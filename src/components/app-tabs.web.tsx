@@ -1,115 +1,248 @@
+import { Feather } from "@expo/vector-icons";
 import {
-  Tabs,
   TabList,
-  TabTrigger,
-  TabSlot,
-  TabTriggerSlotProps,
   TabListProps,
-} from 'expo-router/ui';
-import { SymbolView } from 'expo-symbols';
-import { Pressable, useColorScheme, View, StyleSheet } from 'react-native';
+  Tabs,
+  TabSlot,
+  TabTrigger,
+  TabTriggerSlotProps,
+} from "expo-router/ui";
+import { forwardRef } from "react";
+import {
+  Image,
+  Pressable,
+  StyleSheet,
+  useColorScheme,
+  useWindowDimensions,
+  View,
+} from "react-native";
 
-import { ExternalLink } from './external-link';
-import { ThemedText } from './themed-text';
-import { ThemedView } from './themed-view';
+import { ThemedText } from "./themed-text";
+import { ThemedView } from "./themed-view";
 
-import { Colors, MaxContentWidth, Spacing } from '@/constants/theme';
+import { Colors, Spacing } from "@/constants/theme";
 
 export default function AppTabs() {
+  const scheme = useColorScheme();
+  const theme = Colors[scheme === "unspecified" ? "light" : scheme];
+
   return (
-    <Tabs>
-      <TabSlot style={{ height: '100%' }} />
+    <Tabs
+      style={[styles.dashboardContainer, { backgroundColor: theme.background }]}
+    >
       <TabList asChild>
-        <CustomTabList>
-          <TabTrigger name="home" href="/" asChild>
-            <TabButton>Home</TabButton>
+        <CustomSidebar>
+          <TabTrigger name="index" href="/" asChild>
+            <TabButton icon="home">Home</TabButton>
           </TabTrigger>
-          <TabTrigger name="explore" href="/explore" asChild>
-            <TabButton>Explore</TabButton>
+          <TabTrigger name="quote" href="/quote" asChild>
+            <TabButton icon="file-text">Quote</TabButton>
           </TabTrigger>
-        </CustomTabList>
+          <TabTrigger name="new-sales" href="/new-sales" asChild>
+            <TabButton icon="plus-circle">New Sales</TabButton>
+          </TabTrigger>
+          <TabTrigger name="board" href="/board" asChild>
+            <TabButton icon="layout">Job Board</TabButton>
+          </TabTrigger>
+          <TabTrigger name="records" href="/records" asChild>
+            <TabButton icon="archive">Records</TabButton>
+          </TabTrigger>
+          <TabTrigger name="clients" href="/clients" asChild>
+            <TabButton icon="users">Clients</TabButton>
+          </TabTrigger>
+          <TabTrigger name="expenses" href="/expenses" asChild>
+            <TabButton icon="dollar-sign">Expenses</TabButton>
+          </TabTrigger>
+          <View style={{ flex: 1 }} />
+          <TabTrigger name="settings" href="/settings" asChild>
+            <SettingsButton />
+          </TabTrigger>
+        </CustomSidebar>
       </TabList>
+
+      <TabSlot style={styles.mainContent} />
     </Tabs>
   );
 }
 
-export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps) {
+export function TabButton({
+  children,
+  isFocused,
+  icon,
+  ...props
+}: TabTriggerSlotProps & { icon?: any }) {
+  const scheme = useColorScheme();
+  const theme = Colors[scheme === "unspecified" ? "light" : scheme];
+  const { width } = useWindowDimensions();
+  const isCompact = width < 768;
+
   return (
     <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
       <ThemedView
-        type={isFocused ? 'backgroundSelected' : 'backgroundElement'}
-        style={styles.tabButtonView}>
-        <ThemedText type="small" themeColor={isFocused ? 'text' : 'textSecondary'}>
-          {children}
-        </ThemedText>
+        type="backgroundElement"
+        style={[
+          styles.tabButtonView,
+          isCompact && { justifyContent: "center", paddingHorizontal: 0 },
+          isFocused && { backgroundColor: theme.text + "15" },
+        ]}
+      >
+        {icon && (
+          <Feather
+            name={icon}
+            size={isCompact ? 20 : 18}
+            color={isFocused ? theme.text : theme.textSecondary}
+          />
+        )}
+        {!isCompact && (
+          <ThemedText
+            type="default"
+            style={{ fontWeight: isFocused ? "600" : "normal" }}
+            themeColor={isFocused ? "text" : "textSecondary"}
+          >
+            {children}
+          </ThemedText>
+        )}
       </ThemedView>
     </Pressable>
   );
 }
 
-export function CustomTabList(props: TabListProps) {
+export function CustomSidebar(props: TabListProps) {
   const scheme = useColorScheme();
-  const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
+  const theme = Colors[scheme === "unspecified" ? "light" : scheme];
+  const { width } = useWindowDimensions();
+  const isCompact = width < 768;
 
   return (
-    <View {...props} style={styles.tabListContainer}>
-      <ThemedView type="backgroundElement" style={styles.innerContainer}>
-        <ThemedText type="smallBold" style={styles.brandText}>
-          Expo Starter
-        </ThemedText>
+    <ThemedView
+      type="backgroundElement"
+      style={[
+        styles.sidebarContainer,
+        isCompact && styles.sidebarContainerCompact,
+        { borderRightColor: theme.backgroundSelected },
+      ]}
+    >
+      <View
+        style={[
+          styles.brandContainer,
+          isCompact && { justifyContent: "center", paddingHorizontal: 0 },
+        ]}
+      >
+        {isCompact ? (
+          <Image
+            source={require("@/assets/images/bomedia-icon.png")}
+            style={{ width: 32, height: 32 }}
+            resizeMode="contain"
+          />
+        ) : (
+          <Image
+            source={require("@/assets/images/bomedia-logo.png")}
+            style={{ width: 140, height: 40 }}
+            resizeMode="contain"
+          />
+        )}
+      </View>
 
+      <View {...props} style={styles.tabListContainer}>
         {props.children}
-
-        <ExternalLink href="https://docs.expo.dev" asChild>
-          <Pressable style={styles.externalPressable}>
-            <ThemedText type="link">Docs</ThemedText>
-            <SymbolView
-              tintColor={colors.text}
-              name={{ ios: 'arrow.up.right.square', web: 'link' }}
-              size={12}
-            />
-          </Pressable>
-        </ExternalLink>
-      </ThemedView>
-    </View>
+      </View>
+    </ThemedView>
   );
 }
 
+const SettingsButton = forwardRef((props: any, ref: any) => {
+  const scheme = useColorScheme();
+  const theme = Colors[scheme === "unspecified" ? "light" : scheme];
+  const { width } = useWindowDimensions();
+  const isCompact = width < 768;
+  const { style, isFocused, ...restProps } = props;
+
+  return (
+    <Pressable
+      ref={ref}
+      {...restProps}
+      style={({ pressed }) =>
+        StyleSheet.flatten([
+          style,
+          styles.externalPressable,
+          isCompact && { justifyContent: "center", paddingHorizontal: 0 },
+          isFocused && { backgroundColor: theme.text + "15", opacity: 1 },
+          pressed && styles.pressed,
+        ])
+      }
+    >
+      <Feather
+        color={isFocused ? theme.text : theme.textSecondary}
+        name="settings"
+        size={20}
+      />
+      {!isCompact && (
+        <ThemedText
+          type="small"
+          themeColor={isFocused ? "text" : "textSecondary"}
+          style={{ fontWeight: isFocused ? "600" : "normal" }}
+        >
+          Settings
+        </ThemedText>
+      )}
+    </Pressable>
+  );
+});
+
 const styles = StyleSheet.create({
+  dashboardContainer: {
+    flex: 1,
+    flexDirection: "row",
+    height: "100%", // Web typical viewport height
+    overflow: "hidden",
+  },
+  sidebarContainer: {
+    width: 250,
+    height: "100%",
+    padding: Spacing.four,
+    borderRightWidth: 1,
+    flexDirection: "column",
+    transitionDuration: "0.2s", // slight transition for smooth collapse on web
+  },
+  sidebarContainerCompact: {
+    width: 80,
+    paddingHorizontal: Spacing.two,
+  },
+  brandContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.three,
+    marginBottom: Spacing.six,
+    paddingHorizontal: Spacing.two,
+    height: 48,
+  },
   tabListContainer: {
-    position: 'absolute',
-    width: '100%',
-    padding: Spacing.three,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-  },
-  innerContainer: {
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.five,
-    borderRadius: Spacing.five,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexGrow: 1,
+    flex: 1,
+    flexDirection: "column",
     gap: Spacing.two,
-    maxWidth: MaxContentWidth,
   },
-  brandText: {
-    marginRight: 'auto',
+  mainContent: {
+    flex: 1,
+    height: "100%",
+    overflow: "hidden", // scrolling handled by screens inside TabSlot
   },
   pressed: {
     opacity: 0.7,
   },
   tabButtonView: {
-    paddingVertical: Spacing.one,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.three,
+    paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
+    borderRadius: Spacing.two,
   },
   externalPressable: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: Spacing.one,
-    marginLeft: Spacing.three,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    opacity: 0.7,
   },
 });
