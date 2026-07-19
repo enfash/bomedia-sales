@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
-import { Surface, Text } from 'react-native-paper';
+import { View, StyleSheet, StyleProp, ViewStyle, Platform } from 'react-native';
+import { Surface, Text, Avatar } from 'react-native-paper';
 import { StatusChip, StatusType } from './status-chip';
 
 export interface TransactionCardProps {
@@ -44,7 +44,14 @@ export function TransactionCard({
       elevation={1}
       onTouchEnd={onPress}
     >
-      <View style={styles.header}>
+      <View style={styles.cardContent}>
+        <Avatar.Text 
+          size={40} 
+          label={customerName.substring(0, 2).toUpperCase()} 
+          style={styles.avatar} 
+        />
+        <View style={styles.detailsContainer}>
+          <View style={styles.header}>
         <Text variant="titleMedium" style={styles.customerName}>
           {customerName}
         </Text>
@@ -67,21 +74,33 @@ export function TransactionCard({
           </Text>
         </View>
       </View>
+        </View>
+      </View>
     </Surface>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: Platform.OS === 'web' ? 16 : 0,
     padding: 16,
     marginBottom: 8,
+  },
+  cardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatar: {
+    marginRight: 16,
+  },
+  detailsContainer: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    alignItems: 'flex-start',
+    marginBottom: 8,
   },
   customerName: {
     fontWeight: '600',

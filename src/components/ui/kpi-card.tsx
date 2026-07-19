@@ -46,7 +46,7 @@ export function KPICard({
       </View>
       <View style={styles.info}>
         <ThemedText type="small" themeColor="onSurfaceVariant">{title}</ThemedText>
-        <ThemedText type="defaultSemiBold" style={styles.value}>{value}</ThemedText>
+        <ThemedText type="defaultSemiBold" style={styles.value} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>{value}</ThemedText>
       </View>
     </Surface>
   );
@@ -69,6 +69,6 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   value: {
-    fontSize: 18,
+    fontSize: 14,
   },
 });

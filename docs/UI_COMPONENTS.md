@@ -284,3 +284,44 @@ This document outlines the core reusable components built for the project. Every
 - **Supported Variants:** Outlined (default).
 - **Accessibility Notes:** 
   - Associates error text with the input visually and semantically (using standard Paper implementation).
+
+---
+
+## ExpenseCard
+
+- **Documentation:** Standardized card for displaying an expense record.
+- **Props:** `description: string`, `category: string`, `date: string`, `amount: number`, `onPress?: () => void`, `style?: StyleProp<ViewStyle>`
+- **Usage Example:**
+  ```tsx
+  <ExpenseCard 
+    description="Office Supplies" 
+    category="Equipment" 
+    date="2023-10-01" 
+    amount={250.00} 
+  />
+  ```
+- **Supported Variants:** Elevated Surface (1dp).
+- **Accessibility Notes:** 
+  - Reads as a single expense record.
+  - Formats amount correctly with standard currency formatting.
+
+---
+
+## DealCard
+
+- **Documentation:** Standardized card for displaying a sales deal in a pipeline or Kanban board.
+- **Props:** `company: string`, `client: string`, `value: number`, `owner: string`, `daysActive: number`, `stage?: string`, `onPress?: () => void`, `style?: StyleProp<ViewStyle>`, `compact?: boolean`
+- **Usage Example:**
+  ```tsx
+  <DealCard 
+    company="Acme Corp" 
+    client="John Doe" 
+    value={45000} 
+    owner="Alice Smith" 
+    daysActive={2}
+  />
+  ```
+- **Supported Variants:** Elevated Surface (1dp). `compact` variant for constrained spaces like Kanban columns.
+- **Accessibility Notes:** 
+  - Entire card acts as a touchable button.
+  - Groups related deal data for easy reading.

@@ -1,25 +1,28 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Platform, Text } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { View, StyleSheet, Alert, Share } from 'react-native';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useTheme } from '@/hooks/use-theme';
 import { useRecords } from '@/hooks/use-records';
-import { IconButton, Button, Divider, Portal } from 'react-native-paper';
-import { SymbolView } from 'expo-symbols';
+import { Divider, Portal } from 'react-native-paper';
 import { Spacing } from '@/constants/theme';
 import { PaymentModal } from '@/components/records/payment-modal';
 import { formatCurrency } from '@/utils/currency';
-import { formatDate } from '@/utils/date';
+import { EmptyState } from '@/components/ui/empty-state';
+import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
+import { PrimaryButton } from '@/components/ui/primary-button';
+import { PageContainer } from '@/components/ui/page-container';
+
+import { TransactionSummaryCard } from '@/components/records/transaction-summary-card';
+import { TransactionItemRow } from '@/components/records/transaction-item-row';
+import { TransactionCostBreakdown } from '@/components/records/transaction-cost-breakdown';
+import { TransactionActionBar } from '@/components/records/transaction-action-bar';
+import { ThemedText } from '@/components/themed-text';
 
 export default function TransactionDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const theme = useTheme();
   
-  // For simplicity right now, we use the global records hook to find our transaction
-  // A more optimized approach would query Firebase for just this record via dbPath.
   const { sortedBatches, loading } = useRecords(theme);
   const transaction = sortedBatches.find(b => b.id === id);
 
@@ -79,20 +82,90 @@ export default function TransactionDetails() {
     }
   };
 
+  const handleDelete = () => {
+    if (!transaction) return;
+    
+    Alert.alert(
+      "Delete Transaction",
+      "Are you sure you want to delete this transaction? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const { db } = await import('@/lib/firebase');
+              const { ref, remove } = await import('firebase/database');
+              
+              if (transaction.dbPath) {
+                await remove(ref(db, transaction.dbPath));
+              } else {
+                // Fallback for legacy items without a clean dbPath at the batch level
+                // (Though all should have one now)
+                for (const record of transaction.records) {
+                  if (record.dbPath) {
+                    await remove(ref(db, record.dbPath));
+                  }
+                }
+              }
+              router.back();
+            } catch (error: any) {
+              Alert.alert("Error", "Failed to delete transaction: " + error.message);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleShare = async () => {
+    if (!transaction) return;
+    
+    try {
+      const itemsString = transaction.records.map(r => 
+        `- ${r.material} (${r.width}x${r.height} ${r.jobUnit}): ${formatCurrency(r.total || 0)}`
+      ).join('\n');
+
+      const message = `Invoice: #${transaction.id.substring(0, 8).toUpperCase()}
+Customer: ${transaction.clientName || 'Unknown'}
+Grand Total: ${formatCurrency(transaction.totalAmount)}
+Outstanding Balance: ${formatCurrency(transaction.totalBalance)}
+
+Items:
+${itemsString}`;
+
+      await Share.share({
+        message,
+        title: `Invoice #${transaction.id.substring(0, 8).toUpperCase()}`,
+      });
+    } catch (error: any) {
+      Alert.alert("Error", "Failed to share: " + error.message);
+    }
+  };
+
   if (loading) {
     return (
-      <ThemedView style={styles.center}>
-        <ThemedText>Loading transaction...</ThemedText>
-      </ThemedView>
+      <View style={{ flex: 1, padding: 16, backgroundColor: theme.background, gap: 16 }}>
+        <LoadingSkeleton width="100%" height={100} borderRadius={16} />
+        <LoadingSkeleton width="100%" height={200} borderRadius={16} />
+      </View>
     );
   }
 
   if (!transaction) {
     return (
-      <ThemedView style={styles.center}>
-        <ThemedText>Transaction not found.</ThemedText>
-        <Button mode="contained" onPress={() => router.back()} style={{ marginTop: 20 }}>Go Back</Button>
-      </ThemedView>
+      <View style={{ flex: 1, backgroundColor: theme.background, justifyContent: 'center' }}>
+        <Stack.Screen options={{ title: 'Not Found', headerBackVisible: true }} />
+        <EmptyState 
+          iconName="doc.text.magnifyingglass"
+          title="Transaction not found"
+          message="The transaction you are looking for does not exist or has been removed."
+        />
+        <View style={{ paddingHorizontal: 32 }}>
+          <PrimaryButton onPress={() => router.back()}>Go Back</PrimaryButton>
+        </View>
+      </View>
     );
   }
 
@@ -101,136 +174,56 @@ export default function TransactionDetails() {
   const grandTotal = transaction.totalAmount;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
-      {/* Top App Bar */}
-      <View style={[styles.header, { borderBottomColor: theme.outline }]}>
-        <IconButton
-          icon="arrow-left"
-          iconColor={theme.onSurface}
-          size={24}
-          onPress={() => router.back()}
-        />
-        <ThemedText type="subtitle" style={{ flex: 1 }}>Transaction Details</ThemedText>
-        <IconButton
-          icon="dots-vertical"
-          iconColor={theme.onSurface}
-          size={24}
-          onPress={() => {}}
-        />
-      </View>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <Stack.Screen options={{ title: 'Transaction Details', headerBackVisible: true }} />
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Customer Information */}
+      <PageContainer contentContainerStyle={styles.scrollContent}>
+        <TransactionSummaryCard 
+          grandTotal={grandTotal}
+          clientName={transaction.clientName}
+          transactionId={transaction.id}
+          createdAt={transaction.createdAt}
+          status={transaction.status as any}
+        />
+
         <View style={styles.section}>
-          <ThemedText type="small" themeColor="onSurfaceVariant">Customer Information</ThemedText>
-          <ThemedText type="title" style={{ marginTop: 4 }}>{transaction.clientName || 'Unknown Client'}</ThemedText>
-          <View style={[styles.metaRow, { marginTop: 16 }]}>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                <SymbolView name={{ ios: 'doc.text', android: 'description', web: 'description' }} size={16} tintColor={theme.onSurfaceVariant} style={{ marginRight: 8 }} />
-                <ThemedText type="small" themeColor="onSurfaceVariant">Invoice:</ThemedText>
-              </View>
-              <ThemedText style={{ fontWeight: '600' }}>#{transaction.id.substring(0, 8).toUpperCase()}</ThemedText>
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                <SymbolView name={{ ios: 'calendar', android: 'calendar_today', web: 'calendar_today' }} size={16} tintColor={theme.onSurfaceVariant} style={{ marginRight: 8 }} />
-                <ThemedText type="small" themeColor="onSurfaceVariant">Date:</ThemedText>
-              </View>
-              <ThemedText style={{ fontWeight: '600' }}>{formatDate(transaction.createdAt)}</ThemedText>
-            </View>
-          </View>
-          
-          <View style={[styles.statusChip, { backgroundColor: transaction.statusColor + '20', marginTop: 16 }]}>
-            <SymbolView 
-              name={transaction.status === 'Paid' ? { ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' } : { ios: 'exclamationmark.circle.fill', android: 'info', web: 'info' }} 
-              size={16} 
-              tintColor={transaction.statusColor} 
-              style={{ marginRight: 6 }} 
+          <ThemedText type="subtitle" style={{ marginBottom: Spacing.three }}>Purchased Items</ThemedText>
+          {transaction.records.map((item) => (
+            <TransactionItemRow 
+              key={item.id}
+              material={item.material}
+              width={item.width as any}
+              height={item.height as any}
+              jobUnit={item.jobUnit}
+              quantity={item.quantity}
+              total={item.total || 0}
             />
-            <Text style={{ color: transaction.statusColor, fontWeight: '700', fontSize: 14 }}>
-              {transaction.status.toUpperCase()}
-            </Text>
-          </View>
-        </View>
-
-        <Divider style={{ backgroundColor: theme.outline }} />
-
-        {/* Purchased Items */}
-        <View style={styles.section}>
-          <ThemedText type="subtitle" style={{ marginBottom: 12 }}>Purchased Items</ThemedText>
-          {transaction.records.map((item, idx) => (
-            <View key={item.id} style={styles.itemRow}>
-              <View style={{ flex: 1, paddingRight: 16 }}>
-                <ThemedText style={{ fontWeight: '600' }}>{item.material}</ThemedText>
-                <ThemedText type="small" themeColor="onSurfaceVariant" style={{ marginTop: 2 }}>
-                  {item.width}x{item.height} {item.jobUnit} • Qty: {item.quantity}
-                </ThemedText>
-              </View>
-              <ThemedText style={{ fontWeight: '600' }}>{formatCurrency((item.total || 0))}</ThemedText>
-            </View>
           ))}
         </View>
 
-        <Divider style={{ backgroundColor: theme.outline }} />
-
-        {/* Cost Breakdown */}
         <View style={styles.section}>
-          <ThemedText type="subtitle" style={{ marginBottom: 12 }}>Cost Breakdown</ThemedText>
-          
-          <View style={styles.breakdownRow}>
-            <ThemedText themeColor="onSurfaceVariant">Subtotal:</ThemedText>
-            <ThemedText>{formatCurrency(subtotal)}</ThemedText>
-          </View>
-          <View style={styles.breakdownRow}>
-            <ThemedText themeColor="onSurfaceVariant">VAT (0%):</ThemedText>
-            <ThemedText>{formatCurrency(vat)}</ThemedText>
-          </View>
-          <View style={[styles.breakdownRow, { marginTop: 8, marginBottom: 16 }]}>
-            <ThemedText style={{ fontWeight: '700', fontSize: 16 }}>Grand Total:</ThemedText>
-            <ThemedText style={{ fontWeight: '700', fontSize: 16 }}>{formatCurrency(grandTotal)}</ThemedText>
-          </View>
-
-          <View style={styles.breakdownRow}>
-            <ThemedText themeColor="onSurfaceVariant">Amount Paid:</ThemedText>
-            <ThemedText>{formatCurrency((transaction.totalPaid || 0))}</ThemedText>
-          </View>
-          <View style={[styles.breakdownRow, { marginTop: 4 }]}>
-            <ThemedText style={{ fontWeight: '700' }}>Outstanding Balance:</ThemedText>
-            <ThemedText style={{ fontWeight: '700', color: transaction.totalBalance > 0 ? theme.error : '#2E7D32' }}>
-              {formatCurrency(transaction.totalBalance)}
-            </ThemedText>
-          </View>
+          <ThemedText type="subtitle" style={{ marginBottom: Spacing.three }}>Cost Breakdown</ThemedText>
+          <TransactionCostBreakdown 
+            subtotal={subtotal}
+            vat={vat}
+            grandTotal={grandTotal}
+            amountPaid={transaction.totalPaid || 0}
+            totalBalance={transaction.totalBalance}
+          />
         </View>
         
         {/* Extra spacing for Bottom Action Bar */}
         <View style={{ height: 100 }} />
-      </ScrollView>
+      </PageContainer>
 
-      {/* Bottom Action Bar */}
-      <View style={[styles.bottomActionBar, { backgroundColor: theme.surface, borderTopColor: theme.outline }]}>
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          <IconButton icon="printer" mode="outlined" iconColor={theme.onSurfaceVariant} size={24} onPress={() => router.push(`/invoice?batchId=${transaction.id}`)} />
-          <IconButton icon="share-variant" mode="outlined" iconColor={theme.onSurfaceVariant} size={24} onPress={() => {}} />
-          <IconButton icon="pencil" mode="outlined" iconColor={theme.onSurfaceVariant} size={24} onPress={() => {}} />
-          <IconButton icon="delete" mode="outlined" iconColor={theme.error} size={24} onPress={() => {}} />
-        </View>
-        
-        {transaction.totalBalance > 0 && (
-          <Button 
-            mode="contained" 
-            icon="cash-register"
-            style={{ borderRadius: 12, marginLeft: 'auto' }} 
-            contentStyle={{ paddingHorizontal: 16, height: 48 }}
-            buttonColor={theme.primary}
-            onPress={() => setPaymentModalVisible(true)}
-          >
-            Record Payment
-          </Button>
-        )}
-      </View>
+      <TransactionActionBar 
+        totalBalance={transaction.totalBalance}
+        onPrintInvoice={() => router.push(`/invoice?batchId=${transaction.id}`)}
+        onShare={handleShare}
+        onDelete={handleDelete}
+        onRecordPayment={() => setPaymentModalVisible(true)}
+      />
 
-      {/* Payment Modal */}
       <Portal>
         <PaymentModal
           paymentModalVisible={paymentModalVisible}
@@ -242,71 +235,15 @@ export default function TransactionDetails() {
           theme={theme}
         />
       </Portal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderBottomWidth: 1,
-  },
   scrollContent: {
     paddingBottom: Spacing.six,
   },
   section: {
     padding: Spacing.six,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
-  },
-  breakdownRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  bottomActionBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.four,
-    paddingBottom: Platform.OS === 'ios' ? 32 : Spacing.four,
-    borderTopWidth: 1,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-  }
 });

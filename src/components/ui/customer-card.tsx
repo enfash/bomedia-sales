@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { View, StyleSheet, StyleProp, ViewStyle, Platform } from 'react-native';
 import { Surface, Text, Avatar } from 'react-native-paper';
 
 export interface CustomerCardProps {
@@ -9,11 +9,12 @@ export interface CustomerCardProps {
   avatarUrl?: string;
   style?: StyleProp<ViewStyle>;
   onPress?: () => void;
+  children?: React.ReactNode;
 }
 
 /**
  * @description Standardized card for displaying customer overview.
- * @props CustomerCardProps (name, email, initials, avatarUrl, style, onPress)
+ * @props CustomerCardProps (name, email, initials, avatarUrl, style, onPress, children)
  * @example
  * <CustomerCard 
  *   name="Jane Doe" 
@@ -32,6 +33,7 @@ export function CustomerCard({
   avatarUrl,
   style,
   onPress,
+  children
 }: CustomerCardProps) {
   return (
     <Surface
@@ -50,13 +52,18 @@ export function CustomerCard({
           {email && <Text variant="bodyMedium" style={styles.email}>{email}</Text>}
         </View>
       </View>
+      {children && (
+        <View style={styles.childrenContainer}>
+          {children}
+        </View>
+      )}
     </Surface>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: Platform.OS === 'web' ? 16 : 0,
     padding: 16,
     marginBottom: 8,
   },
@@ -78,4 +85,10 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 2,
   },
+  childrenContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.1)',
+  }
 });

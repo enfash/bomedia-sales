@@ -26,6 +26,7 @@ export function usePaperTheme() {
       outlineVariant: isDark ? baseTheme.colors.outlineVariant : brandColors.outlineVariant,
       onSurface: isDark ? baseTheme.colors.onSurface : brandColors.textPrimary,
       onSurfaceVariant: isDark ? baseTheme.colors.onSurfaceVariant : brandColors.textSecondary,
+      shadow: 'rgba(0,0,0,0.55)', // Reduce shadows globally by 45%
       elevation: {
         ...baseTheme.colors.elevation,
         level0: 'transparent',

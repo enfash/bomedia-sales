@@ -72,7 +72,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           if (route.name === 'settings') { iconName = "settings"; label = "Settings"; }
 
           // Skip routes we don't want in the tab bar
-          if (['invoice', '_sitemap', '+not-found'].includes(route.name)) {
+          if (['invoice', 'transaction/[id]', '_sitemap', '+not-found'].includes(route.name)) {
             return null;
           }
 

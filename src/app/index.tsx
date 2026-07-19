@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 
@@ -9,11 +9,13 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { KPICard } from '@/components/ui/kpi-card';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
+import { PageContainer } from '@/components/ui/page-container';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useRecords } from '@/hooks/use-records';
 import { useExpenses } from '@/hooks/use-expenses';
 import { formatCurrency } from '@/utils/currency';
+import { parseDate } from '@/utils/date';
 
 export default function DashboardScreen() {
   const safeAreaInsets = useSafeAreaInsets();
@@ -45,7 +47,7 @@ export default function DashboardScreen() {
     const currentMonthNum = new Date().getMonth();
 
     sortedBatches.forEach(batch => {
-      const batchDate = new Date(batch.createdAt);
+      const batchDate = parseDate(batch.createdAt);
       const isToday = batchDate.toISOString().split('T')[0] === todayStr;
       const isThisMonth = batchDate.getFullYear() === currentYear && batchDate.getMonth() === currentMonthNum;
 
@@ -79,18 +81,22 @@ export default function DashboardScreen() {
     };
   }, [sortedBatches, expenses]);
 
-  const contentPlatformStyle = Platform.select({
-    android: {
-      paddingTop: insets.top,
-      paddingLeft: insets.left,
-      paddingRight: insets.right,
-      paddingBottom: insets.bottom,
-    },
-    web: {
-      paddingTop: Spacing.six,
-      paddingBottom: Spacing.four,
-    },
-  });
+  if (loading) {
+    return (
+      <PageContainer>
+        <ThemedView style={{ padding: 40, width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center' }}>
+          <LoadingSkeleton height={120} style={{ borderRadius: 16, marginBottom: 20 }} />
+          <LoadingSkeleton height={180} style={{ borderRadius: 16, marginBottom: 20 }} />
+          <View style={styles.gridContainer}>
+            <LoadingSkeleton height={120} style={{ borderRadius: 16, width: '47%' }} />
+            <LoadingSkeleton height={120} style={{ borderRadius: 16, width: '47%' }} />
+            <LoadingSkeleton height={120} style={{ borderRadius: 16, width: '47%' }} />
+            <LoadingSkeleton height={120} style={{ borderRadius: 16, width: '47%' }} />
+          </View>
+        </ThemedView>
+      </PageContainer>
+    );
+  }
 
   const todayDate = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
@@ -99,34 +105,8 @@ export default function DashboardScreen() {
     year: 'numeric',
   });
 
-  if (loading) {
-    return (
-      <View style={[styles.mainContainer, { backgroundColor: theme.background }]}>
-        <View style={[styles.contentContainer, contentPlatformStyle]}>
-          <ThemedView style={[styles.container, { padding: 40 }]}>
-             <LoadingSkeleton height={120} style={{ borderRadius: 16, marginBottom: 20 }} />
-             <LoadingSkeleton height={180} style={{ borderRadius: 16, marginBottom: 20 }} />
-             <View style={styles.gridContainer}>
-                <LoadingSkeleton height={120} style={{ borderRadius: 16, width: '47%' }} />
-                <LoadingSkeleton height={120} style={{ borderRadius: 16, width: '47%' }} />
-                <LoadingSkeleton height={120} style={{ borderRadius: 16, width: '47%' }} />
-                <LoadingSkeleton height={120} style={{ borderRadius: 16, width: '47%' }} />
-             </View>
-          </ThemedView>
-        </View>
-      </View>
-    );
-  }
-
   return (
-    <View style={[styles.mainContainer, { backgroundColor: theme.background }]}>
-      <ScrollView
-        style={styles.scrollView}
-        contentInset={insets}
-        contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}
-      >
-        <ThemedView style={styles.container}>
-        
+    <PageContainer>
         {/* Top Header */}
         <ThemedView style={styles.header}>
           <ThemedText type="smallBold" themeColor="onSurfaceVariant" style={styles.dateText}>
@@ -208,33 +188,15 @@ export default function DashboardScreen() {
           />
         </View>
 
-      </ThemedView>
-    </ScrollView>
-    </View>
+      </PageContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  mainContainer: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  container: {
-    maxWidth: MaxContentWidth,
-    flexGrow: 1,
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.four,
-    gap: Spacing.four,
-    width: '100%',
-  },
   header: {
     gap: Spacing.one,
+    paddingHorizontal: Platform.OS === 'web' ? 0 : Spacing.four,
+    paddingTop: Spacing.four,
   },
   dateText: {
     textTransform: 'uppercase',

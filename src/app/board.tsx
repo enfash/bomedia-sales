@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, View, FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 
@@ -8,6 +8,7 @@ import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatCurrency } from '@/utils/currency';
+import { DealCard } from '@/components/ui/deal-card';
 
 interface Deal {
   id: string;
@@ -109,299 +110,283 @@ export default function BoardScreen() {
 
   const isWebLayout = Platform.OS === 'web';
 
-  return (
-    <View style={[styles.mainContainer, { backgroundColor: theme.background }]}>
-      <ScrollView
-        style={styles.scrollView}
-        contentInset={insets}
-        contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}
-      >
-        <ThemedView style={styles.container}>
-        {/* Header Section */}
-        <ThemedView style={styles.header}>
-          <ThemedText type="subtitle" style={styles.title}>Kanban Sales Board</ThemedText>
-          <ThemedText themeColor="onSurfaceVariant" style={styles.subtitle}>
-            Manage and track active sales deals through pipeline stages.
+  const renderHeader = () => (
+    <View style={{ gap: Spacing.four, paddingHorizontal: Spacing.four, paddingTop: Spacing.four, paddingBottom: isWebLayout ? 0 : Spacing.two, width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center' }}>
+      {/* Header Section */}
+      <ThemedView style={styles.header}>
+        <ThemedText type="subtitle" style={styles.title}>Kanban Sales Board</ThemedText>
+        <ThemedText themeColor="onSurfaceVariant" style={styles.subtitle}>
+          Manage and track active sales deals through pipeline stages.
+        </ThemedText>
+      </ThemedView>
+
+      {/* Dashboard Stats */}
+      <View style={styles.dashboardStats}>
+        <ThemedView type="surface" style={styles.statBox}>
+          <ThemedText type="code" themeColor="onSurfaceVariant">Active Pipeline</ThemedText>
+          <ThemedText type="smallBold" style={[styles.statValue, { color: theme.primary }]}>
+            {formatCurrency(getPipelineTotal())}
           </ThemedText>
         </ThemedView>
+        <ThemedView type="surface" style={styles.statBox}>
+          <ThemedText type="code" themeColor="onSurfaceVariant">Total Won</ThemedText>
+          <ThemedText type="smallBold" style={[styles.statValue, { color: '#2E7D32' }]}>
+            {formatCurrency(getWonTotal())}
+          </ThemedText>
+        </ThemedView>
+        <ThemedView type="surface" style={styles.statBox}>
+          <ThemedText type="code" themeColor="onSurfaceVariant">Deal Count</ThemedText>
+          <ThemedText type="smallBold" style={styles.statValue}>
+            {deals.length} Active
+          </ThemedText>
+        </ThemedView>
+      </View>
 
-        {/* Dashboard Stats */}
-        <View style={styles.dashboardStats}>
-          <ThemedView type="surface" style={styles.statBox}>
-            <ThemedText type="code" themeColor="onSurfaceVariant">Active Pipeline</ThemedText>
-            <ThemedText type="smallBold" style={[styles.statValue, { color: theme.primary }]}>
-              {formatCurrency(getPipelineTotal())}
-            </ThemedText>
-          </ThemedView>
-          <ThemedView type="surface" style={styles.statBox}>
-            <ThemedText type="code" themeColor="onSurfaceVariant">Total Won</ThemedText>
-            <ThemedText type="smallBold" style={[styles.statValue, { color: '#2E7D32' }]}>
-              {formatCurrency(getWonTotal())}
-            </ThemedText>
-          </ThemedView>
-          <ThemedView type="surface" style={styles.statBox}>
-            <ThemedText type="code" themeColor="onSurfaceVariant">Deal Count</ThemedText>
-            <ThemedText type="smallBold" style={styles.statValue}>
-              {deals.length} Active
-            </ThemedText>
-          </ThemedView>
+      {/* Mobile Stage Selector */}
+      {!isWebLayout && (
+        <View style={styles.stageTabsContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll}>
+            {STAGES.map((stage) => {
+              const isActive = selectedMobileStage === stage;
+              const count = getStageDeals(stage).length;
+              return (
+                <Pressable
+                  key={stage}
+                  onPress={() => setSelectedMobileStage(stage)}
+                  style={[
+                    styles.stageTab,
+                    {
+                      backgroundColor: isActive ? theme.primary : theme.surface,
+                      borderColor: theme.surfaceVariant,
+                    }
+                  ]}
+                >
+                  <ThemedText type="smallBold" style={{ color: isActive ? '#ffffff' : theme.onSurface }}>
+                    {stage} ({count})
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </View>
+      )}
 
-        {/* Mobile Stage Selector */}
-        {!isWebLayout && (
-          <View style={styles.stageTabsContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll}>
-              {STAGES.map((stage) => {
-                const isActive = selectedMobileStage === stage;
-                const count = getStageDeals(stage).length;
-                return (
-                  <Pressable
-                    key={stage}
-                    onPress={() => setSelectedMobileStage(stage)}
-                      style={[
-                        styles.stageTab,
-                        {
-                          backgroundColor: isActive ? theme.primary : theme.surface,
-                          borderColor: theme.surfaceVariant,
-                        }
-                      ]}
-                  >
-                    <ThemedText type="smallBold" style={{ color: isActive ? '#ffffff' : theme.onSurface }}>
-                      {stage} ({count})
-                    </ThemedText>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+      {/* Mobile Stage Header */}
+      {!isWebLayout && (
+        <View style={styles.mobileColumnHeader}>
+          <ThemedText type="smallBold" style={{ fontSize: 18 }}>
+            {selectedMobileStage} Deals
+          </ThemedText>
+          <ThemedText type="smallBold" style={{ color: theme.primary }}>
+            Total: {formatCurrency(getStageTotal(selectedMobileStage))}
+          </ThemedText>
+        </View>
+      )}
+    </View>
+  );
+
+  const renderModal = () => {
+    if (!activeDeal) return null;
+    return (
+      <View style={styles.modalOverlay}>
+        <ThemedView type="surface" style={[styles.modalCard, { borderColor: theme.surfaceVariant }]}>
+          <View style={styles.modalHeader}>
+            <View>
+              <ThemedText type="subtitle" style={styles.modalTitle}>{activeDeal.company}</ThemedText>
+              <ThemedText themeColor="onSurfaceVariant" style={styles.modalSubtitle}>
+                Contact: {activeDeal.client}
+              </ThemedText>
+            </View>
+            <Pressable onPress={() => setActiveDeal(null)} style={styles.closeButton}>
+              <SymbolView
+                name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
+                size={24}
+                tintColor={theme.onSurfaceVariant}
+              />
+            </Pressable>
+          </View>
+
+          <View style={[styles.modalInfoPanel, { backgroundColor: theme.background }]}>
+            <View style={styles.infoRow}>
+              <ThemedText type="small" themeColor="onSurfaceVariant">Current Stage</ThemedText>
+              <View style={[styles.modalStageBadge, { backgroundColor: theme.primary + '1A' }]}>
+                <ThemedText type="smallBold" style={{ color: theme.primary }}>{activeDeal.stage}</ThemedText>
+              </View>
+            </View>
+            <View style={styles.infoRow}>
+              <ThemedText type="small" themeColor="onSurfaceVariant">Deal Value</ThemedText>
+              <ThemedText type="smallBold" style={{ fontSize: 18, color: theme.primary }}>
+                {formatCurrency(activeDeal.value)}
+              </ThemedText>
+            </View>
+            <View style={styles.infoRow}>
+              <ThemedText type="small" themeColor="onSurfaceVariant">Lead Owner</ThemedText>
+              <ThemedText type="smallBold">{activeDeal.owner}</ThemedText>
+            </View>
+            <View style={styles.infoRow}>
+              <ThemedText type="small" themeColor="onSurfaceVariant">Age</ThemedText>
+              <ThemedText type="smallBold">{activeDeal.daysActive} days in pipeline</ThemedText>
+            </View>
+          </View>
+
+          <View style={styles.modalActions}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.actionButton,
+                { backgroundColor: theme.background, borderColor: theme.surfaceVariant },
+                pressed && styles.pressed,
+                STAGES.indexOf(activeDeal.stage) === 0 && styles.disabledButton
+              ]}
+              onPress={() => handleDemoteStage(activeDeal.id)}
+              disabled={STAGES.indexOf(activeDeal.stage) === 0}
+            >
+              <SymbolView
+                name={{ ios: 'arrow.left', android: 'arrow_back', web: 'arrow_back' }}
+                size={16}
+                tintColor={STAGES.indexOf(activeDeal.stage) === 0 ? theme.surfaceVariant : theme.onSurface}
+              />
+              <ThemedText type="smallBold" style={{ marginLeft: 8, color: STAGES.indexOf(activeDeal.stage) === 0 ? theme.surfaceVariant : theme.onSurface }}>
+                Move Back
+              </ThemedText>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.actionButton,
+                { backgroundColor: theme.primary },
+                pressed && styles.pressed,
+                STAGES.indexOf(activeDeal.stage) === STAGES.length - 1 && styles.disabledButton
+              ]}
+              onPress={() => handleAdvanceStage(activeDeal.id)}
+              disabled={STAGES.indexOf(activeDeal.stage) === STAGES.length - 1}
+            >
+              <ThemedText type="smallBold" style={{ color: '#ffffff', marginRight: 8 }}>
+                Advance Stage
+              </ThemedText>
+              <SymbolView
+                name={{ ios: 'arrow.right', android: 'arrow_forward', web: 'arrow_forward' }}
+                size={16}
+                tintColor="#ffffff"
+              />
+            </Pressable>
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}
+            onPress={() => handleDeleteDeal(activeDeal.id)}
+          >
+            <SymbolView
+              name={{ ios: 'trash.fill', android: 'delete', web: 'delete' }}
+              size={14}
+              tintColor={theme.error || '#FF3B30'}
+            />
+            <ThemedText type="smallBold" style={{ color: theme.error || '#FF3B30', marginLeft: 6 }}>
+              Archive / Delete Deal
+            </ThemedText>
+          </Pressable>
+        </ThemedView>
+      </View>
+    );
+  };
+
+  if (isWebLayout) {
+    return (
+      <View style={[styles.mainContainer, { backgroundColor: theme.background }]}>
+        <ScrollView
+          style={styles.scrollView}
+          contentInset={insets}
+          contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}
+        >
+          <View style={styles.container}>
+            {renderHeader()}
+            <View style={{ paddingHorizontal: Spacing.four, width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center' }}>
+              <View style={styles.webBoardGrid}>
+                {STAGES.map((stage) => {
+                  const stageDeals = getStageDeals(stage);
+                  return (
+                    <ThemedView key={stage} type="surface" style={styles.boardColumn}>
+                      {/* Column Header */}
+                      <View style={styles.columnHeader}>
+                        <ThemedText type="smallBold" style={styles.columnTitle}>{stage}</ThemedText>
+                        <ThemedView type="surfaceVariant" style={styles.countBadge}>
+                          <ThemedText type="code">{stageDeals.length}</ThemedText>
+                        </ThemedView>
+                      </View>
+                      <ThemedText type="code" themeColor="onSurfaceVariant" style={styles.columnTotal}>
+                        {formatCurrency(getStageTotal(stage))}
+                      </ThemedText>
+
+                      {/* Cards */}
+                      <ScrollView style={styles.columnCardsScroll} contentContainerStyle={styles.columnCardsContainer}>
+                        {stageDeals.map((deal) => (
+                          <DealCard
+                            key={deal.id}
+                            company={deal.company}
+                            client={deal.client}
+                            value={deal.value}
+                            owner={deal.owner}
+                            daysActive={deal.daysActive}
+                            compact
+                            onPress={() => setActiveDeal(deal)}
+                          />
+                        ))}
+                        {stageDeals.length === 0 && (
+                          <View style={styles.emptyColumn}>
+                            <ThemedText type="code" themeColor="onSurfaceVariant">No Deals</ThemedText>
+                          </View>
+                        )}
+                      </ScrollView>
+                    </ThemedView>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+        {renderModal()}
+      </View>
+    );
+  }
+
+  // Mobile layout uses FlatList to prevent virtualized lists inside scrollview issues
+  const stageDeals = getStageDeals(selectedMobileStage);
+
+  return (
+    <View style={[styles.mainContainer, { backgroundColor: theme.background }]}>
+      <FlatList
+        data={stageDeals}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={renderHeader}
+        contentContainerStyle={contentPlatformStyle}
+        contentInset={insets}
+        renderItem={({ item }) => (
+          <View style={{ paddingHorizontal: Spacing.four }}>
+            <DealCard
+              company={item.company}
+              client={item.client}
+              value={item.value}
+              owner={item.owner}
+              daysActive={item.daysActive}
+              onPress={() => setActiveDeal(item)}
+            />
           </View>
         )}
-
-        {/* Board Columns Grid */}
-        <View style={isWebLayout ? styles.webBoardGrid : styles.mobileBoardGrid}>
-          {isWebLayout ? (
-            STAGES.map((stage) => {
-              const stageDeals = getStageDeals(stage);
-              return (
-                <ThemedView key={stage} type="surface" style={styles.boardColumn}>
-                  {/* Column Header */}
-                  <View style={styles.columnHeader}>
-                    <ThemedText type="smallBold" style={styles.columnTitle}>{stage}</ThemedText>
-                    <ThemedView type="surfaceVariant" style={styles.countBadge}>
-                      <ThemedText type="code">{stageDeals.length}</ThemedText>
-                    </ThemedView>
-                  </View>
-                  <ThemedText type="code" themeColor="onSurfaceVariant" style={styles.columnTotal}>
-                    {formatCurrency(getStageTotal(stage))}
-                  </ThemedText>
-
-                  {/* Cards */}
-                  <ScrollView style={styles.columnCardsScroll} contentContainerStyle={styles.columnCardsContainer}>
-                    {stageDeals.map((deal) => (
-                      <Pressable
-                        key={deal.id}
-                        onPress={() => setActiveDeal(deal)}
-                        style={({ pressed }) => [
-                          styles.dealCard,
-                          { backgroundColor: theme.background, borderColor: theme.surfaceVariant },
-                          pressed && styles.pressed
-                        ]}
-                      >
-                        <ThemedText type="smallBold">{deal.company}</ThemedText>
-                        <ThemedText type="small" themeColor="onSurfaceVariant">{deal.client}</ThemedText>
-                        
-                        <View style={styles.cardFooter}>
-                          <ThemedText type="smallBold" style={{ color: theme.primary }}>
-                            {formatCurrency(deal.value)}
-                          </ThemedText>
-                          <ThemedText type="code" themeColor="onSurfaceVariant">
-                            {deal.daysActive}d
-                          </ThemedText>
-                        </View>
-                      </Pressable>
-                    ))}
-                    {stageDeals.length === 0 && (
-                      <View style={styles.emptyColumn}>
-                        <ThemedText type="code" themeColor="onSurfaceVariant">No Deals</ThemedText>
-                      </View>
-                    )}
-                  </ScrollView>
-                </ThemedView>
-              );
-            })
-          ) : (
-            // Mobile active column layout
-            <View style={styles.mobileColumnContainer}>
-              <View style={styles.mobileColumnHeader}>
-                <ThemedText type="smallBold" style={{ fontSize: 18 }}>
-                  {selectedMobileStage} Deals
-                </ThemedText>
-                <ThemedText type="smallBold" style={{ color: theme.primary }}>
-                  Total: {formatCurrency(getStageTotal(selectedMobileStage))}
-                </ThemedText>
-              </View>
-
-              {getStageDeals(selectedMobileStage).length === 0 ? (
-                <View style={[styles.emptyColumn, { padding: 40, marginTop: 20 }]}>
-                  <ThemedText type="subtitle" themeColor="onSurfaceVariant">No Deals</ThemedText>
-                  <ThemedText type="small" themeColor="onSurfaceVariant" style={{ marginTop: 8 }}>Nothing in this stage yet.</ThemedText>
-                </View>
-              ) : getStageDeals(selectedMobileStage).map((deal) => (
-                <Pressable
-                  key={deal.id}
-                  onPress={() => setActiveDeal(deal)}
-                  style={({ pressed }) => [
-                    styles.dealCard,
-                    { backgroundColor: theme.surface, borderColor: theme.surfaceVariant },
-                    pressed && styles.pressed
-                  ]}
-                >
-                  <View style={styles.mobileCardHeader}>
-                    <View>
-                      <ThemedText type="smallBold" style={{ fontSize: 16 }}>{deal.company}</ThemedText>
-                      <ThemedText type="small" themeColor="onSurfaceVariant">{deal.client}</ThemedText>
-                    </View>
-                    <ThemedText type="smallBold" style={{ color: theme.primary, fontSize: 16 }}>
-                      {formatCurrency(deal.value)}
-                    </ThemedText>
-                  </View>
-
-                  <View style={styles.mobileCardFooter}>
-                    <View style={styles.ownerBadge}>
-                      <SymbolView
-                        name={{ ios: 'person.fill', android: 'person', web: 'person' }}
-                        size={10}
-                        tintColor={theme.onSurfaceVariant}
-                      />
-                      <ThemedText type="code" themeColor="onSurfaceVariant" style={{ marginLeft: 4 }}>
-                        {deal.owner}
-                      </ThemedText>
-                    </View>
-                    <ThemedText type="code" themeColor="onSurfaceVariant">
-                      Active for {deal.daysActive} days
-                    </ThemedText>
-                  </View>
-                </Pressable>
-              ))}
-
-              {getStageDeals(selectedMobileStage).length === 0 && (
-                <ThemedView type="surface" style={styles.emptyState}>
-                  <SymbolView
-                    name={{ ios: 'tray.fill', android: 'inbox', web: 'inbox' }}
-                    size={36}
-                    tintColor={theme.onSurfaceVariant}
-                  />
-                  <ThemedText type="small" themeColor="onSurfaceVariant" style={{ marginTop: 8 }}>
-                    No active deals in this stage.
-                  </ThemedText>
-                </ThemedView>
-              )}
-            </View>
-          )}
-        </View>
-
-        {/* Card Detail & Interaction Modal / Overlay */}
-        {activeDeal && (
-          <View style={styles.modalOverlay}>
-            <ThemedView type="surface" style={[styles.modalCard, { borderColor: theme.surfaceVariant }]}>
-              <View style={styles.modalHeader}>
-                <View>
-                  <ThemedText type="subtitle" style={styles.modalTitle}>{activeDeal.company}</ThemedText>
-                  <ThemedText themeColor="onSurfaceVariant" style={styles.modalSubtitle}>
-                    Contact: {activeDeal.client}
-                  </ThemedText>
-                </View>
-                <Pressable onPress={() => setActiveDeal(null)} style={styles.closeButton}>
-                  <SymbolView
-                    name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
-                    size={24}
-                    tintColor={theme.onSurfaceVariant}
-                  />
-                </Pressable>
-              </View>
-
-              <View style={[styles.modalInfoPanel, { backgroundColor: theme.background }]}>
-                <View style={styles.infoRow}>
-                  <ThemedText type="small" themeColor="onSurfaceVariant">Current Stage</ThemedText>
-                  <View style={[styles.modalStageBadge, { backgroundColor: theme.primary + '1A' }]}>
-                    <ThemedText type="smallBold" style={{ color: theme.primary }}>{activeDeal.stage}</ThemedText>
-                  </View>
-                </View>
-                <View style={styles.infoRow}>
-                  <ThemedText type="small" themeColor="onSurfaceVariant">Deal Value</ThemedText>
-                  <ThemedText type="smallBold" style={{ fontSize: 18, color: theme.primary }}>
-                    {formatCurrency(activeDeal.value)}
-                  </ThemedText>
-                </View>
-                <View style={styles.infoRow}>
-                  <ThemedText type="small" themeColor="onSurfaceVariant">Lead Owner</ThemedText>
-                  <ThemedText type="smallBold">{activeDeal.owner}</ThemedText>
-                </View>
-                <View style={styles.infoRow}>
-                  <ThemedText type="small" themeColor="onSurfaceVariant">Age</ThemedText>
-                  <ThemedText type="smallBold">{activeDeal.daysActive} days in pipeline</ThemedText>
-                </View>
-              </View>
-
-              <View style={styles.modalActions}>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.actionButton,
-                    { backgroundColor: theme.background, borderColor: theme.surfaceVariant },
-                    pressed && styles.pressed,
-                    STAGES.indexOf(activeDeal.stage) === 0 && styles.disabledButton
-                  ]}
-                  onPress={() => handleDemoteStage(activeDeal.id)}
-                  disabled={STAGES.indexOf(activeDeal.stage) === 0}
-                >
-                  <SymbolView
-                    name={{ ios: 'arrow.left', android: 'arrow_back', web: 'arrow_back' }}
-                    size={16}
-                    tintColor={STAGES.indexOf(activeDeal.stage) === 0 ? theme.surfaceVariant : theme.onSurface}
-                  />
-                  <ThemedText type="smallBold" style={{ marginLeft: 8, color: STAGES.indexOf(activeDeal.stage) === 0 ? theme.surfaceVariant : theme.onSurface }}>
-                    Move Back
-                  </ThemedText>
-                </Pressable>
-
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.actionButton,
-                    { backgroundColor: theme.primary },
-                    pressed && styles.pressed,
-                    STAGES.indexOf(activeDeal.stage) === STAGES.length - 1 && styles.disabledButton
-                  ]}
-                  onPress={() => handleAdvanceStage(activeDeal.id)}
-                  disabled={STAGES.indexOf(activeDeal.stage) === STAGES.length - 1}
-                >
-                  <ThemedText type="smallBold" style={{ color: '#ffffff', marginRight: 8 }}>
-                    Advance Stage
-                  </ThemedText>
-                  <SymbolView
-                    name={{ ios: 'arrow.right', android: 'arrow_forward', web: 'arrow_forward' }}
-                    size={16}
-                    tintColor="#ffffff"
-                  />
-                </Pressable>
-              </View>
-
-              <Pressable
-                style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}
-                onPress={() => handleDeleteDeal(activeDeal.id)}
-              >
-                <SymbolView
-                  name={{ ios: 'trash.fill', android: 'delete', web: 'delete' }}
-                  size={14}
-                  tintColor={theme.error || '#FF3B30'}
-                />
-                <ThemedText type="smallBold" style={{ color: theme.error || '#FF3B30', marginLeft: 6 }}>
-                  Archive / Delete Deal
-                </ThemedText>
-              </Pressable>
+        ListEmptyComponent={
+          <View style={{ paddingHorizontal: Spacing.four }}>
+            <ThemedView type="surface" style={styles.emptyState}>
+              <SymbolView
+                name={{ ios: 'tray.fill', android: 'inbox', web: 'inbox' }}
+                size={36}
+                tintColor={theme.onSurfaceVariant}
+              />
+              <ThemedText type="small" themeColor="onSurfaceVariant" style={{ marginTop: 8 }}>
+                No active deals in this stage.
+              </ThemedText>
             </ThemedView>
           </View>
-        )}
-      </ThemedView>
-      </ScrollView>
+        }
+      />
+      {renderModal()}
     </View>
   );
 }
@@ -414,15 +399,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: 'column',
+    alignItems: 'center',
+    width: '100%',
   },
   container: {
-    maxWidth: MaxContentWidth,
     flexGrow: 1,
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.four,
-    gap: Spacing.four,
     width: '100%',
   },
   header: {
@@ -469,9 +451,6 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     minHeight: 450,
   },
-  mobileBoardGrid: {
-    gap: Spacing.three,
-  },
   boardColumn: {
     flex: 1,
     borderRadius: Spacing.four,
@@ -503,49 +482,16 @@ const styles = StyleSheet.create({
   columnCardsContainer: {
     gap: Spacing.two,
   },
-  dealCard: {
-    borderRadius: Spacing.three,
-    padding: Spacing.three,
-    borderWidth: 1,
-    gap: Spacing.two,
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: Spacing.one,
-  },
   emptyColumn: {
     height: 100,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  mobileColumnContainer: {
-    gap: Spacing.two,
   },
   mobileColumnHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: Spacing.one,
-  },
-  mobileCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  mobileCardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: Spacing.two,
-  },
-  ownerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   emptyState: {
     borderRadius: Spacing.three,
@@ -627,5 +573,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  pressed: {
+    opacity: 0.8,
   },
 });

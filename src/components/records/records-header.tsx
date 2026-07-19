@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { SymbolView } from 'expo-symbols';
-import { Menu, Chip, Searchbar, Button } from 'react-native-paper';
+import { Menu, Button } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/hooks/use-theme';
+import { SearchBar } from '@/components/ui/search-bar';
+import { FilterBar } from '@/components/ui/filter-bar';
+import { PrimaryButton } from '@/components/ui/primary-button';
+import { SecondaryButton } from '@/components/ui/secondary-button';
 
 interface RecordsHeaderProps {
   searchQuery: string;
@@ -30,16 +34,18 @@ export function RecordsHeader({
 
   const statuses = ['All', 'Paid', 'Partial', 'Unpaid'];
 
+  const filterOptions = statuses.map(s => ({ label: s, value: s }));
+
   return (
     <View style={[styles.searchContainer, { flexDirection: 'column', gap: 12 }]}>
-      <View style={[{ flexDirection: 'row', gap: 12, alignItems: 'center', width: '100%' }, isMobile && { paddingHorizontal: 16 }]}>
-        <Searchbar
-          placeholder="Search clients or dates"
-          onChangeText={setSearchQuery}
-          value={searchQuery}
-          style={styles.searchBar}
-          inputStyle={{ minHeight: 44 }}
-        />
+      <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', width: '100%' }}>
+        <View style={{ flex: 1 }}>
+          <SearchBar
+            placeholder="Search clients or dates"
+            onChangeText={setSearchQuery}
+            value={searchQuery}
+          />
+        </View>
 
         <Menu
           visible={dateMenuVisible}
@@ -66,45 +72,36 @@ export function RecordsHeader({
         </Menu>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4, paddingHorizontal: isMobile ? 16 : 0 }}>
-        {statuses.map(status => (
-          <Chip 
-            key={status}
-            selected={statusFilter === status}
-            onPress={() => setStatusFilter(status)}
-            mode={statusFilter === status ? 'flat' : 'outlined'}
-            showSelectedOverlay={true}
-          >
-            {status}
-          </Chip>
-        ))}
-      </ScrollView>
+      <FilterBar
+        options={filterOptions}
+        selectedValue={statusFilter}
+        onSelect={setStatusFilter}
+        style={{ marginHorizontal: -16 }}
+      />
       
-      <View style={[{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', zIndex: 10 }, isMobile && { paddingHorizontal: 16 }]}>
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', zIndex: 10 }}>
         {selectedBatches.length > 0 && (
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Button 
-              mode="contained"
+            <PrimaryButton 
               onPress={() => {
                 router.push({ pathname: '/invoice', params: { batchId: selectedBatches.join(',') } });
                 setSelectedBatches([]);
               }} 
             >
               Generate Invoice ({selectedBatches.length})
-            </Button>
+            </PrimaryButton>
             
             <Menu
               visible={bulkMenuVisible}
               onDismiss={() => setBulkMenuVisible(false)}
               anchor={
-                <Button 
-                  mode="outlined"
+                <SecondaryButton 
                   onPress={() => setBulkMenuVisible(true)} 
                   contentStyle={{ flexDirection: 'row-reverse' }}
                   icon={() => <SymbolView name={{ ios: 'chevron.down', android: 'expand_more', web: 'expand_more' }} size={16} tintColor={theme.onSurfaceVariant} />}
                 >
                   Bulk Actions
-                </Button>
+                </SecondaryButton>
               }>
               <Menu.Item onPress={exportCSV} title={`Export Selected to CSV`} />
               <Menu.Item onPress={markSelectedAsPaid} title="Mark as Paid" />

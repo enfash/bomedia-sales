@@ -374,3 +374,10 @@ See docs/DESIGN_SYSTEM.md, docs/UI_COMPONENTS.md, docs/BRAND_GUIDELINES.md, docs
 
 
 [1]: https://docs.expo.dev/agents/?utm_source=chatgpt.com "AI agents and Expo overview - Expo Documentation"
+
+# Screen Layouts & Padding Rule (Learned)
+
+Always use the `<PageContainer>` component from `@/components/ui/page-container` as the top-level scroll wrapper for all screens.
+Do NOT manually apply `maxWidth`, `alignSelf: 'center'`, or horizontal padding to `ScrollView` or `View` wrappers for the main screen layout.
+To ensure screens fit 100% on phone screens (edge-to-edge), `<PageContainer>` handles applying `0` horizontal padding on mobile natively, while applying constraints on desktop/web.
+Ensure that inner elements (like `Surface` cards) provide their own internal padding.

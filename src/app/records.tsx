@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Surface } from 'react-native-paper';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { usePageContainerStyles } from '@/components/ui/page-container';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -103,32 +104,21 @@ export default function RecordsScreen() {
     }
   };
 
-  const contentPlatformStyle = Platform.select({
-    android: {
-      paddingTop: insets.top,
-      paddingLeft: insets.left,
-      paddingRight: insets.right,
-      paddingBottom: insets.bottom,
-    },
-    web: {
-      paddingTop: Spacing.six,
-      paddingBottom: Spacing.four,
-    },
-  });
+  const { contentStyle } = usePageContainerStyles(false, 80);
 
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
   const headerComponent = (
-    <View style={isMobile ? { gap: Spacing.four, paddingTop: Spacing.four, paddingBottom: Spacing.four } : { gap: Spacing.four, paddingBottom: Spacing.four }}>
-      <ThemedView style={[styles.header, isMobile && { paddingHorizontal: Spacing.four }]}>
+    <View style={{ gap: Spacing.four, paddingTop: isMobile ? Spacing.four : 0, paddingBottom: Spacing.four, paddingHorizontal: isMobile ? Spacing.four : 0 }}>
+      <ThemedView style={styles.header}>
         <ThemedText type="subtitle" style={styles.title}>Data Records</ThemedText>
         <ThemedText themeColor="onSurfaceVariant" style={styles.subtitle}>
           Manage sales, track balances, and log payments.
         </ThemedText>
       </ThemedView>
 
-      <View style={isMobile && { paddingHorizontal: Spacing.four }}>
+      <View>
         <QuotaCard
           theme={theme}
           totalRevenue={totalRevenue}
@@ -152,45 +142,29 @@ export default function RecordsScreen() {
     </View>
   );
 
-  const innerContent = (
-    <ThemedView style={isMobile ? { flex: 1, width: '100%' } : styles.container}>
-      {!isMobile && headerComponent}
-
-      <Surface elevation={1} style={[styles.recordsCard, isMobile && { flex: 1, padding: 0, margin: 0, borderRadius: 0, backgroundColor: 'transparent' }]}>
-        <RecordsTable
-          sortedBatches={sortedBatches}
-          loading={loading}
-          theme={theme}
-          compactMode={false}
-          selectedBatches={selectedBatches}
-          setSelectedBatches={setSelectedBatches}
-          toggleSelectBatch={toggleSelectBatch}
-          handleSort={handleSort}
-          sortColumn={sortColumn}
-          sortDirection={sortDirection}
-          searchQuery={searchQuery}
-          ListHeaderComponent={isMobile ? headerComponent : undefined}
-          contentContainerStyle={isMobile ? { paddingTop: insets.top, paddingBottom: insets.bottom + 80 } : undefined}
-        />
-      </Surface>
-    </ThemedView>
-  );
-
   return (
     <View style={[styles.mainContainer, { backgroundColor: theme.background }]}>
-      {isMobile ? (
-        <View style={{ flex: 1 }}>
-          {innerContent}
+      <View style={{ flex: 1, alignItems: 'center' }}>
+        <View style={isMobile ? { flex: 1, width: '100%' } : styles.container}>
+          <Surface elevation={isMobile ? 0 : 1} style={[styles.recordsCard, isMobile && { flex: 1, padding: 0, margin: 0, borderRadius: 0, backgroundColor: 'transparent' }]}>
+            <RecordsTable
+              sortedBatches={sortedBatches}
+              loading={loading}
+              theme={theme}
+              compactMode={false}
+              selectedBatches={selectedBatches}
+              setSelectedBatches={setSelectedBatches}
+              toggleSelectBatch={toggleSelectBatch}
+              handleSort={handleSort}
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              searchQuery={searchQuery}
+              ListHeaderComponent={headerComponent}
+              contentContainerStyle={contentStyle}
+            />
+          </Surface>
         </View>
-      ) : (
-        <ScrollView
-          style={styles.scrollView}
-          contentInset={insets}
-          contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}
-        >
-          {innerContent}
-        </ScrollView>
-      )}
+      </View>
     </View>
   );
 }
