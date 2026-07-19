@@ -3,8 +3,11 @@ import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 
+import { Surface } from 'react-native-paper';
+
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { KPICard } from '@/components/ui/kpi-card';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -47,7 +50,7 @@ export default function DashboardScreen() {
         
         {/* Top Header */}
         <ThemedView style={styles.header}>
-          <ThemedText type="smallBold" themeColor="textSecondary" style={styles.dateText}>
+          <ThemedText type="smallBold" themeColor="onSurfaceVariant" style={styles.dateText}>
             {todayDate}
           </ThemedText>
           <View style={styles.titleRow}>
@@ -60,82 +63,71 @@ export default function DashboardScreen() {
         </ThemedView>
 
         {/* Live Overview Row */}
-        <ThemedView type="backgroundElement" style={styles.liveRowCard}>
+        <Surface style={styles.liveRowCard} elevation={1}>
           <View style={styles.liveItem}>
-            <ThemedText type="small" themeColor="textSecondary">Sales</ThemedText>
+            <ThemedText type="small" themeColor="onSurfaceVariant">Sales</ThemedText>
             <ThemedText type="defaultSemiBold">12</ThemedText>
           </View>
-          <View style={[styles.divider, { backgroundColor: theme.backgroundSelected }]} />
+          <View style={[styles.divider, { backgroundColor: theme.surfaceVariant }]} />
           <View style={styles.liveItem}>
-            <ThemedText type="small" themeColor="textSecondary">Jobs</ThemedText>
+            <ThemedText type="small" themeColor="onSurfaceVariant">Jobs</ThemedText>
             <ThemedText type="defaultSemiBold">8</ThemedText>
           </View>
-          <View style={[styles.divider, { backgroundColor: theme.backgroundSelected }]} />
+          <View style={[styles.divider, { backgroundColor: theme.surfaceVariant }]} />
           <View style={styles.liveItem}>
-            <ThemedText type="small" themeColor="textSecondary">Revenue</ThemedText>
+            <ThemedText type="small" themeColor="onSurfaceVariant">Revenue</ThemedText>
             <ThemedText type="defaultSemiBold" style={{ color: theme.primary }}>₦45,000</ThemedText>
           </View>
-        </ThemedView>
+        </Surface>
 
         {/* Big Card: Total Sales */}
-        <ThemedView type="backgroundElement" style={styles.bigCard}>
+        <Surface style={styles.bigCard} elevation={1}>
           <View style={styles.bigCardHeader}>
             <View style={[styles.iconContainer, { backgroundColor: theme.primary + '1A' }]}>
               <SymbolView name={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }} size={24} tintColor={theme.primary} />
             </View>
-            <ThemedText type="defaultSemiBold" themeColor="textSecondary">Total Sales</ThemedText>
+            <ThemedText type="defaultSemiBold" themeColor="onSurfaceVariant">Total Sales</ThemedText>
           </View>
           <View style={styles.bigCardBody}>
             <ThemedText type="subtitle" style={styles.bigCardAmount}>₦1,250,000</ThemedText>
-            <ThemedText type="smallBold" style={{ color: theme.success }}>+15% from last month</ThemedText>
+            <ThemedText type="smallBold" style={{ color: '#2E7D32' }}>+15% from last month</ThemedText>
           </View>
-        </ThemedView>
+        </Surface>
 
         {/* Small Cards Grid */}
         <View style={styles.gridContainer}>
-          {/* Expenses */}
-          <ThemedView type="backgroundElement" style={styles.smallCard}>
-            <View style={[styles.smallIconContainer, { backgroundColor: theme.error + '1A' }]}>
-              <SymbolView name={{ ios: 'arrow.down.right.circle.fill', android: 'trending_down', web: 'trending_down' }} size={20} tintColor={theme.error} />
-            </View>
-            <View style={styles.smallCardInfo}>
-              <ThemedText type="small" themeColor="textSecondary">Expenses</ThemedText>
-              <ThemedText type="defaultSemiBold" style={styles.smallCardValue}>₦12,500</ThemedText>
-            </View>
-          </ThemedView>
-
-          {/* Net Profit */}
-          <ThemedView type="backgroundElement" style={styles.smallCard}>
-            <View style={[styles.smallIconContainer, { backgroundColor: theme.success + '1A' }]}>
-              <SymbolView name={{ ios: 'banknote.fill', android: 'account_balance_wallet', web: 'account_balance_wallet' }} size={20} tintColor={theme.success} />
-            </View>
-            <View style={styles.smallCardInfo}>
-              <ThemedText type="small" themeColor="textSecondary">Net Profit</ThemedText>
-              <ThemedText type="defaultSemiBold" style={styles.smallCardValue}>₦32,500</ThemedText>
-            </View>
-          </ThemedView>
-
-          {/* Outstanding Debt */}
-          <ThemedView type="backgroundElement" style={styles.smallCard}>
-            <View style={[styles.smallIconContainer, { backgroundColor: theme.warning + '1A' }]}>
-              <SymbolView name={{ ios: 'exclamationmark.circle.fill', android: 'error', web: 'error' }} size={20} tintColor={theme.warning} />
-            </View>
-            <View style={styles.smallCardInfo}>
-              <ThemedText type="small" themeColor="textSecondary">Outstanding Debt</ThemedText>
-              <ThemedText type="defaultSemiBold" style={styles.smallCardValue}>₦5,000</ThemedText>
-            </View>
-          </ThemedView>
-
-          {/* Gross Margin */}
-          <ThemedView type="backgroundElement" style={styles.smallCard}>
-            <View style={[styles.smallIconContainer, { backgroundColor: theme.primaryLight + '1A' }]}>
-              <SymbolView name={{ ios: 'percent', android: 'pie_chart', web: 'pie_chart' }} size={20} tintColor={theme.primaryLight} />
-            </View>
-            <View style={styles.smallCardInfo}>
-              <ThemedText type="small" themeColor="textSecondary">Gross Margin</ThemedText>
-              <ThemedText type="defaultSemiBold" style={styles.smallCardValue}>65%</ThemedText>
-            </View>
-          </ThemedView>
+          <KPICard
+            title="Expenses"
+            value="₦12,500"
+            iconName={{ ios: 'arrow.down.right.circle.fill', android: 'trending_down', web: 'trending_down' }}
+            iconColor={theme.error}
+            iconBackgroundColor={theme.error + '1A'}
+            style={styles.smallCard}
+          />
+          <KPICard
+            title="Net Profit"
+            value="₦32,500"
+            iconName={{ ios: 'banknote.fill', android: 'account_balance_wallet', web: 'account_balance_wallet' }}
+            iconColor={'#2E7D32'}
+            iconBackgroundColor={'#2E7D32' + '1A'}
+            style={styles.smallCard}
+          />
+          <KPICard
+            title="Outstanding Debt"
+            value="₦5,000"
+            iconName={{ ios: 'exclamationmark.circle.fill', android: 'error', web: 'error' }}
+            iconColor={'#EF6C00'}
+            iconBackgroundColor={'#EF6C00' + '1A'}
+            style={styles.smallCard}
+          />
+          <KPICard
+            title="Gross Margin"
+            value="65%"
+            iconName={{ ios: 'percent', android: 'pie_chart', web: 'pie_chart' }}
+            iconColor={theme.primaryContainer}
+            iconBackgroundColor={theme.primaryContainer + '1A'}
+            style={styles.smallCard}
+          />
         </View>
 
       </ThemedView>
@@ -199,10 +191,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-evenly',
     alignItems: 'center',
-    borderRadius: Spacing.four,
+    borderRadius: 16,
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.two,
-    boxShadow: '0px 4px 10px rgba(0,0,0,0.05)',
   },
   liveItem: {
     alignItems: 'center',
@@ -213,9 +204,8 @@ const styles = StyleSheet.create({
     height: '80%',
   },
   bigCard: {
-    borderRadius: Spacing.four,
+    borderRadius: 16,
     padding: Spacing.four,
-    boxShadow: '0px 4px 10px rgba(0,0,0,0.05)',
   },
   bigCardHeader: {
     flexDirection: 'row',
@@ -245,9 +235,6 @@ const styles = StyleSheet.create({
   },
   smallCard: {
     width: '47%',
-    borderRadius: Spacing.four,
-    padding: Spacing.three,
-    boxShadow: '0px 4px 10px rgba(0,0,0,0.05)',
   },
   smallIconContainer: {
     width: 36,

@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { db } from '@/lib/firebase';
+import { ref, onValue, set, get } from 'firebase/database';
 
 export interface MaterialItem {
   id: string;
@@ -82,9 +84,6 @@ interface SettingsContextType {
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
-
-import { db } from '@/lib/firebase';
-import { ref, onValue, set, get } from 'firebase/database';
 
 // Helper to convert flat AppSettings to nested Firebase structure
 const nestSettings = (flatSettings: AppSettings) => {

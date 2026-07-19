@@ -9,6 +9,7 @@ import AppTabs from "@/components/app-tabs";
 import { SettingsProvider } from "@/context/settings-context";
 import DesktopSidebar from "@/components/desktop-sidebar";
 import { useTheme } from "@/hooks/use-theme";
+import { usePaperTheme } from "@/hooks/use-paper-theme";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -35,8 +36,10 @@ function LayoutContent() {
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const paperTheme = usePaperTheme();
+
   return (
-    <PaperProvider>
+    <PaperProvider theme={paperTheme}>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
         <SettingsProvider>
           <AnimatedSplashOverlay />

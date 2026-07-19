@@ -89,56 +89,56 @@ export default function ClientsScreen() {
         <ThemedView style={styles.container}>
           <ThemedView style={styles.header}>
             <ThemedText type="subtitle" style={styles.title}>Client Management</ThemedText>
-            <ThemedText themeColor="textSecondary" style={styles.subtitle}>
+            <ThemedText themeColor="onSurfaceVariant" style={styles.subtitle}>
               View client history, lifetime value, and outstanding balances.
             </ThemedText>
           </ThemedView>
 
-          <View style={[styles.searchBar, { backgroundColor: theme.backgroundElement, borderColor: theme.backgroundSelected }]}>
+          <View style={[styles.searchBar, { backgroundColor: theme.surface, borderColor: theme.surfaceVariant }]}>
             <SymbolView
               name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
               size={18}
-              tintColor={theme.textSecondary}
+              tintColor={theme.onSurfaceVariant}
             />
             <TextInput
-              style={[styles.searchInput, { color: theme.text }]}
+              style={[styles.searchInput, { color: theme.onSurface }]}
               placeholder="Search clients..."
-              placeholderTextColor={theme.textSecondary}
+              placeholderTextColor={theme.onSurfaceVariant}
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
           </View>
 
-          <ThemedView type="backgroundElement" style={styles.card}>
+          <ThemedView type="surface" style={styles.card}>
             {loading ? (
               <View style={{ padding: 40, alignItems: 'center' }}>
                 <ActivityIndicator size="large" color={theme.primary} />
               </View>
             ) : filteredClients.length === 0 ? (
               <View style={{ padding: 40, alignItems: 'center' }}>
-                <SymbolView name={{ ios: 'person.2.slash', android: 'group_off', web: 'group_off' }} size={40} tintColor={theme.textSecondary} />
-                <ThemedText style={{ marginTop: 12, color: theme.textSecondary }}>No clients found.</ThemedText>
+                <SymbolView name={{ ios: 'person.2.slash', android: 'group_off', web: 'group_off' }} size={40} tintColor={theme.onSurfaceVariant} />
+                <ThemedText style={{ marginTop: 12, color: theme.onSurfaceVariant }}>No clients found.</ThemedText>
               </View>
             ) : (
               <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableWrapper}>
                 <View style={{ minWidth: 700 }}>
-                  <View style={[styles.tableHeader, { borderBottomColor: theme.backgroundSelected }]}>
-                    <Text style={[styles.th, { width: 200, color: theme.textSecondary }]}>Client Name</Text>
-                    <Text style={[styles.th, { width: 80, color: theme.textSecondary, textAlign: 'right' }]}>Jobs</Text>
-                    <Text style={[styles.th, { width: 140, color: theme.textSecondary, textAlign: 'right' }]}>Lifetime Value</Text>
-                    <Text style={[styles.th, { width: 140, color: theme.textSecondary, textAlign: 'right' }]}>Outstanding Bal</Text>
-                    <Text style={[styles.th, { width: 140, color: theme.textSecondary, textAlign: 'right' }]}>Last Order</Text>
+                  <View style={[styles.tableHeader, { borderBottomColor: theme.surfaceVariant }]}>
+                    <Text style={[styles.th, { width: 200, color: theme.onSurfaceVariant }]}>Client Name</Text>
+                    <Text style={[styles.th, { width: 80, color: theme.onSurfaceVariant, textAlign: 'right' }]}>Jobs</Text>
+                    <Text style={[styles.th, { width: 140, color: theme.onSurfaceVariant, textAlign: 'right' }]}>Lifetime Value</Text>
+                    <Text style={[styles.th, { width: 140, color: theme.onSurfaceVariant, textAlign: 'right' }]}>Outstanding Bal</Text>
+                    <Text style={[styles.th, { width: 140, color: theme.onSurfaceVariant, textAlign: 'right' }]}>Last Order</Text>
                   </View>
 
                   {filteredClients.map((client, idx) => (
-                    <View key={client.clientName} style={[styles.tableRow, { borderBottomColor: theme.backgroundSelected }, idx === filteredClients.length - 1 && { borderBottomWidth: 0 }]}>
-                      <Text style={[styles.td, { width: 200, color: theme.text, fontWeight: '600', paddingRight: 8 }]} numberOfLines={1}>{client.clientName}</Text>
-                      <Text style={[styles.td, { width: 80, color: theme.text, textAlign: 'right', paddingRight: 8 }]} numberOfLines={1}>{client.jobsCount}</Text>
-                      <Text style={[styles.td, { width: 140, color: theme.text, textAlign: 'right', fontWeight: '500', paddingRight: 8 }]} numberOfLines={1}>₦{client.totalSpend.toLocaleString()}</Text>
-                      <Text style={[styles.td, { width: 140, color: client.balance > 0 ? (theme.error || '#EF4444') : theme.textSecondary, textAlign: 'right', fontWeight: client.balance > 0 ? '700' : '400', paddingRight: 8 }]} numberOfLines={1}>
+                    <View key={client.clientName} style={[styles.tableRow, { borderBottomColor: theme.surfaceVariant }, idx === filteredClients.length - 1 && { borderBottomWidth: 0 }]}>
+                      <Text style={[styles.td, { width: 200, color: theme.onSurface, fontWeight: '600', paddingRight: 8 }]} numberOfLines={1}>{client.clientName}</Text>
+                      <Text style={[styles.td, { width: 80, color: theme.onSurface, textAlign: 'right', paddingRight: 8 }]} numberOfLines={1}>{client.jobsCount}</Text>
+                      <Text style={[styles.td, { width: 140, color: theme.onSurface, textAlign: 'right', fontWeight: '500', paddingRight: 8 }]} numberOfLines={1}>₦{client.totalSpend.toLocaleString()}</Text>
+                      <Text style={[styles.td, { width: 140, color: client.balance > 0 ? (theme.error || '#EF4444') : theme.onSurfaceVariant, textAlign: 'right', fontWeight: client.balance > 0 ? '700' : '400', paddingRight: 8 }]} numberOfLines={1}>
                         ₦{client.balance.toLocaleString()}
                       </Text>
-                      <Text style={[styles.td, { width: 140, color: theme.textSecondary, textAlign: 'right' }]} numberOfLines={1}>
+                      <Text style={[styles.td, { width: 140, color: theme.onSurfaceVariant, textAlign: 'right' }]} numberOfLines={1}>
                         {new Date(client.lastPurchaseDate).toLocaleDateString()}
                       </Text>
                     </View>

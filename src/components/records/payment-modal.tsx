@@ -3,7 +3,6 @@ import { View, StyleSheet, Modal, Pressable, TextInput, Text } from 'react-nativ
 import { SymbolView } from 'expo-symbols';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
-import { SalesRecord } from './types';
 
 interface PaymentModalProps {
   paymentModalVisible: boolean;
@@ -44,30 +43,30 @@ export function PaymentModal({
       onRequestClose={() => setPaymentModalVisible(false)}
     >
       <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { backgroundColor: theme.backgroundElement }]}>
+        <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
           <View style={styles.modalHeader}>
             <ThemedText type="subtitle">Add Payment {isBatch ? '(Batch)' : ''}</ThemedText>
             <Pressable onPress={() => setPaymentModalVisible(false)}>
-              <SymbolView name={{ ios: 'xmark.circle.fill', android: 'close', web: 'close' }} size={24} tintColor={theme.textSecondary} />
+              <SymbolView name={{ ios: 'xmark.circle.fill', android: 'close', web: 'close' }} size={24} tintColor={theme.onSurfaceVariant} />
             </Pressable>
           </View>
           
           {selectedPaymentRecord && (
             <View style={styles.modalBody}>
-              <ThemedText type="small" themeColor="textSecondary">
+              <ThemedText type="small" themeColor="onSurfaceVariant">
                 Recording payment for <ThemedText type="smallBold">{clientName}</ThemedText>
               </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
+              <ThemedText type="small" themeColor="onSurfaceVariant">
                 Remaining Balance: <ThemedText type="smallBold">₦{remainingBalance.toLocaleString()}</ThemedText>
               </ThemedText>
 
-              <View style={[styles.inputWrapper, { backgroundColor: theme.background, borderColor: theme.backgroundSelected, marginTop: Spacing.four }]}>
-                <Text style={[styles.inputPrefix, { color: theme.textSecondary }]}>₦</Text>
+              <View style={[styles.inputWrapper, { backgroundColor: theme.background, borderColor: theme.surfaceVariant, marginTop: Spacing.four }]}>
+                <Text style={[styles.inputPrefix, { color: theme.onSurfaceVariant }]}>₦</Text>
                 <TextInput
-                  style={[styles.input, { color: theme.text }]}
+                  style={[styles.input, { color: theme.onSurface }]}
                   keyboardType="numeric"
                   placeholder="0.00"
-                  placeholderTextColor={theme.textSecondary}
+                  placeholderTextColor={theme.onSurfaceVariant}
                   value={paymentAmount}
                   onChangeText={setPaymentAmount}
                   autoFocus

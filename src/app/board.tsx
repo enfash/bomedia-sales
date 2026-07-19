@@ -119,27 +119,27 @@ export default function BoardScreen() {
         {/* Header Section */}
         <ThemedView style={styles.header}>
           <ThemedText type="subtitle" style={styles.title}>Kanban Sales Board</ThemedText>
-          <ThemedText themeColor="textSecondary" style={styles.subtitle}>
+          <ThemedText themeColor="onSurfaceVariant" style={styles.subtitle}>
             Manage and track active sales deals through pipeline stages.
           </ThemedText>
         </ThemedView>
 
         {/* Dashboard Stats */}
         <View style={styles.dashboardStats}>
-          <ThemedView type="backgroundElement" style={styles.statBox}>
-            <ThemedText type="code" themeColor="textSecondary">Active Pipeline</ThemedText>
+          <ThemedView type="surface" style={styles.statBox}>
+            <ThemedText type="code" themeColor="onSurfaceVariant">Active Pipeline</ThemedText>
             <ThemedText type="smallBold" style={[styles.statValue, { color: theme.primary }]}>
               ₦{getPipelineTotal().toLocaleString()}
             </ThemedText>
           </ThemedView>
-          <ThemedView type="backgroundElement" style={styles.statBox}>
-            <ThemedText type="code" themeColor="textSecondary">Total Won</ThemedText>
-            <ThemedText type="smallBold" style={[styles.statValue, { color: (theme.success || '#0A802F') }]}>
+          <ThemedView type="surface" style={styles.statBox}>
+            <ThemedText type="code" themeColor="onSurfaceVariant">Total Won</ThemedText>
+            <ThemedText type="smallBold" style={[styles.statValue, { color: '#2E7D32' }]}>
               ₦{getWonTotal().toLocaleString()}
             </ThemedText>
           </ThemedView>
-          <ThemedView type="backgroundElement" style={styles.statBox}>
-            <ThemedText type="code" themeColor="textSecondary">Deal Count</ThemedText>
+          <ThemedView type="surface" style={styles.statBox}>
+            <ThemedText type="code" themeColor="onSurfaceVariant">Deal Count</ThemedText>
             <ThemedText type="smallBold" style={styles.statValue}>
               {deals.length} Active
             </ThemedText>
@@ -160,12 +160,12 @@ export default function BoardScreen() {
                       style={[
                         styles.stageTab,
                         {
-                          backgroundColor: isActive ? theme.primary : theme.backgroundElement,
-                          borderColor: theme.backgroundSelected,
+                          backgroundColor: isActive ? theme.primary : theme.surface,
+                          borderColor: theme.surfaceVariant,
                         }
                       ]}
                   >
-                    <ThemedText type="smallBold" style={{ color: isActive ? '#ffffff' : theme.text }}>
+                    <ThemedText type="smallBold" style={{ color: isActive ? '#ffffff' : theme.onSurface }}>
                       {stage} ({count})
                     </ThemedText>
                   </Pressable>
@@ -181,15 +181,15 @@ export default function BoardScreen() {
             STAGES.map((stage) => {
               const stageDeals = getStageDeals(stage);
               return (
-                <ThemedView key={stage} type="backgroundElement" style={styles.boardColumn}>
+                <ThemedView key={stage} type="surface" style={styles.boardColumn}>
                   {/* Column Header */}
                   <View style={styles.columnHeader}>
                     <ThemedText type="smallBold" style={styles.columnTitle}>{stage}</ThemedText>
-                    <ThemedView type="backgroundSelected" style={styles.countBadge}>
+                    <ThemedView type="surfaceVariant" style={styles.countBadge}>
                       <ThemedText type="code">{stageDeals.length}</ThemedText>
                     </ThemedView>
                   </View>
-                  <ThemedText type="code" themeColor="textSecondary" style={styles.columnTotal}>
+                  <ThemedText type="code" themeColor="onSurfaceVariant" style={styles.columnTotal}>
                     ₦{getStageTotal(stage).toLocaleString()}
                   </ThemedText>
 
@@ -201,18 +201,18 @@ export default function BoardScreen() {
                         onPress={() => setActiveDeal(deal)}
                         style={({ pressed }) => [
                           styles.dealCard,
-                          { backgroundColor: theme.background, borderColor: theme.backgroundSelected },
+                          { backgroundColor: theme.background, borderColor: theme.surfaceVariant },
                           pressed && styles.pressed
                         ]}
                       >
                         <ThemedText type="smallBold">{deal.company}</ThemedText>
-                        <ThemedText type="small" themeColor="textSecondary">{deal.client}</ThemedText>
+                        <ThemedText type="small" themeColor="onSurfaceVariant">{deal.client}</ThemedText>
                         
                         <View style={styles.cardFooter}>
                           <ThemedText type="smallBold" style={{ color: theme.primary }}>
                             ₦{deal.value.toLocaleString()}
                           </ThemedText>
-                          <ThemedText type="code" themeColor="textSecondary">
+                          <ThemedText type="code" themeColor="onSurfaceVariant">
                             {deal.daysActive}d
                           </ThemedText>
                         </View>
@@ -220,7 +220,7 @@ export default function BoardScreen() {
                     ))}
                     {stageDeals.length === 0 && (
                       <View style={styles.emptyColumn}>
-                        <ThemedText type="code" themeColor="textSecondary">No Deals</ThemedText>
+                        <ThemedText type="code" themeColor="onSurfaceVariant">No Deals</ThemedText>
                       </View>
                     )}
                   </ScrollView>
@@ -241,8 +241,8 @@ export default function BoardScreen() {
 
               {getStageDeals(selectedMobileStage).length === 0 ? (
                 <View style={[styles.emptyColumn, { padding: 40, marginTop: 20 }]}>
-                  <ThemedText type="subtitle" themeColor="textSecondary">No Deals</ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 8 }}>Nothing in this stage yet.</ThemedText>
+                  <ThemedText type="subtitle" themeColor="onSurfaceVariant">No Deals</ThemedText>
+                  <ThemedText type="small" themeColor="onSurfaceVariant" style={{ marginTop: 8 }}>Nothing in this stage yet.</ThemedText>
                 </View>
               ) : getStageDeals(selectedMobileStage).map((deal) => (
                 <Pressable
@@ -250,14 +250,14 @@ export default function BoardScreen() {
                   onPress={() => setActiveDeal(deal)}
                   style={({ pressed }) => [
                     styles.dealCard,
-                    { backgroundColor: theme.backgroundElement, borderColor: theme.backgroundSelected },
+                    { backgroundColor: theme.surface, borderColor: theme.surfaceVariant },
                     pressed && styles.pressed
                   ]}
                 >
                   <View style={styles.mobileCardHeader}>
                     <View>
                       <ThemedText type="smallBold" style={{ fontSize: 16 }}>{deal.company}</ThemedText>
-                      <ThemedText type="small" themeColor="textSecondary">{deal.client}</ThemedText>
+                      <ThemedText type="small" themeColor="onSurfaceVariant">{deal.client}</ThemedText>
                     </View>
                     <ThemedText type="smallBold" style={{ color: theme.primary, fontSize: 16 }}>
                       ₦{deal.value.toLocaleString()}
@@ -269,13 +269,13 @@ export default function BoardScreen() {
                       <SymbolView
                         name={{ ios: 'person.fill', android: 'person', web: 'person' }}
                         size={10}
-                        tintColor={theme.textSecondary}
+                        tintColor={theme.onSurfaceVariant}
                       />
-                      <ThemedText type="code" themeColor="textSecondary" style={{ marginLeft: 4 }}>
+                      <ThemedText type="code" themeColor="onSurfaceVariant" style={{ marginLeft: 4 }}>
                         {deal.owner}
                       </ThemedText>
                     </View>
-                    <ThemedText type="code" themeColor="textSecondary">
+                    <ThemedText type="code" themeColor="onSurfaceVariant">
                       Active for {deal.daysActive} days
                     </ThemedText>
                   </View>
@@ -283,13 +283,13 @@ export default function BoardScreen() {
               ))}
 
               {getStageDeals(selectedMobileStage).length === 0 && (
-                <ThemedView type="backgroundElement" style={styles.emptyState}>
+                <ThemedView type="surface" style={styles.emptyState}>
                   <SymbolView
                     name={{ ios: 'tray.fill', android: 'inbox', web: 'inbox' }}
                     size={36}
-                    tintColor={theme.textSecondary}
+                    tintColor={theme.onSurfaceVariant}
                   />
-                  <ThemedText type="small" themeColor="textSecondary" style={{ marginTop: 8 }}>
+                  <ThemedText type="small" themeColor="onSurfaceVariant" style={{ marginTop: 8 }}>
                     No active deals in this stage.
                   </ThemedText>
                 </ThemedView>
@@ -301,11 +301,11 @@ export default function BoardScreen() {
         {/* Card Detail & Interaction Modal / Overlay */}
         {activeDeal && (
           <View style={styles.modalOverlay}>
-            <ThemedView type="backgroundElement" style={[styles.modalCard, { borderColor: theme.backgroundSelected }]}>
+            <ThemedView type="surface" style={[styles.modalCard, { borderColor: theme.surfaceVariant }]}>
               <View style={styles.modalHeader}>
                 <View>
                   <ThemedText type="subtitle" style={styles.modalTitle}>{activeDeal.company}</ThemedText>
-                  <ThemedText themeColor="textSecondary" style={styles.modalSubtitle}>
+                  <ThemedText themeColor="onSurfaceVariant" style={styles.modalSubtitle}>
                     Contact: {activeDeal.client}
                   </ThemedText>
                 </View>
@@ -313,30 +313,30 @@ export default function BoardScreen() {
                   <SymbolView
                     name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }}
                     size={24}
-                    tintColor={theme.textSecondary}
+                    tintColor={theme.onSurfaceVariant}
                   />
                 </Pressable>
               </View>
 
               <View style={[styles.modalInfoPanel, { backgroundColor: theme.background }]}>
                 <View style={styles.infoRow}>
-                  <ThemedText type="small" themeColor="textSecondary">Current Stage</ThemedText>
+                  <ThemedText type="small" themeColor="onSurfaceVariant">Current Stage</ThemedText>
                   <View style={[styles.modalStageBadge, { backgroundColor: theme.primary + '1A' }]}>
                     <ThemedText type="smallBold" style={{ color: theme.primary }}>{activeDeal.stage}</ThemedText>
                   </View>
                 </View>
                 <View style={styles.infoRow}>
-                  <ThemedText type="small" themeColor="textSecondary">Deal Value</ThemedText>
+                  <ThemedText type="small" themeColor="onSurfaceVariant">Deal Value</ThemedText>
                   <ThemedText type="smallBold" style={{ fontSize: 18, color: theme.primary }}>
                     ₦{activeDeal.value.toLocaleString()}
                   </ThemedText>
                 </View>
                 <View style={styles.infoRow}>
-                  <ThemedText type="small" themeColor="textSecondary">Lead Owner</ThemedText>
+                  <ThemedText type="small" themeColor="onSurfaceVariant">Lead Owner</ThemedText>
                   <ThemedText type="smallBold">{activeDeal.owner}</ThemedText>
                 </View>
                 <View style={styles.infoRow}>
-                  <ThemedText type="small" themeColor="textSecondary">Age</ThemedText>
+                  <ThemedText type="small" themeColor="onSurfaceVariant">Age</ThemedText>
                   <ThemedText type="smallBold">{activeDeal.daysActive} days in pipeline</ThemedText>
                 </View>
               </View>
@@ -345,7 +345,7 @@ export default function BoardScreen() {
                 <Pressable
                   style={({ pressed }) => [
                     styles.actionButton,
-                    { backgroundColor: theme.background, borderColor: theme.backgroundSelected },
+                    { backgroundColor: theme.background, borderColor: theme.surfaceVariant },
                     pressed && styles.pressed,
                     STAGES.indexOf(activeDeal.stage) === 0 && styles.disabledButton
                   ]}
@@ -355,9 +355,9 @@ export default function BoardScreen() {
                   <SymbolView
                     name={{ ios: 'arrow.left', android: 'arrow_back', web: 'arrow_back' }}
                     size={16}
-                    tintColor={STAGES.indexOf(activeDeal.stage) === 0 ? theme.backgroundSelected : theme.text}
+                    tintColor={STAGES.indexOf(activeDeal.stage) === 0 ? theme.surfaceVariant : theme.onSurface}
                   />
-                  <ThemedText type="smallBold" style={{ marginLeft: 8, color: STAGES.indexOf(activeDeal.stage) === 0 ? theme.backgroundSelected : theme.text }}>
+                  <ThemedText type="smallBold" style={{ marginLeft: 8, color: STAGES.indexOf(activeDeal.stage) === 0 ? theme.surfaceVariant : theme.onSurface }}>
                     Move Back
                   </ThemedText>
                 </Pressable>

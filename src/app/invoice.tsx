@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Pressable, Platform, ScrollView, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Pressable, Platform, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Button, TextInput as PaperTextInput, Surface } from 'react-native-paper';
+import { useTheme } from '@/hooks/use-theme';
 import { SymbolView } from 'expo-symbols';
 import { Image } from 'expo-image';
 import * as Print from 'expo-print';
@@ -16,6 +18,7 @@ export default function InvoiceScreen() {
   const { batchId } = useLocalSearchParams();
   const router = useRouter();
   const { settings, isLoading: settingsLoading } = useSettings();
+  const theme = useTheme();
   
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<any[]>([]);
@@ -25,6 +28,7 @@ export default function InvoiceScreen() {
 
   useEffect(() => {
     if (!batchId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }
@@ -260,22 +264,20 @@ export default function InvoiceScreen() {
   };
 
   return (
-    <View style={styles.mainContainer}>
+    <View style={[styles.mainContainer, { backgroundColor: theme.background }]}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
         <View style={styles.container}>
           <View style={styles.controls}>
-        <Pressable style={styles.controlBtn} onPress={() => router.back()}>
-          <SymbolView name={{ ios: 'arrow.left', android: 'arrow_back', web: 'arrow_back' }} size={20} tintColor="#2e388d" />
-          <Text style={styles.controlText}>Back</Text>
-        </Pressable>
+        <Button mode="text" onPress={() => router.back()} icon="arrow-left" style={{ marginBottom: 12 }}>
+          Back
+        </Button>
         
-        <Pressable style={[styles.controlBtn, styles.printBtn]} onPress={handleExport}>
-          <SymbolView name={{ ios: 'square.and.arrow.down', android: 'download', web: 'download' }} size={20} tintColor="#FFF" />
-          <Text style={[styles.controlText, { color: '#FFF' }]}>{Platform.OS === 'web' ? 'Save as PDF / Print' : 'Save / Share PDF'}</Text>
-        </Pressable>
+        <Button mode="contained" onPress={handleExport} icon="download">
+          {Platform.OS === 'web' ? 'Save as PDF / Print' : 'Save / Share PDF'}
+        </Button>
       </View>
 
-      <View style={styles.invoiceSheet}>
+      <Surface elevation={2} style={styles.invoiceSheet}>
         {/* Status Stamp */}
         <View style={[styles.stampContainer, { borderColor: statusColor }]}>
           <Text style={[styles.stampText, { color: statusColor }]}>{status}</Text>
@@ -362,35 +364,37 @@ export default function InvoiceScreen() {
         <View style={styles.editableSection}>
           <View style={styles.editableRow}>
             <Text style={styles.sectionTitle}>DUE DATE</Text>
-            <TextInput
-              style={styles.editableInput}
+            <PaperTextInput
+              mode="outlined"
+              dense
               value={dueDate}
               onChangeText={setDueDate}
               placeholder="e.g. Net 30, Oct 15th"
-              placeholderTextColor="#9e9e9e"
             />
           </View>
 
           <View style={[styles.editableRow, { marginTop: 16 }]}>
             <Text style={styles.sectionTitle}>NOTES</Text>
-            <TextInput
-              style={[styles.editableInput, { height: 80, paddingTop: 12 }]}
+            <PaperTextInput
+              mode="outlined"
+              multiline
+              numberOfLines={3}
               value={notes}
               onChangeText={setNotes}
               placeholder="Add payment terms or special notes here..."
-              placeholderTextColor="#9e9e9e"
-              multiline
-              textAlignVertical="top"
             />
           </View>
 
-          <Pressable 
-            style={({ pressed }) => [styles.saveDetailsBtn, pressed && { opacity: 0.7 }]}
+          <Button 
+            mode="contained"
             onPress={handleSaveDetails}
+            loading={isSavingDetails}
             disabled={isSavingDetails}
+            style={{ marginTop: 16 }}
+            contentStyle={{ height: 48 }}
           >
-            {isSavingDetails ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.saveDetailsText}>Save Notes</Text>}
-          </Pressable>
+            Save Notes
+          </Button>
         </View>
         
         {/* Payment Details */}
@@ -400,7 +404,7 @@ export default function InvoiceScreen() {
             <Text style={styles.paymentText}>{settings.bankDetails}</Text>
           </View>
         </View>
-        </View>
+        </Surface>
         </View>
       </ScrollView>
     </View>

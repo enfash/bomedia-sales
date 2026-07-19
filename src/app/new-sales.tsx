@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View, KeyboardAvoidingView, Alert, Modal, Animated, PanResponder, TouchableOpacity } from 'react-native';
-import { Checkbox, ActivityIndicator } from 'react-native-paper';
+import { Platform, Pressable, ScrollView, StyleSheet, View, KeyboardAvoidingView, Alert, Modal, Animated, PanResponder, TouchableOpacity } from 'react-native';
+import { Checkbox, ActivityIndicator, TextInput as PaperTextInput, Surface, Button, SegmentedButtons } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useFocusEffect } from 'expo-router';
@@ -29,7 +29,7 @@ export default function NewSalesScreen() {
   const [materialQuery, setMaterialQuery] = useState('');
   const [showMaterialSheet, setShowMaterialSheet] = useState(false);
   const [sheetSearchQuery, setSheetSearchQuery] = useState('');
-  const sheetTranslateY = useRef(new Animated.Value(0)).current;
+  const [sheetTranslateY] = useState(() => new Animated.Value(0));
 
   const scrollViewRef = useRef<ScrollView>(null);
   
@@ -42,7 +42,7 @@ export default function NewSalesScreen() {
     }, [])
   );
 
-  const sheetPanResponder = useRef(
+  const [sheetPanResponder] = useState(() =>
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onStartShouldSetPanResponderCapture: () => false,
@@ -74,7 +74,7 @@ export default function NewSalesScreen() {
         }
       },
     })
-  ).current;
+  );
 
   // Form State
   const [clientName, setClientName] = useState('');
@@ -313,7 +313,7 @@ export default function NewSalesScreen() {
             <View style={[styles.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
               <View>
                 <ThemedText type="subtitle" style={styles.title}>New Sales Record</ThemedText>
-                <ThemedText themeColor="textSecondary" style={styles.subtitle}>
+                <ThemedText themeColor="onSurfaceVariant" style={styles.subtitle}>
                   Enter details for a new sale.
                 </ThemedText>
               </View>
@@ -321,18 +321,18 @@ export default function NewSalesScreen() {
           </ThemedView>
 
           {/* Section 1: Client Information */}
-          <ThemedView type="backgroundElement" style={styles.card}>
+          <Surface elevation={1} style={styles.card}>
             <ThemedText type="smallBold" style={styles.cardHeader}>1. Client Information</ThemedText>
 
             <View style={styles.formGroup}>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Date</ThemedText>
+              <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Date</ThemedText>
               {Platform.OS === 'ios' ? (
                 <View style={{ height: 44, justifyContent: 'center', alignItems: 'flex-start' }}>
                   <DateTimePicker
                     value={date}
                     mode="date"
                     display="default"
-                    onChange={(event, selectedDate) => {
+                    onValueChange={(event, selectedDate) => {
                       if (selectedDate) setDate(selectedDate);
                     }}
                   />
@@ -345,12 +345,12 @@ export default function NewSalesScreen() {
                       styles.input,
                       {
                         backgroundColor: theme.background,
-                        borderColor: theme.backgroundSelected,
+                        borderColor: theme.surfaceVariant,
                         justifyContent: 'center'
                       }
                     ]}
                   >
-                    <ThemedText style={{ color: theme.text }}>
+                    <ThemedText style={{ color: theme.onSurface }}>
                       {date.toISOString().split('T')[0]}
                     </ThemedText>
                   </Pressable>
@@ -359,10 +359,11 @@ export default function NewSalesScreen() {
                       value={date}
                       mode="date"
                       display="default"
-                      onChange={(event, selectedDate) => {
+                      onValueChange={(event, selectedDate) => {
                         setShowDatePicker(false);
                         if (selectedDate) setDate(selectedDate);
                       }}
+                      onDismiss={() => setShowDatePicker(false)}
                     />
                   )}
                 </>
@@ -370,18 +371,12 @@ export default function NewSalesScreen() {
             </View>
 
             <View style={styles.formGroup}>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Client / Company Name</ThemedText>
-              <TextInput 
-                style={[
-                  styles.input,
-                  {
-                    color: theme.text,
-                    backgroundColor: theme.background,
-                    borderColor: theme.backgroundSelected,
-                  }
-                ]}
+              <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Client / Company Name</ThemedText>
+              <PaperTextInput 
+                mode="outlined"
+                dense
+                style={{ backgroundColor: theme.background }}
                 placeholder="Enter client name"
-                placeholderTextColor={theme.textSecondary}
                 value={clientName}
                 onChangeText={setClientName}
                 ref={clientNameRef}
@@ -391,18 +386,12 @@ export default function NewSalesScreen() {
             </View>
 
             <View style={styles.formGroup}>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Contact (Phone / Email)</ThemedText>
-              <TextInput 
-                style={[
-                  styles.input,
-                  {
-                    color: theme.text,
-                    backgroundColor: theme.background,
-                    borderColor: theme.backgroundSelected,
-                  }
-                ]}
+              <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Contact (Phone / Email)</ThemedText>
+              <PaperTextInput 
+                mode="outlined"
+                dense
+                style={{ backgroundColor: theme.background }}
                 placeholder="e.g. 08012345678"
-                placeholderTextColor={theme.textSecondary}
                 value={contact}
                 onChangeText={setContact}
                 ref={contactRef}
@@ -410,10 +399,10 @@ export default function NewSalesScreen() {
                 onSubmitEditing={() => jobNameRef.current?.focus()}
               />
             </View>
-          </ThemedView>
+          </Surface>
 
           {/* Section 2: Job Dimensions & Pricing */}
-          <ThemedView type="backgroundElement" style={[styles.card, { zIndex: 10 }]}>
+          <Surface elevation={1} style={[styles.card, { zIndex: 10 }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <ThemedText type="smallBold" style={styles.cardHeader}>2. Job Detail & Material</ThemedText>
               <Pressable onPress={refreshSettings} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -423,18 +412,12 @@ export default function NewSalesScreen() {
             </View>
             
             <View style={styles.formGroup}>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Job Name (Optional)</ThemedText>
-              <TextInput 
-                style={[
-                  styles.input,
-                  {
-                    color: theme.text,
-                    backgroundColor: theme.background,
-                    borderColor: theme.backgroundSelected,
-                  }
-                ]}
+              <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Job Name (Optional)</ThemedText>
+              <PaperTextInput 
+                mode="outlined"
+                dense
+                style={{ backgroundColor: theme.background }}
                 placeholder="e.g. Birthday Banner"
-                placeholderTextColor={theme.textSecondary}
                 value={jobName}
                 onChangeText={setJobName}
                 ref={jobNameRef}
@@ -445,7 +428,7 @@ export default function NewSalesScreen() {
 
             <View style={styles.formGroup}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Material</ThemedText>
+                <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Material</ThemedText>
                 {isLoading && <ActivityIndicator size={12} color={theme.primary} />}
               </View>
               <TouchableOpacity
@@ -454,18 +437,18 @@ export default function NewSalesScreen() {
                 style={[
                   styles.input,
                   styles.materialPickerButton,
-                  { backgroundColor: theme.background, borderColor: theme.backgroundSelected },
+                  { backgroundColor: theme.background, borderColor: theme.surfaceVariant },
                 ]}
               >
                 <ThemedText
                   style={[
                     styles.materialPickerText,
-                    { color: materialQuery ? theme.text : theme.textSecondary },
+                    { color: materialQuery ? theme.onSurface : theme.onSurfaceVariant },
                   ]}
                 >
                   {materialQuery || 'Tap to select material...'}
                 </ThemedText>
-                <ThemedText style={{ color: theme.textSecondary, fontSize: 16 }}>▼</ThemedText>
+                <ThemedText style={{ color: theme.onSurfaceVariant, fontSize: 16 }}>▼</ThemedText>
               </TouchableOpacity>
             </View>
 
@@ -474,47 +457,27 @@ export default function NewSalesScreen() {
                 Dimensions & Quantity
               </ThemedText>
               
-              <View style={[styles.row, { gap: 0, borderRadius: Spacing.two, overflow: 'hidden', borderWidth: 1, borderColor: theme.backgroundSelected }]}>
-                <Pressable
-                  onPress={() => setJobUnit('in')}
-                  style={[
-                    styles.toggleButton,
-                    { backgroundColor: jobUnit === 'in' ? theme.primary : theme.background }
-                  ]}
-                >
-                  <ThemedText type="smallBold" style={{ color: jobUnit === 'in' ? '#ffffff' : theme.text }}>
-                    in
-                  </ThemedText>
-                </Pressable>
-                <Pressable
-                  onPress={() => setJobUnit('ft')}
-                  style={[
-                    styles.toggleButton,
-                    { backgroundColor: jobUnit === 'ft' ? theme.primary : theme.background }
-                  ]}
-                >
-                  <ThemedText type="smallBold" style={{ color: jobUnit === 'ft' ? '#ffffff' : theme.text }}>
-                    ft
-                  </ThemedText>
-                </Pressable>
-              </View>
+              <SegmentedButtons
+                value={jobUnit}
+                onValueChange={(val) => setJobUnit(val as 'in' | 'ft')}
+                buttons={[
+                  { value: 'in', label: 'IN' },
+                  { value: 'ft', label: 'FT' },
+                ]}
+                density="small"
+                style={{ width: 140 }}
+              />
             </View>
 
             <View style={styles.row}>
               <View style={[styles.formGroup, { flex: 1, minWidth: 140 }]}>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Width ({jobUnit})</ThemedText>
-                <TextInput 
-                  style={[
-                    styles.input,
-                    {
-                      color: theme.text,
-                      backgroundColor: theme.background,
-                      borderColor: theme.backgroundSelected,
-                    }
-                  ]}
+                <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Width ({jobUnit})</ThemedText>
+                <PaperTextInput 
+                  mode="outlined"
+                  dense
+                  style={{ backgroundColor: theme.background }}
                   placeholder={jobUnit === 'in' ? "e.g. 24" : "e.g. 2"}
                   keyboardType="numeric"
-                  placeholderTextColor={theme.textSecondary}
                   value={width}
                   onChangeText={setWidth}
                   ref={widthRef}
@@ -524,19 +487,13 @@ export default function NewSalesScreen() {
                 />
               </View>
               <View style={[styles.formGroup, { flex: 1, minWidth: 140 }]}>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Height ({jobUnit})</ThemedText>
-                <TextInput 
-                  style={[
-                    styles.input,
-                    {
-                      color: theme.text,
-                      backgroundColor: theme.background,
-                      borderColor: theme.backgroundSelected,
-                    }
-                  ]}
+                <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Height ({jobUnit})</ThemedText>
+                <PaperTextInput 
+                  mode="outlined"
+                  dense
+                  style={{ backgroundColor: theme.background }}
                   placeholder={jobUnit === 'in' ? "e.g. 36" : "e.g. 3"}
                   keyboardType="numeric"
-                  placeholderTextColor={theme.textSecondary}
                   value={height}
                   onChangeText={setHeight}
                   ref={heightRef}
@@ -549,7 +506,7 @@ export default function NewSalesScreen() {
 
             <View style={styles.row}>
               <View style={[styles.formGroup, { flex: 1, minWidth: 140 }]}>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Quantity</ThemedText>
+                <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Quantity</ThemedText>
                 <View style={[
                   styles.row, 
                   styles.input,
@@ -557,7 +514,7 @@ export default function NewSalesScreen() {
                     alignItems: 'center', 
                     paddingHorizontal: 0,
                     backgroundColor: theme.background,
-                    borderColor: theme.backgroundSelected,
+                    borderColor: theme.surfaceVariant,
                     gap: 0,
                   }
                 ]}>
@@ -568,20 +525,21 @@ export default function NewSalesScreen() {
                       pressed && styles.pressed
                     ]}
                   >
-                    <ThemedText style={{ fontSize: 18, color: theme.text }}>-</ThemedText>
+                    <ThemedText style={{ fontSize: 18, color: theme.onSurface }}>-</ThemedText>
                   </Pressable>
-                  <TextInput 
+                  <PaperTextInput 
+                    mode="flat"
+                    dense
                     style={{
                       flex: 1,
                       textAlign: 'center',
-                      color: theme.text,
-                      fontSize: 14,
-                      height: '100%',
+                      backgroundColor: 'transparent',
                     }}
+                    underlineColor="transparent"
+                    activeUnderlineColor="transparent"
                     value={quantity}
                     onChangeText={setQuantity}
                     keyboardType="numeric"
-                    placeholderTextColor={theme.textSecondary}
                     ref={quantityRef}
                     returnKeyType="next"
                     blurOnSubmit={false}
@@ -594,24 +552,18 @@ export default function NewSalesScreen() {
                       pressed && styles.pressed
                     ]}
                   >
-                    <ThemedText style={{ fontSize: 18, color: theme.text }}>+</ThemedText>
+                    <ThemedText style={{ fontSize: 18, color: theme.onSurface }}>+</ThemedText>
                   </Pressable>
                 </View>
               </View>
               <View style={[styles.formGroup, { flex: 1, minWidth: 140 }]}>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Price/sqft (₦)</ThemedText>
-                <TextInput 
-                  style={[
-                    styles.input,
-                    {
-                      color: theme.text,
-                      backgroundColor: theme.background,
-                      borderColor: theme.backgroundSelected,
-                    }
-                  ]}
+                <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Price/sqft (₦)</ThemedText>
+                <PaperTextInput 
+                  mode="outlined"
+                  dense
+                  style={{ backgroundColor: theme.background }}
                   placeholder="e.g. 25.00"
                   keyboardType="numeric"
-                  placeholderTextColor={theme.textSecondary}
                   value={unitPrice}
                   onChangeText={setUnitPrice}
                   ref={unitPriceRef}
@@ -629,7 +581,7 @@ export default function NewSalesScreen() {
                   color={theme.primary}
                 />
                 <Pressable onPress={() => setAddEyelets(!addEyelets)}>
-                  <ThemedText style={{ color: theme.text }}>
+                  <ThemedText style={{ color: theme.onSurface }}>
                     Eyelets ({settings?.eyeletCost === 0 ? 'Free' : `₦${settings?.eyeletCost}`})
                   </ThemedText>
                 </Pressable>
@@ -642,7 +594,7 @@ export default function NewSalesScreen() {
                   color={theme.primary}
                 />
                 <Pressable onPress={() => setAddLamination(!addLamination)}>
-                  <ThemedText style={{ color: theme.text }}>
+                  <ThemedText style={{ color: theme.onSurface }}>
                     Lamination (₦{settings?.laminationCost}/sqft)
                   </ThemedText>
                 </Pressable>
@@ -650,35 +602,29 @@ export default function NewSalesScreen() {
             </View>
 
             <View style={[styles.formGroup, { marginBottom: Spacing.four }]}>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Turnaround Time</ThemedText>
-              <View style={[styles.row, { gap: 0, borderRadius: Spacing.two, overflow: 'hidden', borderWidth: 1, borderColor: theme.backgroundSelected }]}>
-                {['Standard', 'Rush', 'Same Day'].map((time) => (
-                  <Pressable
-                    key={time}
-                    onPress={() => setTurnaroundTime(time as 'Standard' | 'Rush' | 'Same Day')}
-                    style={[
-                      styles.toggleButton,
-                      { flex: 1, backgroundColor: turnaroundTime === time ? theme.primary : theme.background }
-                    ]}
-                  >
-                    <ThemedText type="smallBold" style={{ color: turnaroundTime === time ? '#ffffff' : theme.text }}>
-                      {time}
-                    </ThemedText>
-                  </Pressable>
-                ))}
-              </View>
+              <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Turnaround Time</ThemedText>
+              <SegmentedButtons
+                value={turnaroundTime}
+                onValueChange={(val) => setTurnaroundTime(val as 'Standard' | 'Rush' | 'Same Day')}
+                buttons={[
+                  { value: 'Standard', label: 'Standard' },
+                  { value: 'Rush', label: 'Rush' },
+                  { value: 'Same Day', label: 'Same Day' },
+                ]}
+                density="small"
+              />
             </View>
 
             {/* Live Preview */}
-            <View style={[styles.previewCard, { backgroundColor: theme.backgroundSelected }]}>
+            <View style={[styles.previewCard, { backgroundColor: theme.surfaceVariant }]}>
               <ThemedText type="smallBold">Current Item Preview</ThemedText>
               <View style={styles.row}>
                 <View style={{ flex: 1, gap: 2 }}>
-                  <ThemedText type="small" themeColor="textSecondary">
+                  <ThemedText type="small" themeColor="onSurfaceVariant">
                     {parsedQuantity}x {materialQuery || 'No Material'} ({width || '0'}x{height || '0'}{jobUnit})
                     {addEyelets ? ' + Eyelets' : ''}{addLamination ? ' + Lam' : ''}
                   </ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary" style={{ fontStyle: 'italic' }}>
+                  <ThemedText type="small" themeColor="onSurfaceVariant" style={{ fontStyle: 'italic' }}>
                     {areaSqFt > 0 ? `${areaWithWaste.toFixed(2)} sqft (inc waste) @ ₦${parsedUnitPrice}/sqft` : `Flat rate @ ₦${parsedUnitPrice}`}
                   </ThemedText>
                   {movApplied && (
@@ -693,25 +639,20 @@ export default function NewSalesScreen() {
               </View>
             </View>
 
-            <Pressable
-              style={({ pressed }) => [
-                styles.submitButton, 
-                { backgroundColor: theme.primary },
-                pressed && styles.pressed,
-                (!materialQuery || !width || !height || !unitPrice) && { opacity: 0.5 }
-              ]}
+            <Button
+              mode="contained"
               onPress={addToBatch}
               disabled={!materialQuery || !width || !height || !unitPrice}
+              style={{ marginTop: 16 }}
+              contentStyle={{ height: 48 }}
             >
-              <ThemedText type="smallBold" style={styles.submitButtonText}>
-                Add to Batch
-              </ThemedText>
-            </Pressable>
-          </ThemedView>
+              Add to Batch
+            </Button>
+          </Surface>
 
           {/* Section 4: Batch Review */}
           {batchItems.length > 0 && (
-            <ThemedView type="backgroundElement" style={styles.card}>
+            <Surface elevation={2} style={[styles.card, { backgroundColor: theme.surface }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <ThemedText type="defaultSemiBold">Items in Order ({batchItems.length})</ThemedText>
                 <ThemedText type="smallBold" style={{ color: theme.primary }}>
@@ -727,14 +668,14 @@ export default function NewSalesScreen() {
                   const effArea = area > 0 ? area : 1;
 
                   return (
-                    <View key={item.id} style={[styles.batchItem, { borderColor: theme.backgroundSelected }]}>
+                    <View key={item.id} style={[styles.batchItem, { borderColor: theme.surfaceVariant }]}>
                       <View style={{ flex: 1, gap: 2 }}>
                         <ThemedText type="smallBold">Item {index + 1}: {item.jobName || 'Unnamed'} ({item.material})</ThemedText>
-                        <ThemedText type="small" themeColor="textSecondary">
+                        <ThemedText type="small" themeColor="onSurfaceVariant">
                           {item.quantity}x ({item.width}x{item.height}{item.jobUnit})
                           {item.eyelets ? ' + Eyelets' : ''}{item.lamination ? ' + Lam' : ''} {item.turnaroundTime !== 'Standard' ? `(${item.turnaroundTime})` : ''}
                         </ThemedText>
-                        <ThemedText type="small" themeColor="textSecondary" style={{ fontStyle: 'italic' }}>
+                        <ThemedText type="small" themeColor="onSurfaceVariant" style={{ fontStyle: 'italic' }}>
                           {effArea > 0 ? `${(effArea * (1 + (settings?.wasteFactor || 0) / 100)).toFixed(2)} sqft (inc waste) @ ₦${item.unitPrice.toLocaleString()}/sqft` : `₦${item.unitPrice.toLocaleString()}`}
                         </ThemedText>
                       </View>
@@ -752,19 +693,13 @@ export default function NewSalesScreen() {
               </View>
 
               <View style={[styles.formGroup, { marginTop: Spacing.four }]}>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Delivery / Dispatch Cost (₦)</ThemedText>
-                <TextInput 
-                  style={[
-                    styles.input,
-                    {
-                      color: theme.text,
-                      backgroundColor: theme.background,
-                      borderColor: theme.backgroundSelected,
-                    }
-                  ]}
+                <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Delivery / Dispatch Cost (₦)</ThemedText>
+                <PaperTextInput 
+                  mode="outlined"
+                  dense
+                  style={{ backgroundColor: theme.background }}
                   placeholder="e.g. 2000 (0 for pickup)"
                   keyboardType="numeric"
-                  placeholderTextColor={theme.textSecondary}
                   value={deliveryCost}
                   onChangeText={setDeliveryCost}
                 />
@@ -772,45 +707,33 @@ export default function NewSalesScreen() {
 
               <View style={[styles.row, { marginTop: Spacing.two }]}>
                 <View style={[styles.formGroup, { flex: 1, minWidth: 140 }]}>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Advance / Paid Amount (₦)</ThemedText>
-                  <TextInput 
-                    style={[
-                      styles.input,
-                      {
-                        color: theme.text,
-                        backgroundColor: theme.background,
-                        borderColor: theme.backgroundSelected,
-                      }
-                    ]}
+                  <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Advance / Paid Amount (₦)</ThemedText>
+                  <PaperTextInput 
+                    mode="outlined"
+                    dense
+                    style={{ backgroundColor: theme.background }}
                     placeholder="e.g. 5000"
                     keyboardType="numeric"
-                    placeholderTextColor={theme.textSecondary}
                     value={advancePayment}
                     onChangeText={setAdvancePayment}
                   />
                 </View>
                 
                 <View style={[styles.formGroup, { flex: 1, minWidth: 140 }]}>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Payment Method</ThemedText>
-                  <View style={[styles.row, { gap: 0, borderRadius: Spacing.two, overflow: 'hidden', borderWidth: 1, borderColor: theme.backgroundSelected, height: 44 }]}>
-                    {['Cash', 'POS', 'Transfer'].map((method) => (
-                      <Pressable
-                        key={method}
-                        onPress={() => setPaymentMethod(method as any)}
-                        style={[
-                          styles.toggleButton,
-                          { flex: 1, height: '100%', backgroundColor: paymentMethod === method ? theme.primary : theme.background }
-                        ]}
-                      >
-                        <ThemedText type="smallBold" style={{ color: paymentMethod === method ? '#ffffff' : theme.text, fontSize: 11 }}>
-                          {method}
-                        </ThemedText>
-                      </Pressable>
-                    ))}
-                  </View>
+                  <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Payment Method</ThemedText>
+                  <SegmentedButtons
+                    value={paymentMethod}
+                    onValueChange={(val) => setPaymentMethod(val as 'Cash' | 'POS' | 'Transfer')}
+                    buttons={[
+                      { value: 'Cash', label: 'Cash' },
+                      { value: 'POS', label: 'POS' },
+                      { value: 'Transfer', label: 'Transfer' },
+                    ]}
+                    density="small"
+                  />
                 </View>
               </View>
-            </ThemedView>
+            </Surface>
           )}
         </ThemedView>
       </ScrollView>
@@ -820,31 +743,27 @@ export default function NewSalesScreen() {
         <View style={[
           styles.stickyFooter, 
           { 
-            backgroundColor: theme.backgroundElement,
-            borderTopColor: theme.backgroundSelected,
+            backgroundColor: theme.surface,
+            borderTopColor: theme.surfaceVariant,
             paddingBottom: Platform.OS === 'ios' ? insets.bottom : Spacing.four,
           }
         ]}>
           <View style={[styles.row, { justifyContent: 'space-between', alignItems: 'center', width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center' }]}>
             <View>
-              <ThemedText type="small" themeColor="textSecondary">Final Total</ThemedText>
+              <ThemedText type="small" themeColor="onSurfaceVariant">Final Total</ThemedText>
               <ThemedText type="subtitle" style={{ color: theme.primary, fontWeight: '700' }}>
                 ₦{finalBatchTotal.toLocaleString()}
               </ThemedText>
             </View>
             
-            <Pressable
-              style={({ pressed }) => [
-                styles.submitButton, 
-                { backgroundColor: '#0A802F', marginTop: 0, paddingHorizontal: Spacing.six },
-                pressed && styles.pressed,
-              ]}
+            <Button
+              mode="contained"
+              buttonColor="#0A802F"
               onPress={submitBatch}
+              contentStyle={{ height: 48, paddingHorizontal: 16 }}
             >
-              <ThemedText type="smallBold" style={styles.submitButtonText}>
-                Record Sale
-              </ThemedText>
-            </Pressable>
+              Record Sale
+            </Button>
           </View>
         </View>
       )}
@@ -864,7 +783,7 @@ export default function NewSalesScreen() {
         <Animated.View
           style={[
             styles.sheetPanel,
-            { backgroundColor: theme.backgroundElement, transform: [{ translateY: sheetTranslateY }] },
+            { backgroundColor: theme.surface, transform: [{ translateY: sheetTranslateY }] },
           ]}
         >
           {/* Drag handle — tall hit area with PanResponder */}
@@ -872,7 +791,7 @@ export default function NewSalesScreen() {
             style={styles.sheetHandleArea}
             {...sheetPanResponder.panHandlers}
           >
-            <View style={[styles.sheetHandle, { backgroundColor: theme.backgroundSelected }]} />
+            <View style={[styles.sheetHandle, { backgroundColor: theme.surfaceVariant }]} />
           </View>
 
           <ThemedText type="smallBold" style={styles.sheetTitle}>
@@ -880,20 +799,22 @@ export default function NewSalesScreen() {
           </ThemedText>
 
           {/* Search bar */}
-          <View style={[styles.sheetSearchBar, { backgroundColor: theme.background, borderColor: theme.backgroundSelected }]}>
-            <ThemedText style={{ fontSize: 16, color: theme.textSecondary }}>🔍</ThemedText>
-            <TextInput
-              allowFontScaling={false}
-              style={[styles.sheetSearchInput, { color: theme.text }]}
+          <View style={[styles.sheetSearchBar, { backgroundColor: theme.background, borderColor: theme.surfaceVariant }]}>
+            <ThemedText style={{ fontSize: 16, color: theme.onSurfaceVariant }}>🔍</ThemedText>
+            <PaperTextInput
+              mode="flat"
+              dense
+              style={{ flex: 1, backgroundColor: 'transparent' }}
+              underlineColor="transparent"
+              activeUnderlineColor="transparent"
               placeholder="Search materials..."
-              placeholderTextColor={theme.textSecondary}
               value={sheetSearchQuery}
               onChangeText={setSheetSearchQuery}
               returnKeyType="search"
             />
             {sheetSearchQuery.length > 0 && (
               <Pressable onPress={() => setSheetSearchQuery('')}>
-                <ThemedText style={{ fontSize: 16, color: theme.textSecondary }}>✕</ThemedText>
+                <ThemedText style={{ fontSize: 16, color: theme.onSurfaceVariant }}>✕</ThemedText>
               </Pressable>
             )}
           </View>
@@ -906,7 +827,7 @@ export default function NewSalesScreen() {
           >
             {filteredMaterials.length === 0 ? (
               <View style={styles.sheetEmpty}>
-                <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+                <ThemedText type="small" themeColor="onSurfaceVariant" style={{ textAlign: 'center' }}>
                   {allMaterials.length === 0
                     ? 'No materials configured.\nGo to Settings → Materials to add some.'
                     : 'No materials match your search.'}
@@ -919,16 +840,16 @@ export default function NewSalesScreen() {
                   style={({ pressed }) => [
                     styles.sheetItem,
                     {
-                      backgroundColor: pressed ? theme.backgroundSelected : theme.background,
+                      backgroundColor: pressed ? theme.surfaceVariant : theme.background,
                       borderWidth: materialQuery === m.name ? 2 : 1,
-                      borderColor: materialQuery === m.name ? theme.primary : theme.border,
+                      borderColor: materialQuery === m.name ? theme.primary : theme.outline,
                     },
                   ]}
                   onPress={() => selectMaterial(m)}
                 >
                   <View style={{ flex: 1 }}>
                     <ThemedText type="smallBold">{m.name}</ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary">
+                    <ThemedText type="small" themeColor="onSurfaceVariant">
                       ₦{m.price.toLocaleString()} / sqft
                     </ThemedText>
                   </View>

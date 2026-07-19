@@ -1,11 +1,12 @@
 import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
 
-import { Fonts, ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { MD3Theme } from 'react-native-paper';
+import { Fonts } from '@/constants/theme';
 
 export type ThemedTextProps = TextProps & {
   type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code' | 'defaultSemiBold';
-  themeColor?: ThemeColor;
+  themeColor?: keyof MD3Theme['colors'];
 };
 
 export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
@@ -15,7 +16,7 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
     <Text
       allowFontScaling={false}
       style={[
-        { color: theme[themeColor ?? 'text'] },
+        { color: (theme as any)[themeColor ?? 'onSurface'] as string },
         type === 'default' && styles.default,
         type === 'title' && styles.title,
         type === 'small' && styles.small,

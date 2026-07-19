@@ -17,26 +17,6 @@ export default function SettingsScreen() {
   const theme = useTheme();
   const { settings, updateSettings, isLoading } = useSettings();
 
-  // Update local state if settings change from another device or initial load
-  useEffect(() => {
-    setBusinessName(settings.businessName);
-    setAddress(settings.address);
-    setContactEmail(settings.contactEmail);
-    setContactPhone(settings.contactPhone);
-    setLogoUrl(settings.logoUrl || '');
-    setBankDetails(settings.bankDetails || '');
-    setMov(settings.mov.toString());
-    setEyeletCost(settings.eyeletCost.toString());
-    setLaminationCost(settings.laminationCost?.toString() || '0');
-    setLaborCost(settings.laborCost?.toString() || '0');
-    setWasteFactor(settings.wasteFactor?.toString() || '0');
-    setTurnaroundStandard(settings.turnaroundStandard?.toString() || '1.0');
-    setTurnaroundRush(settings.turnaroundRush?.toString() || '1.5');
-    setTurnaroundSameDay(settings.turnaroundSameDay?.toString() || '2.0');
-    setMaterials(settings.materials || []);
-    setPrinters(settings.printers || []);
-  }, [settings]);
-
   // Local state for edits
   const [businessName, setBusinessName] = useState(settings.businessName);
   const [address, setAddress] = useState(settings.address);
@@ -57,6 +37,28 @@ export default function SettingsScreen() {
   // Dynamic Lists State
   const [materials, setMaterials] = useState<MaterialItem[]>(settings.materials || []);
   const [printers, setPrinters] = useState<PrinterItem[]>(settings.printers || []);
+
+  // Update local state if settings change from another device or initial load
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setBusinessName(settings.businessName);
+    setAddress(settings.address);
+    setContactEmail(settings.contactEmail);
+    setContactPhone(settings.contactPhone);
+    setLogoUrl(settings.logoUrl || '');
+    setBankDetails(settings.bankDetails || '');
+    
+    setMov(settings.mov.toString());
+    setEyeletCost(settings.eyeletCost.toString());
+    setLaminationCost(settings.laminationCost?.toString() || '0');
+    setLaborCost(settings.laborCost?.toString() || '0');
+    setWasteFactor(settings.wasteFactor?.toString() || '0');
+    setTurnaroundStandard(settings.turnaroundStandard?.toString() || '1.0');
+    setTurnaroundRush(settings.turnaroundRush?.toString() || '1.5');
+    setTurnaroundSameDay(settings.turnaroundSameDay?.toString() || '2.0');
+    setMaterials(settings.materials || []);
+    setPrinters(settings.printers || []);
+  }, [settings]);
 
   type TabType = 'profile' | 'materials' | 'metrics' | 'printers';
   const [activeTab, setActiveTab] = useState<TabType>('profile');
@@ -153,7 +155,7 @@ export default function SettingsScreen() {
           <View style={styles.headerRow}>
             <View style={styles.headerTextContainer}>
               <ThemedText type="subtitle" style={styles.title}>Settings</ThemedText>
-              <ThemedText themeColor="textSecondary" style={styles.subtitle}>
+              <ThemedText themeColor="onSurfaceVariant" style={styles.subtitle}>
                 Manage operational metrics and business profile
               </ThemedText>
             </View>
@@ -161,7 +163,7 @@ export default function SettingsScreen() {
             <Pressable 
               style={({ pressed }) => [
                 styles.saveButton,
-                { backgroundColor: saveSuccess ? (theme.success || '#10B981') : theme.primary },
+                { backgroundColor: saveSuccess ? ('#10B981') : theme.primary },
                 pressed && { opacity: 0.8 },
                 isSaving && { opacity: 0.5 }
               ]}
@@ -176,7 +178,7 @@ export default function SettingsScreen() {
           </View>
 
           {/* Segmented Control Navigation */}
-          <View style={[styles.tabSelector, { backgroundColor: theme.border + '80' }]}>
+          <View style={[styles.tabSelector, { backgroundColor: theme.outline + '80' }]}>
             {(['profile', 'materials', 'metrics', 'printers'] as TabType[]).map((tab) => {
               const isActive = activeTab === tab;
               return (
@@ -184,13 +186,13 @@ export default function SettingsScreen() {
                   key={tab}
                   style={[
                     styles.tabButton,
-                    isActive && [styles.activeTabButton, { backgroundColor: theme.backgroundElement }]
+                    isActive && [styles.activeTabButton, { backgroundColor: theme.surface }]
                   ]}
                   onPress={() => setActiveTab(tab)}
                 >
                   <ThemedText
                     type="smallBold"
-                    style={{ color: isActive ? theme.primary : theme.textSecondary }}
+                    style={{ color: isActive ? theme.primary : theme.onSurfaceVariant }}
                   >
                     {tab === 'profile' && 'Profile'}
                     {tab === 'materials' && 'Materials'}
@@ -205,22 +207,22 @@ export default function SettingsScreen() {
           {/* Form Content */}
           <View style={{ gap: 24 }}>
             {activeTab === 'profile' && (
-              <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
-                <ThemedText type="smallBold" style={[styles.cardHeader, { borderBottomColor: theme.border }]}>Business Profile</ThemedText>
+              <ThemedView type="surface" style={[styles.card, { borderColor: theme.outline }]}>
+                <ThemedText type="smallBold" style={[styles.cardHeader, { borderBottomColor: theme.outline }]}>Business Profile</ThemedText>
                 
                 <View style={styles.formGroup}>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Business Name</ThemedText>
+                  <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Business Name</ThemedText>
                   <TextInput
-                    style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
+                    style={[styles.input, { color: theme.onSurface, backgroundColor: theme.background, borderColor: theme.outline }]}
                     value={businessName}
                     onChangeText={setBusinessName}
                   />
                 </View>
 
                 <View style={styles.formGroup}>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Address</ThemedText>
+                  <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Address</ThemedText>
                   <TextInput
-                    style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
+                    style={[styles.input, { color: theme.onSurface, backgroundColor: theme.background, borderColor: theme.outline }]}
                     value={address}
                     onChangeText={setAddress}
                   />
@@ -228,18 +230,18 @@ export default function SettingsScreen() {
 
                 <View style={styles.row}>
                   <View style={[styles.formGroup, { flex: 1 }]}>
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Contact Email</ThemedText>
+                    <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Contact Email</ThemedText>
                     <TextInput
-                      style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
+                      style={[styles.input, { color: theme.onSurface, backgroundColor: theme.background, borderColor: theme.outline }]}
                       value={contactEmail}
                       onChangeText={setContactEmail}
                       keyboardType="email-address"
                     />
                   </View>
                   <View style={[styles.formGroup, { flex: 1 }]}>
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Contact Phone</ThemedText>
+                    <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Contact Phone</ThemedText>
                     <TextInput
-                      style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
+                      style={[styles.input, { color: theme.onSurface, backgroundColor: theme.background, borderColor: theme.outline }]}
                       value={contactPhone}
                       onChangeText={setContactPhone}
                       keyboardType="phone-pad"
@@ -248,20 +250,20 @@ export default function SettingsScreen() {
                 </View>
 
                 <View style={styles.formGroup}>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Logo URL (optional)</ThemedText>
+                  <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Logo URL (optional)</ThemedText>
                   <TextInput
-                    style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
+                    style={[styles.input, { color: theme.onSurface, backgroundColor: theme.background, borderColor: theme.outline }]}
                     value={logoUrl}
                     onChangeText={setLogoUrl}
                     placeholder="https://example.com/logo.png"
-                    placeholderTextColor={theme.textSecondary}
+                    placeholderTextColor={theme.onSurfaceVariant}
                   />
                 </View>
 
                 <View style={styles.formGroup}>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Bank Details (For Invoices)</ThemedText>
+                  <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Bank Details (For Invoices)</ThemedText>
                   <TextInput
-                    style={[styles.input, { height: 100, paddingVertical: 12, color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
+                    style={[styles.input, { height: 100, paddingVertical: 12, color: theme.onSurface, backgroundColor: theme.background, borderColor: theme.outline }]}
                     value={bankDetails}
                     onChangeText={setBankDetails}
                     multiline
@@ -272,13 +274,13 @@ export default function SettingsScreen() {
             )}
 
             {activeTab === 'metrics' && (
-              <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
-                <ThemedText type="smallBold" style={[styles.cardHeader, { borderBottomColor: theme.border }]}>Operational Metrics</ThemedText>
+              <ThemedView type="surface" style={[styles.card, { borderColor: theme.outline }]}>
+                <ThemedText type="smallBold" style={[styles.cardHeader, { borderBottomColor: theme.outline }]}>Operational Metrics</ThemedText>
                 
                 <View style={styles.formGroup}>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Minimum Order Value (MOV) - ₦</ThemedText>
+                  <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Minimum Order Value (MOV) - ₦</ThemedText>
                   <TextInput
-                    style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
+                    style={[styles.input, { color: theme.onSurface, backgroundColor: theme.background, borderColor: theme.outline }]}
                     value={mov}
                     onChangeText={setMov}
                     keyboardType="numeric"
@@ -287,18 +289,18 @@ export default function SettingsScreen() {
 
                 <View style={styles.row}>
                   <View style={[styles.formGroup, { flex: 1 }]}>
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Eyelet Cost (₦)</ThemedText>
+                    <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Eyelet Cost (₦)</ThemedText>
                     <TextInput
-                      style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
+                      style={[styles.input, { color: theme.onSurface, backgroundColor: theme.background, borderColor: theme.outline }]}
                       value={eyeletCost}
                       onChangeText={setEyeletCost}
                       keyboardType="numeric"
                     />
                   </View>
                   <View style={[styles.formGroup, { flex: 1 }]}>
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Waste Factor (%)</ThemedText>
+                    <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Waste Factor (%)</ThemedText>
                     <TextInput
-                      style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
+                      style={[styles.input, { color: theme.onSurface, backgroundColor: theme.background, borderColor: theme.outline }]}
                       value={wasteFactor}
                       onChangeText={setWasteFactor}
                       keyboardType="numeric"
@@ -308,18 +310,18 @@ export default function SettingsScreen() {
 
                 <View style={styles.row}>
                   <View style={[styles.formGroup, { flex: 1 }]}>
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Lamination Cost (/SqFt ₦)</ThemedText>
+                    <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Lamination Cost (/SqFt ₦)</ThemedText>
                     <TextInput
-                      style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
+                      style={[styles.input, { color: theme.onSurface, backgroundColor: theme.background, borderColor: theme.outline }]}
                       value={laminationCost}
                       onChangeText={setLaminationCost}
                       keyboardType="numeric"
                     />
                   </View>
                   <View style={[styles.formGroup, { flex: 1 }]}>
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Labor / Welding (Flat ₦)</ThemedText>
+                    <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Labor / Welding (Flat ₦)</ThemedText>
                     <TextInput
-                      style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
+                      style={[styles.input, { color: theme.onSurface, backgroundColor: theme.background, borderColor: theme.outline }]}
                       value={laborCost}
                       onChangeText={setLaborCost}
                       keyboardType="numeric"
@@ -330,27 +332,27 @@ export default function SettingsScreen() {
                 <ThemedText type="smallBold" style={{ marginTop: 12, marginBottom: -4 }}>Turnaround Multipliers</ThemedText>
                 <View style={styles.row}>
                   <View style={[styles.formGroup, { flex: 1 }]}>
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Standard</ThemedText>
+                    <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Standard</ThemedText>
                     <TextInput
-                      style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
+                      style={[styles.input, { color: theme.onSurface, backgroundColor: theme.background, borderColor: theme.outline }]}
                       value={turnaroundStandard}
                       onChangeText={setTurnaroundStandard}
                       keyboardType="numeric"
                     />
                   </View>
                   <View style={[styles.formGroup, { flex: 1 }]}>
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Rush</ThemedText>
+                    <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Rush</ThemedText>
                     <TextInput
-                      style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
+                      style={[styles.input, { color: theme.onSurface, backgroundColor: theme.background, borderColor: theme.outline }]}
                       value={turnaroundRush}
                       onChangeText={setTurnaroundRush}
                       keyboardType="numeric"
                     />
                   </View>
                   <View style={[styles.formGroup, { flex: 1 }]}>
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Same Day</ThemedText>
+                    <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Same Day</ThemedText>
                     <TextInput
-                      style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
+                      style={[styles.input, { color: theme.onSurface, backgroundColor: theme.background, borderColor: theme.outline }]}
                       value={turnaroundSameDay}
                       onChangeText={setTurnaroundSameDay}
                       keyboardType="numeric"
@@ -361,8 +363,8 @@ export default function SettingsScreen() {
             )}
 
             {activeTab === 'materials' && (
-              <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
-                <View style={[styles.cardHeaderRow, { borderBottomColor: theme.border }]}>
+              <ThemedView type="surface" style={[styles.card, { borderColor: theme.outline }]}>
+                <View style={[styles.cardHeaderRow, { borderBottomColor: theme.outline }]}>
                   <ThemedText type="smallBold" style={styles.cardHeaderNoMargin}>Materials & Pricing</ThemedText>
                   <Pressable onPress={addMaterial} style={[styles.iconButton, { backgroundColor: theme.primary + '1A' }]}>
                     <Feather name="plus" size={16} color={theme.primary} />
@@ -374,18 +376,18 @@ export default function SettingsScreen() {
                   {materials.map((material) => (
                     <View key={material.id} style={styles.dynamicRow}>
                       <View style={{ flex: 2, gap: 4 }}>
-                        <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Name</ThemedText>
+                        <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Name</ThemedText>
                         <TextInput
-                          style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
+                          style={[styles.input, { color: theme.onSurface, backgroundColor: theme.background, borderColor: theme.outline }]}
                           placeholder="e.g. SAV Default"
                           value={material.name}
                           onChangeText={(text) => updateMaterial(material.id, 'name', text)}
                         />
                       </View>
                       <View style={{ flex: 1, gap: 4 }}>
-                        <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Price ₦</ThemedText>
+                        <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Price ₦</ThemedText>
                         <TextInput
-                          style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
+                          style={[styles.input, { color: theme.onSurface, backgroundColor: theme.background, borderColor: theme.outline }]}
                           placeholder="0.00"
                           keyboardType="numeric"
                           value={material.price.toString()}
@@ -396,15 +398,15 @@ export default function SettingsScreen() {
                         />
                       </View>
                       <View style={{ paddingTop: 20 }}>
-                        <Pressable onPress={() => removeMaterial(material.id)} style={[styles.deleteButton, { backgroundColor: (theme.error || '#FF3B30') + '1A' }]}>
-                          <Feather name="trash-2" size={18} color={theme.error || '#FF3B30'} />
+                        <Pressable onPress={() => removeMaterial(material.id)} style={[styles.deleteButton, { backgroundColor: (theme.error) + '1A' }]}>
+                          <Feather name="trash-2" size={18} color={theme.error} />
                         </Pressable>
                       </View>
                     </View>
                   ))}
                   {materials.length === 0 && (
-                    <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center', padding: 24 }}>
-                      No materials configured. Click 'Add New' to start.
+                    <ThemedText type="small" themeColor="onSurfaceVariant" style={{ textAlign: 'center', padding: 24 }}>
+                      No materials configured. Click &apos;Add New&apos; to start.
                     </ThemedText>
                   )}
                 </View>
@@ -412,8 +414,8 @@ export default function SettingsScreen() {
             )}
 
             {activeTab === 'printers' && (
-              <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
-                <View style={[styles.cardHeaderRow, { borderBottomColor: theme.border }]}>
+              <ThemedView type="surface" style={[styles.card, { borderColor: theme.outline }]}>
+                <View style={[styles.cardHeaderRow, { borderBottomColor: theme.outline }]}>
                   <ThemedText type="smallBold" style={styles.cardHeaderNoMargin}>Printers</ThemedText>
                   <Pressable onPress={addPrinter} style={[styles.iconButton, { backgroundColor: theme.primary + '1A' }]}>
                     <Feather name="plus" size={16} color={theme.primary} />
@@ -425,24 +427,24 @@ export default function SettingsScreen() {
                   {printers.map((printer) => (
                     <View key={printer.id} style={styles.dynamicRow}>
                       <View style={{ flex: 1, gap: 4 }}>
-                        <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Printer Name</ThemedText>
+                        <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Printer Name</ThemedText>
                         <TextInput
-                          style={[styles.input, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
+                          style={[styles.input, { color: theme.onSurface, backgroundColor: theme.background, borderColor: theme.outline }]}
                           placeholder="e.g. Roland 1"
                           value={printer.name}
                           onChangeText={(text) => updatePrinter(printer.id, text)}
                         />
                       </View>
                       <View style={{ paddingTop: 20 }}>
-                        <Pressable onPress={() => removePrinter(printer.id)} style={[styles.deleteButton, { backgroundColor: (theme.error || '#FF3B30') + '1A' }]}>
-                          <Feather name="trash-2" size={18} color={theme.error || '#FF3B30'} />
+                        <Pressable onPress={() => removePrinter(printer.id)} style={[styles.deleteButton, { backgroundColor: (theme.error) + '1A' }]}>
+                          <Feather name="trash-2" size={18} color={theme.error} />
                         </Pressable>
                       </View>
                     </View>
                   ))}
                   {printers.length === 0 && (
-                    <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center', padding: 24 }}>
-                      No printers configured. Click 'Add New' to start.
+                    <ThemedText type="small" themeColor="onSurfaceVariant" style={{ textAlign: 'center', padding: 24 }}>
+                      No printers configured. Click &apos;Add New&apos; to start.
                     </ThemedText>
                   )}
                 </View>

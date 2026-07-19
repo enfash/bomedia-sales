@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, Platform, ActivityIndicator, TextInput, Text } from 'react-native';
+import { View, StyleSheet, ScrollView, Platform, ActivityIndicator, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
-import { Button } from 'react-native-paper';
+import { Button, TextInput as PaperTextInput, Surface } from 'react-native-paper';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
@@ -55,6 +55,7 @@ export default function ExpensesScreen() {
 
   // Fetch expenses for selected month
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     const expensesRef = ref(db, `expenses/${selectedMonth}`);
     const unsubscribe = onValue(expensesRef, (snapshot) => {
@@ -146,22 +147,23 @@ export default function ExpensesScreen() {
         <ThemedView style={styles.container}>
           <ThemedView style={styles.header}>
             <ThemedText type="subtitle" style={styles.title}>Expenses Logger</ThemedText>
-            <ThemedText themeColor="textSecondary" style={styles.subtitle}>
+            <ThemedText themeColor="onSurfaceVariant" style={styles.subtitle}>
               Track daily expenses cleanly bucked by month.
             </ThemedText>
           </ThemedView>
 
           <View style={styles.layout}>
             {/* Form Column */}
-            <ThemedView type="backgroundElement" style={styles.card}>
+            <Surface elevation={1} style={[styles.card, { backgroundColor: theme.surface }]}>
               <ThemedText style={styles.cardTitle}>Log New Expense</ThemedText>
               
               <View style={styles.formGroup}>
-                <ThemedText themeColor="textSecondary" style={styles.label}>Amount (₦)</ThemedText>
-                <TextInput
-                  style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                <ThemedText themeColor="onSurfaceVariant" style={styles.label}>Amount (₦)</ThemedText>
+                <PaperTextInput
+                  mode="outlined"
+                  dense
+                  style={{ backgroundColor: theme.background }}
                   placeholder="e.g. 5000"
-                  placeholderTextColor={theme.textSecondary}
                   keyboardType="numeric"
                   value={amount}
                   onChangeText={setAmount}
@@ -169,7 +171,7 @@ export default function ExpensesScreen() {
               </View>
 
               <View style={styles.formGroup}>
-                <ThemedText themeColor="textSecondary" style={styles.label}>Category</ThemedText>
+                <ThemedText themeColor="onSurfaceVariant" style={styles.label}>Category</ThemedText>
                 <View style={styles.categoryChips}>
                   {CATEGORIES.map(cat => (
                     <Button
@@ -177,8 +179,6 @@ export default function ExpensesScreen() {
                       mode={category === cat ? 'contained' : 'outlined'}
                       onPress={() => setCategory(cat)}
                       style={styles.chip}
-                      buttonColor={category === cat ? theme.primary : undefined}
-                      textColor={category === cat ? '#fff' : theme.text}
                     >
                       {cat}
                     </Button>
@@ -187,11 +187,12 @@ export default function ExpensesScreen() {
               </View>
 
               <View style={styles.formGroup}>
-                <ThemedText themeColor="textSecondary" style={styles.label}>Description</ThemedText>
-                <TextInput
-                  style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                <ThemedText themeColor="onSurfaceVariant" style={styles.label}>Description</ThemedText>
+                <PaperTextInput
+                  mode="outlined"
+                  dense
+                  style={{ backgroundColor: theme.background }}
                   placeholder="What was this expense for?"
-                  placeholderTextColor={theme.textSecondary}
                   value={description}
                   onChangeText={setDescription}
                 />
@@ -202,18 +203,19 @@ export default function ExpensesScreen() {
                 onPress={handleLogExpense}
                 loading={submitting}
                 disabled={submitting}
-                style={[styles.submitBtn, { backgroundColor: theme.primary }]}
+                style={[styles.submitBtn, { marginTop: 16 }]}
+                contentStyle={{ height: 48 }}
               >
                 Log Expense
               </Button>
-            </ThemedView>
+            </Surface>
 
             {/* List Column */}
-            <ThemedView type="backgroundElement" style={[styles.card, styles.listCard]}>
+            <Surface elevation={1} style={[styles.card, styles.listCard, { backgroundColor: theme.surface }]}>
               <View style={styles.listHeader}>
                 <View>
                   <ThemedText style={styles.cardTitle}>Monthly Expenses</ThemedText>
-                  <ThemedText themeColor="textSecondary" style={{ fontSize: 13, marginTop: 4 }}>
+                  <ThemedText themeColor="onSurfaceVariant" style={{ fontSize: 13, marginTop: 4 }}>
                     {new Date(selectedMonth + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                   </ThemedText>
                 </View>
@@ -230,30 +232,30 @@ export default function ExpensesScreen() {
                 </View>
               ) : expenses.length === 0 ? (
                 <View style={{ padding: 40, alignItems: 'center' }}>
-                  <SymbolView name={{ ios: 'receipt', android: 'receipt', web: 'receipt' }} size={40} tintColor={theme.textSecondary} />
-                  <ThemedText style={{ marginTop: 12, color: theme.textSecondary }}>No expenses logged this month.</ThemedText>
+                  <SymbolView name={{ ios: 'receipt', android: 'receipt', web: 'receipt' }} size={40} tintColor={theme.onSurfaceVariant} />
+                  <ThemedText style={{ marginTop: 12, color: theme.onSurfaceVariant }}>No expenses logged this month.</ThemedText>
                 </View>
               ) : (
                 <ScrollView horizontal showsHorizontalScrollIndicator={true} style={styles.tableWrapper}>
                   <View style={{ minWidth: 600 }}>
-                    <View style={[styles.tableHeader, { borderBottomColor: theme.backgroundSelected }]}>
-                      <Text style={[styles.th, { width: 100, color: theme.textSecondary }]}>Date</Text>
-                      <Text style={[styles.th, { width: 220, color: theme.textSecondary }]}>Description</Text>
-                      <Text style={[styles.th, { width: 160, color: theme.textSecondary }]}>Category</Text>
-                      <Text style={[styles.th, { width: 120, color: theme.textSecondary, textAlign: 'right' }]}>Amount</Text>
+                    <View style={[styles.tableHeader, { borderBottomColor: theme.surfaceVariant }]}>
+                      <Text style={[styles.th, { width: 100, color: theme.onSurfaceVariant }]}>Date</Text>
+                      <Text style={[styles.th, { width: 220, color: theme.onSurfaceVariant }]}>Description</Text>
+                      <Text style={[styles.th, { width: 160, color: theme.onSurfaceVariant }]}>Category</Text>
+                      <Text style={[styles.th, { width: 120, color: theme.onSurfaceVariant, textAlign: 'right' }]}>Amount</Text>
                     </View>
 
                     {expenses.map((item, idx) => (
-                      <View key={item.id} style={[styles.tableRow, { borderBottomColor: theme.backgroundSelected }, idx === expenses.length - 1 && { borderBottomWidth: 0 }]}>
-                        <Text style={[styles.td, { width: 100, color: theme.textSecondary, paddingRight: 8 }]} numberOfLines={1}>
+                      <View key={item.id} style={[styles.tableRow, { borderBottomColor: theme.surfaceVariant }, idx === expenses.length - 1 && { borderBottomWidth: 0 }]}>
+                        <Text style={[styles.td, { width: 100, color: theme.onSurfaceVariant, paddingRight: 8 }]} numberOfLines={1}>
                           {new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                         </Text>
-                        <Text style={[styles.td, { width: 220, color: theme.text, fontWeight: '500', paddingRight: 8 }]} numberOfLines={2}>
+                        <Text style={[styles.td, { width: 220, color: theme.onSurface, fontWeight: '500', paddingRight: 8 }]} numberOfLines={2}>
                           {item.description}
                         </Text>
                         <View style={{ width: 160, flexDirection: 'row', alignItems: 'center', paddingRight: 8 }}>
-                           <View style={[styles.inlineChip, { backgroundColor: theme.backgroundSelected }]}>
-                             <Text style={[styles.inlineChipText, { color: theme.textSecondary }]} numberOfLines={1}>{item.category}</Text>
+                           <View style={[styles.inlineChip, { backgroundColor: theme.surfaceVariant }]}>
+                             <Text style={[styles.inlineChipText, { color: theme.onSurfaceVariant }]} numberOfLines={1}>{item.category}</Text>
                            </View>
                         </View>
                         <Text style={[styles.td, { width: 120, color: (theme.error || '#FF3B30'), textAlign: 'right', fontWeight: '600' }]} numberOfLines={1}>
@@ -264,7 +266,7 @@ export default function ExpensesScreen() {
                   </View>
                 </ScrollView>
               )}
-            </ThemedView>
+            </Surface>
           </View>
         </ThemedView>
       </ScrollView>

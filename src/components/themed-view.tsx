@@ -1,16 +1,16 @@
 import { View, type ViewProps } from 'react-native';
 
-import { ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { MD3Theme } from 'react-native-paper';
 
 export type ThemedViewProps = ViewProps & {
   lightColor?: string;
   darkColor?: string;
-  type?: ThemeColor;
+  type?: keyof MD3Theme['colors'];
 };
 
 export function ThemedView({ style, lightColor, darkColor, type, ...otherProps }: ThemedViewProps) {
   const theme = useTheme();
 
-  return <View style={[{ backgroundColor: theme[type ?? 'background'] }, style]} {...otherProps} />;
+  return <View style={[{ backgroundColor: (theme as any)[type ?? 'background'] as string }, style]} {...otherProps} />;
 }

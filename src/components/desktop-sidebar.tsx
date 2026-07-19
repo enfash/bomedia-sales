@@ -1,11 +1,10 @@
 import { View, Text, Pressable, StyleSheet, useWindowDimensions, Platform } from 'react-native';
-import { useRouter, useSegments, Link } from 'expo-router';
+import { useSegments, Link } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DesktopSidebar() {
   const { width } = useWindowDimensions();
-  const router = useRouter();
   const segments = useSegments();
   const insets = useSafeAreaInsets();
   
@@ -14,9 +13,6 @@ export default function DesktopSidebar() {
   if (!isDesktop) {
     return null;
   }
-
-  // Determine current active route from segments
-  const currentRoute = segments[0] || 'index';
 
   const menuItems = [
     { name: 'index', label: 'Home', icon: 'home' },

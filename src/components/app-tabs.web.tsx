@@ -20,11 +20,11 @@ import {
 import { ThemedText } from "./themed-text";
 import { ThemedView } from "./themed-view";
 
-import { Colors, Spacing } from "@/constants/theme";
+import { Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 
 export default function AppTabs() {
-  const scheme = useColorScheme();
-  const theme = Colors[scheme === "unspecified" ? "light" : scheme];
+  const theme = useTheme();
 
   return (
     <Tabs
@@ -71,33 +71,32 @@ export function TabButton({
   icon,
   ...props
 }: TabTriggerSlotProps & { icon?: any }) {
-  const scheme = useColorScheme();
-  const theme = Colors[scheme === "unspecified" ? "light" : scheme];
+  const theme = useTheme();
   const { width } = useWindowDimensions();
   const isCompact = width < 768;
 
   return (
     <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
       <ThemedView
-        type="backgroundElement"
+        type="surface"
         style={[
           styles.tabButtonView,
           isCompact && { justifyContent: "center", paddingHorizontal: 0 },
-          isFocused && { backgroundColor: theme.text + "15" },
+          isFocused && { backgroundColor: theme.onSurface + "15" },
         ]}
       >
         {icon && (
           <Feather
             name={icon}
             size={isCompact ? 20 : 18}
-            color={isFocused ? theme.text : theme.textSecondary}
+            color={isFocused ? theme.onSurface : theme.onSurfaceVariant}
           />
         )}
         {!isCompact && (
           <ThemedText
             type="default"
             style={{ fontWeight: isFocused ? "600" : "normal" }}
-            themeColor={isFocused ? "text" : "textSecondary"}
+            themeColor={isFocused ? "onSurface" : "onSurfaceVariant"}
           >
             {children}
           </ThemedText>
@@ -108,18 +107,17 @@ export function TabButton({
 }
 
 export function CustomSidebar(props: TabListProps) {
-  const scheme = useColorScheme();
-  const theme = Colors[scheme === "unspecified" ? "light" : scheme];
+  const theme = useTheme();
   const { width } = useWindowDimensions();
   const isCompact = width < 768;
 
   return (
     <ThemedView
-      type="backgroundElement"
+      type="surface"
       style={[
         styles.sidebarContainer,
         isCompact && styles.sidebarContainerCompact,
-        { borderRightColor: theme.backgroundSelected },
+        { borderRightColor: theme.surfaceVariant },
       ]}
     >
       <View
@@ -151,8 +149,7 @@ export function CustomSidebar(props: TabListProps) {
 }
 
 const SettingsButton = forwardRef((props: any, ref: any) => {
-  const scheme = useColorScheme();
-  const theme = Colors[scheme === "unspecified" ? "light" : scheme];
+  const theme = useTheme();
   const { width } = useWindowDimensions();
   const isCompact = width < 768;
   const { style, isFocused, ...restProps } = props;
@@ -166,20 +163,20 @@ const SettingsButton = forwardRef((props: any, ref: any) => {
           style,
           styles.externalPressable,
           isCompact && { justifyContent: "center", paddingHorizontal: 0 },
-          isFocused && { backgroundColor: theme.text + "15", opacity: 1 },
+          isFocused && { backgroundColor: theme.onSurface + "15", opacity: 1 },
           pressed && styles.pressed,
         ])
       }
     >
       <Feather
-        color={isFocused ? theme.text : theme.textSecondary}
+        color={isFocused ? theme.onSurface : theme.onSurfaceVariant}
         name="settings"
         size={20}
       />
       {!isCompact && (
         <ThemedText
           type="small"
-          themeColor={isFocused ? "text" : "textSecondary"}
+          themeColor={isFocused ? "onSurface" : "onSurfaceVariant"}
           style={{ fontWeight: isFocused ? "600" : "normal" }}
         >
           Settings
@@ -188,6 +185,8 @@ const SettingsButton = forwardRef((props: any, ref: any) => {
     </Pressable>
   );
 });
+
+SettingsButton.displayName = 'SettingsButton';
 
 const styles = StyleSheet.create({
   dashboardContainer: {

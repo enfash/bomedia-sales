@@ -123,35 +123,35 @@ export default function QuoteScreen() {
         {/* Header */}
         <ThemedView style={styles.header}>
           <ThemedText type="subtitle" style={styles.title}>Quote Estimator</ThemedText>
-          <ThemedText themeColor="textSecondary" style={styles.subtitle}>
+          <ThemedText themeColor="onSurfaceVariant" style={styles.subtitle}>
             Create instant estimates and manage sales proposals.
           </ThemedText>
         </ThemedView>
 
         {/* Dynamic Calculator Widget */}
-        <ThemedView type="backgroundElement" style={styles.card}>
+        <ThemedView type="surface" style={styles.card}>
           <ThemedText type="smallBold" style={styles.cardHeader}>Interactive Pricing Calculator</ThemedText>
 
           <View style={styles.formGroup}>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Client Name / Reference</ThemedText>
+            <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Client Name / Reference</ThemedText>
             <TextInput
               style={[
                 styles.input,
                 {
-                  color: theme.text,
+                  color: theme.onSurface,
                   backgroundColor: theme.background,
-                  borderColor: theme.backgroundSelected,
+                  borderColor: theme.surfaceVariant,
                 }
               ]}
               placeholder="e.g. Acme Corp Layout"
-              placeholderTextColor={theme.textSecondary}
+              placeholderTextColor={theme.onSurfaceVariant}
               value={clientName}
               onChangeText={setClientName}
             />
           </View>
 
           <View style={styles.formGroup}>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Select Service Type</ThemedText>
+            <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Select Service Type</ThemedText>
             <View style={styles.row}>
               {(['web', 'marketing', 'branding', 'custom'] as const).map((type) => {
                 const isSelected = service === type;
@@ -164,13 +164,13 @@ export default function QuoteScreen() {
                       styles.pillButton,
                       {
                         backgroundColor: isSelected ? theme.primary : theme.background,
-                        borderColor: theme.backgroundSelected,
+                        borderColor: theme.surfaceVariant,
                       }
                     ]}
                   >
                     <ThemedText
                       type="smallBold"
-                      style={{ color: isSelected ? '#ffffff' : theme.text }}
+                      style={{ color: isSelected ? '#ffffff' : theme.onSurface }}
                     >
                       {labels[type]}
                     </ThemedText>
@@ -181,7 +181,7 @@ export default function QuoteScreen() {
           </View>
 
           <View style={styles.formGroup}>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.label}>Project Duration</ThemedText>
+            <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Project Duration</ThemedText>
             <View style={styles.row}>
               {([1, 3, 6, 12] as const).map((duration) => {
                 const isSelected = months === duration;
@@ -193,13 +193,13 @@ export default function QuoteScreen() {
                       styles.durationButton,
                       {
                         backgroundColor: isSelected ? theme.primary : theme.background,
-                        borderColor: theme.backgroundSelected,
+                        borderColor: theme.surfaceVariant,
                       }
                     ]}
                   >
                     <ThemedText
                       type="smallBold"
-                      style={{ color: isSelected ? '#ffffff' : theme.text }}
+                      style={{ color: isSelected ? '#ffffff' : theme.onSurface }}
                     >
                       {duration} {duration === 1 ? 'Mo' : 'Mos'}
                     </ThemedText>
@@ -211,13 +211,13 @@ export default function QuoteScreen() {
 
           <Pressable
             onPress={() => setHasSupport(!hasSupport)}
-            style={[styles.checkboxContainer, { borderColor: theme.backgroundSelected }]}
+            style={[styles.checkboxContainer, { borderColor: theme.surfaceVariant }]}
           >
             <View
               style={[
                 styles.checkbox,
                 {
-                  borderColor: theme.textSecondary,
+                  borderColor: theme.onSurfaceVariant,
                   backgroundColor: hasSupport ? theme.primary : 'transparent',
                 }
               ]}
@@ -237,7 +237,7 @@ export default function QuoteScreen() {
 
           {/* Pricing Result */}
           <View style={[styles.resultContainer, { backgroundColor: theme.background }]}>
-            <ThemedText type="small" themeColor="textSecondary">Estimated Total</ThemedText>
+            <ThemedText type="small" themeColor="onSurfaceVariant">Estimated Total</ThemedText>
             <ThemedText type="subtitle" style={[styles.totalValue, { color: theme.primary }]}>
               ₦{calculateTotal().toLocaleString()}
             </ThemedText>
@@ -253,7 +253,7 @@ export default function QuoteScreen() {
           </Pressable>
 
           {successMsg ? (
-            <ThemedView type="backgroundSelected" style={styles.successToast}>
+            <ThemedView type="surfaceVariant" style={styles.successToast}>
               <ThemedText type="small" style={{ color: theme.primary }}>{successMsg}</ThemedText>
             </ThemedView>
           ) : null}
@@ -266,32 +266,32 @@ export default function QuoteScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={true}>
               <View style={{ minWidth: 700, paddingBottom: 16 }}>
                 {/* Table Header */}
-              <View style={[styles.tableRow, { borderBottomColor: theme.backgroundSelected, borderBottomWidth: 1, paddingVertical: 12 }]}>
+              <View style={[styles.tableRow, { borderBottomColor: theme.surfaceVariant, borderBottomWidth: 1, paddingVertical: 12 }]}>
                 <Pressable style={{ width: 140 }} onPress={() => handleSort('client')}>
-                  <ThemedText type="smallBold" themeColor="textSecondary">Client {sortField === 'client' ? (sortAsc ? '↑' : '↓') : ''}</ThemedText>
+                  <ThemedText type="smallBold" themeColor="onSurfaceVariant">Client {sortField === 'client' ? (sortAsc ? '↑' : '↓') : ''}</ThemedText>
                 </Pressable>
                 <Pressable style={{ width: 200 }} onPress={() => handleSort('project')}>
-                  <ThemedText type="smallBold" themeColor="textSecondary">Project Type {sortField === 'project' ? (sortAsc ? '↑' : '↓') : ''}</ThemedText>
+                  <ThemedText type="smallBold" themeColor="onSurfaceVariant">Project Type {sortField === 'project' ? (sortAsc ? '↑' : '↓') : ''}</ThemedText>
                 </Pressable>
                 <Pressable style={{ width: 90 }} onPress={() => handleSort('date')}>
-                  <ThemedText type="smallBold" themeColor="textSecondary">Date {sortField === 'date' ? (sortAsc ? '↑' : '↓') : ''}</ThemedText>
+                  <ThemedText type="smallBold" themeColor="onSurfaceVariant">Date {sortField === 'date' ? (sortAsc ? '↑' : '↓') : ''}</ThemedText>
                 </Pressable>
                 <Pressable style={{ width: 100, alignItems: 'flex-end' }} onPress={() => handleSort('value')}>
-                  <ThemedText type="smallBold" themeColor="textSecondary">Amount {sortField === 'value' ? (sortAsc ? '↑' : '↓') : ''}</ThemedText>
+                  <ThemedText type="smallBold" themeColor="onSurfaceVariant">Amount {sortField === 'value' ? (sortAsc ? '↑' : '↓') : ''}</ThemedText>
                 </Pressable>
                 <Pressable style={{ width: 80, paddingLeft: 16 }} onPress={() => handleSort('status')}>
-                  <ThemedText type="smallBold" themeColor="textSecondary">Status {sortField === 'status' ? (sortAsc ? '↑' : '↓') : ''}</ThemedText>
+                  <ThemedText type="smallBold" themeColor="onSurfaceVariant">Status {sortField === 'status' ? (sortAsc ? '↑' : '↓') : ''}</ThemedText>
                 </Pressable>
-                <ThemedText type="smallBold" themeColor="textSecondary" style={{ width: 60, textAlign: 'center' }}>Actions</ThemedText>
+                <ThemedText type="smallBold" themeColor="onSurfaceVariant" style={{ width: 60, textAlign: 'center' }}>Actions</ThemedText>
               </View>
 
               {/* Table Body */}
               {sortedQuotes.map((q) => {
                   const statusColors = {
-                    Approved: { bg: theme.success + '1A', text: theme.success },
-                    Sent: { bg: theme.primary + '1A', text: theme.primary },
-                    Draft: { bg: theme.warning + '1A', text: theme.warning },
-                    Expired: { bg: theme.error + '1A', text: theme.error },
+                    Approved: { bg: '#E8F5E9', text: '#2E7D32' },
+                    Sent: { bg: '#E5EEFF', text: theme.primary },
+                    Draft: { bg: '#FFF4E5', text: '#EF6C00' },
+                    Expired: { bg: '#FFDAD6', text: theme.error },
                   };
                   const col = statusColors[q.status];
 
@@ -309,9 +309,9 @@ export default function QuoteScreen() {
                       ]}
                     >
                       <ThemedText type="smallBold" style={{ width: 140, paddingRight: 8 }} numberOfLines={1}>{q.client}</ThemedText>
-                      <ThemedText type="small" themeColor="textSecondary" style={{ width: 200, paddingRight: 8 }} numberOfLines={1}>{q.project}</ThemedText>
-                      <ThemedText type="small" themeColor="textSecondary" style={{ width: 90, paddingRight: 8 }} numberOfLines={1}>{q.date}</ThemedText>
-                      <ThemedText type="smallBold" style={{ width: 100, textAlign: 'right', color: theme.text, paddingRight: 8 }} numberOfLines={1}>
+                      <ThemedText type="small" themeColor="onSurfaceVariant" style={{ width: 200, paddingRight: 8 }} numberOfLines={1}>{q.project}</ThemedText>
+                      <ThemedText type="small" themeColor="onSurfaceVariant" style={{ width: 90, paddingRight: 8 }} numberOfLines={1}>{q.date}</ThemedText>
+                      <ThemedText type="smallBold" style={{ width: 100, textAlign: 'right', color: theme.onSurface, paddingRight: 8 }} numberOfLines={1}>
                         ₦{q.value.toLocaleString()}
                       </ThemedText>
                       <View style={{ width: 80, paddingLeft: 16, justifyContent: 'center', alignItems: 'flex-start' }}>
@@ -322,7 +322,7 @@ export default function QuoteScreen() {
                         </View>
                       </View>
                       <View style={{ width: 60, alignItems: 'center', justifyContent: 'center' }}>
-                        <SymbolView name={{ ios: 'ellipsis', android: 'more_vert', web: 'more_vert' }} size={16} tintColor={theme.textSecondary} />
+                        <SymbolView name={{ ios: 'ellipsis', android: 'more_vert', web: 'more_vert' }} size={16} tintColor={theme.onSurfaceVariant} />
                       </View>
                     </Pressable>
                   );
@@ -333,18 +333,18 @@ export default function QuoteScreen() {
             <View style={styles.quotesList}>
               {sortedQuotes.map((q) => {
                 const statusColors = {
-                  Approved: { bg: theme.success + '1A', text: theme.success },
-                  Sent: { bg: theme.primary + '1A', text: theme.primary },
-                  Draft: { bg: theme.warning + '1A', text: theme.warning },
-                  Expired: { bg: theme.error + '1A', text: theme.error },
+                  Approved: { bg: '#E8F5E9', text: '#2E7D32' },
+                  Sent: { bg: '#E5EEFF', text: theme.primary },
+                  Draft: { bg: '#FFF4E5', text: '#EF6C00' },
+                  Expired: { bg: '#FFDAD6', text: theme.error },
                 };
                 const col = statusColors[q.status];
 
                 return (
-                  <ThemedView key={q.id} type="backgroundElement" style={styles.quoteCard}>
+                  <ThemedView key={q.id} type="surface" style={styles.quoteCard}>
                     <View style={styles.quoteInfo}>
                       <ThemedText type="smallBold">{q.client}</ThemedText>
-                      <ThemedText type="code" themeColor="textSecondary" style={styles.quoteProject}>
+                      <ThemedText type="code" themeColor="onSurfaceVariant" style={styles.quoteProject}>
                         {q.project} • {q.date}
                       </ThemedText>
                     </View>

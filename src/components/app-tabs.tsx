@@ -1,10 +1,9 @@
 import { Tabs } from "expo-router";
-import { View, Pressable, StyleSheet, Text } from "react-native";
+import { View, Pressable, StyleSheet, Text, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import Animated, { useAnimatedStyle, withTiming, useSharedValue, interpolate } from "react-native-reanimated";
 import { useEffect } from "react";
-import { useWindowDimensions } from "react-native";
 
 export default function AppTabs() {
   return (
@@ -97,6 +96,7 @@ const TabItem = ({ isFocused, onPress, iconName, label }: { isFocused: boolean, 
 
   useEffect(() => {
     animatedValue.value = withTiming(isFocused ? 1 : 0, { duration: 250 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFocused]);
 
   const animatedStyle = useAnimatedStyle(() => {
