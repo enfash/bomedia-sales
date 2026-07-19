@@ -7,8 +7,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { db } from '@/lib/firebase';
-import { ref, push, set, onValue, query, orderByChild } from 'firebase/database';
+import { dbService } from '@/services/db';
+import { useExpenses } from '@/hooks/use-expenses';
 import { useSettings } from '@/context/settings-context';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
@@ -40,10 +40,6 @@ export default function ExpensesScreen() {
   };
   const theme = useTheme();
 
-  const [loading, setLoading] = useState(true);
-  const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
-  
-  // Form state
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [description, setDescription] = useState('');
@@ -55,31 +51,7 @@ export default function ExpensesScreen() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
 
-  // Fetch expenses for selected month
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(true);
-    const expensesRef = ref(db, `expenses/${selectedMonth}`);
-    const unsubscribe = onValue(expensesRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const recordsArray = Object.keys(data).map(key => ({
-          ...data[key],
-          id: key,
-          dbPath: `expenses/${selectedMonth}/${key}`
-        }));
-        
-        // Sort descending by date
-        recordsArray.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setExpenses(recordsArray);
-      } else {
-        setExpenses([]);
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [selectedMonth]);
+  const { expenses, loading } = useExpenses(selectedMonth);
 
   const handleLogExpense = async () => {
     const numAmount = parseFloat(amount.replace(/,/g, ''));
@@ -97,9 +69,6 @@ export default function ExpensesScreen() {
       const date = new Date();
       const monthBucket = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       
-      const expensesRef = ref(db, `expenses/${monthBucket}`);
-      const newExpenseRef = push(expensesRef);
-      
       const newExpense = {
         amount: numAmount,
         category,
@@ -108,7 +77,7 @@ export default function ExpensesScreen() {
         createdAt: date.toISOString(),
       };
       
-      await set(newExpenseRef, newExpense);
+      await dbService.pushRecord(`expenses/${monthBucket}`, newExpense);
       
       // Reset form
       setAmount('');

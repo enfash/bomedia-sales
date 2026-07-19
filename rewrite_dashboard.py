@@ -1,4 +1,6 @@
-import React, { useMemo } from 'react';
+import re
+
+content = """import React, { useMemo } from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
@@ -329,3 +331,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
 });
+"""
+
+with open('src/app/index.tsx', 'w') as f:
+    f.write(content)
