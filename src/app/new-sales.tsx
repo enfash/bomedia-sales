@@ -1,3 +1,4 @@
+import { dbService } from '@/services/db';
 import React, { useState, useRef, useCallback } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View, KeyboardAvoidingView, Alert, Modal, Animated, PanResponder, TouchableOpacity } from 'react-native';
 import { Checkbox, ActivityIndicator, TextInput as PaperTextInput, Surface, Button, SegmentedButtons } from 'react-native-paper';
@@ -8,10 +9,9 @@ import { useFocusEffect } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useSettings } from '@/context/settings-context';
-import { db } from '@/lib/firebase';
-import { ref, set } from 'firebase/database';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { formatCurrency } from '@/utils/currency';
 
 export default function NewSalesScreen() {
   const safeAreaInsets = useSafeAreaInsets();
@@ -278,7 +278,7 @@ export default function NewSalesScreen() {
       });
 
       // Updated path structure: sales/YYYY/MM/DD/receiptId
-      await set(ref(db, `sales/${yyyy}/${mm}/${dd}/${receiptId}`), batchRecord);
+      await dbService.setRecord(`sales/${yyyy}/${mm}/${dd}/${receiptId}`, batchRecord);
       
       Alert.alert('Success', `Batch submitted successfully!\nReceipt: ${receiptId}`);
       setBatchItems([]);
@@ -634,7 +634,7 @@ export default function NewSalesScreen() {
                   )}
                 </View>
                 <ThemedText type="smallBold" style={{ color: theme.primary, alignSelf: 'center', fontSize: 16 }}>
-                  ₦{currentTotal.toLocaleString()}
+                  {formatCurrency(currentTotal)}
                 </ThemedText>
               </View>
             </View>
@@ -656,7 +656,7 @@ export default function NewSalesScreen() {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <ThemedText type="defaultSemiBold">Items in Order ({batchItems.length})</ThemedText>
                 <ThemedText type="smallBold" style={{ color: theme.primary }}>
-                  Items Subtotal: ₦{Math.max(batchItems.reduce((sum, item) => sum + item.total, 0), settings.mov).toLocaleString()}
+                  Items Subtotal: {formatCurrency(Math.max(batchItems.reduce((sum, item) => sum + item.total, 0), settings.mov))}
                 </ThemedText>
               </View>
 
@@ -676,12 +676,12 @@ export default function NewSalesScreen() {
                           {item.eyelets ? ' + Eyelets' : ''}{item.lamination ? ' + Lam' : ''} {item.turnaroundTime !== 'Standard' ? `(${item.turnaroundTime})` : ''}
                         </ThemedText>
                         <ThemedText type="small" themeColor="onSurfaceVariant" style={{ fontStyle: 'italic' }}>
-                          {effArea > 0 ? `${(effArea * (1 + (settings?.wasteFactor || 0) / 100)).toFixed(2)} sqft (inc waste) @ ₦${item.unitPrice.toLocaleString()}/sqft` : `₦${item.unitPrice.toLocaleString()}`}
+                          {effArea > 0 ? `${(effArea * (1 + (settings?.wasteFactor || 0) / 100)).toFixed(2)} sqft (inc waste) @ ${formatCurrency(item.unitPrice)}/sqft` : `${formatCurrency(item.unitPrice)}`}
                         </ThemedText>
                       </View>
                       <View style={{ alignItems: 'flex-end', gap: Spacing.one, justifyContent: 'center' }}>
                         <ThemedText type="smallBold" style={{ color: theme.primary }}>
-                          ₦{item.total.toLocaleString()}
+                          {formatCurrency(item.total)}
                         </ThemedText>
                         <Pressable onPress={() => removeBatchItem(item.id)}>
                           <ThemedText type="smallBold" style={{ color: '#EF4444' }}>Remove</ThemedText>
@@ -752,7 +752,7 @@ export default function NewSalesScreen() {
             <View>
               <ThemedText type="small" themeColor="onSurfaceVariant">Final Total</ThemedText>
               <ThemedText type="subtitle" style={{ color: theme.primary, fontWeight: '700' }}>
-                ₦{finalBatchTotal.toLocaleString()}
+                {formatCurrency(finalBatchTotal)}
               </ThemedText>
             </View>
             
@@ -850,7 +850,7 @@ export default function NewSalesScreen() {
                   <View style={{ flex: 1 }}>
                     <ThemedText type="smallBold">{m.name}</ThemedText>
                     <ThemedText type="small" themeColor="onSurfaceVariant">
-                      ₦{m.price.toLocaleString()} / sqft
+                      {formatCurrency(m.price)} / sqft
                     </ThemedText>
                   </View>
                   {materialQuery === m.name && (

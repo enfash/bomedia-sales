@@ -6,6 +6,8 @@ import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { SalesBatch, SalesRecord } from './types';
 import { Spacing } from '@/constants/theme';
+import { formatCurrency } from '@/utils/currency';
+import { formatDate } from '@/utils/date';
 
 export const getRecordDetails = (record: SalesRecord, theme: any) => {
   const amountPaid = record.amountPaid || 0;
@@ -141,14 +143,14 @@ export function RecordsTable({
                     {batch.clientName || 'Unknown'}
                   </Text>
                   <Text style={{ color: theme.onSurface, fontWeight: '700', fontSize: 16 }}>
-                    ₦{(batch.totalAmount || 0).toLocaleString()}
+                    {formatCurrency((batch.totalAmount || 0))}
                   </Text>
                 </View>
 
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Text style={{ color: theme.onSurfaceVariant, fontSize: 13 }}>
-                      {new Date(batch.createdAt).toLocaleDateString()}
+                      {formatDate(batch.createdAt)}
                     </Text>
                     <Text style={{ color: theme.onSurfaceVariant, fontSize: 13, marginHorizontal: 6 }}>•</Text>
                     <Text style={{ color: theme.onSurfaceVariant, fontSize: 13 }}>
@@ -245,7 +247,7 @@ export function RecordsTable({
               </View>
               <View style={[styles.cell, { width: 90 }]}>
                 <Text style={{ color: theme.onSurface, fontSize: 13 }} numberOfLines={1}>
-                  {new Date(batch.createdAt).toLocaleDateString()}
+                  {formatDate(batch.createdAt)}
                 </Text>
               </View>
               <Text style={[styles.cell, { width: 70, color: theme.onSurface }]} numberOfLines={1}>
@@ -255,7 +257,7 @@ export function RecordsTable({
                 {batch.records.length > 1 ? `${batch.records.length} items batched` : (batch.records[0]?.material + ' • ' + batch.records[0]?.quantity + ' qty • ' + batch.records[0]?.width + 'x' + batch.records[0]?.height + ' ' + batch.records[0]?.jobUnit)}
               </Text>
               <Text style={[styles.cell, { width: 100, color: theme.onSurface }]} numberOfLines={1}>
-                ₦{(batch.totalAmount || 0).toLocaleString()}
+                {formatCurrency((batch.totalAmount || 0))}
               </Text>
               <View style={[styles.cell, { width: 80 }]}>
                 <View style={[styles.statusBadge, { backgroundColor: paperTheme.colors.surfaceVariant }]}>
@@ -267,7 +269,7 @@ export function RecordsTable({
               </Text>
               <View style={[{ width: 100, justifyContent: 'center', backgroundColor: theme.surface }, Platform.OS === 'web' && { position: 'sticky' as any, right: 0, zIndex: 90 }]}>
                 <Text style={[styles.cell, { color: theme.onSurface, fontWeight: '500' }]} numberOfLines={1}>
-                  ₦{(batch.totalBalance || 0).toLocaleString()}
+                  {formatCurrency((batch.totalBalance || 0))}
                 </Text>
               </View>
             </Pressable>

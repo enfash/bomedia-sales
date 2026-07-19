@@ -8,6 +8,8 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useRecords } from '@/hooks/use-records';
 import { SalesBatch } from '@/components/records/types';
+import { formatCurrency } from '@/utils/currency';
+import { formatDate } from '@/utils/date';
 
 interface ClientAgg {
   clientName: string;
@@ -134,12 +136,12 @@ export default function ClientsScreen() {
                     <View key={client.clientName} style={[styles.tableRow, { borderBottomColor: theme.surfaceVariant }, idx === filteredClients.length - 1 && { borderBottomWidth: 0 }]}>
                       <Text style={[styles.td, { width: 200, color: theme.onSurface, fontWeight: '600', paddingRight: 8 }]} numberOfLines={1}>{client.clientName}</Text>
                       <Text style={[styles.td, { width: 80, color: theme.onSurface, textAlign: 'right', paddingRight: 8 }]} numberOfLines={1}>{client.jobsCount}</Text>
-                      <Text style={[styles.td, { width: 140, color: theme.onSurface, textAlign: 'right', fontWeight: '500', paddingRight: 8 }]} numberOfLines={1}>₦{client.totalSpend.toLocaleString()}</Text>
+                      <Text style={[styles.td, { width: 140, color: theme.onSurface, textAlign: 'right', fontWeight: '500', paddingRight: 8 }]} numberOfLines={1}>{formatCurrency(client.totalSpend)}</Text>
                       <Text style={[styles.td, { width: 140, color: client.balance > 0 ? (theme.error || '#EF4444') : theme.onSurfaceVariant, textAlign: 'right', fontWeight: client.balance > 0 ? '700' : '400', paddingRight: 8 }]} numberOfLines={1}>
-                        ₦{client.balance.toLocaleString()}
+                        {formatCurrency(client.balance)}
                       </Text>
                       <Text style={[styles.td, { width: 140, color: theme.onSurfaceVariant, textAlign: 'right' }]} numberOfLines={1}>
-                        {new Date(client.lastPurchaseDate).toLocaleDateString()}
+                        {formatDate(client.lastPurchaseDate)}
                       </Text>
                     </View>
                   ))}

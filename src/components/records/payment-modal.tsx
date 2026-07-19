@@ -3,6 +3,7 @@ import { View, StyleSheet, Modal, Pressable, TextInput, Text } from 'react-nativ
 import { SymbolView } from 'expo-symbols';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { formatCurrency } from '@/utils/currency';
 
 interface PaymentModalProps {
   paymentModalVisible: boolean;
@@ -57,7 +58,7 @@ export function PaymentModal({
                 Recording payment for <ThemedText type="smallBold">{clientName}</ThemedText>
               </ThemedText>
               <ThemedText type="small" themeColor="onSurfaceVariant">
-                Remaining Balance: <ThemedText type="smallBold">₦{remainingBalance.toLocaleString()}</ThemedText>
+                Remaining Balance: <ThemedText type="smallBold">{formatCurrency(remainingBalance)}</ThemedText>
               </ThemedText>
 
               <View style={[styles.inputWrapper, { backgroundColor: theme.background, borderColor: theme.surfaceVariant, marginTop: Spacing.four }]}>

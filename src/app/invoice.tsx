@@ -13,6 +13,8 @@ import { db } from '@/lib/firebase';
 import { ref, get, update } from 'firebase/database';
 import { useSettings } from '@/context/settings-context';
 import { MaxContentWidth } from '@/constants/theme';
+import { formatCurrency } from '@/utils/currency';
+import { formatDate } from '@/utils/date';
 
 export default function InvoiceScreen() {
   const { batchId } = useLocalSearchParams();
@@ -86,7 +88,7 @@ export default function InvoiceScreen() {
 
   const clientName = records[0].clientName || 'Unknown Client';
   const contact = records[0].contact || '';
-  const dateStr = new Date(records[0].createdAt).toLocaleDateString();
+  const dateStr = formatDate(records[0].createdAt);
   const batchIds = typeof batchId === 'string' ? batchId.split(',') : (Array.isArray(batchId) ? batchId : []);
   const invoiceNo = `INV-${batchIds.map(id => id.slice(-6)).join('-').toUpperCase()}`;
 
@@ -196,9 +198,9 @@ export default function InvoiceScreen() {
 
           <div class="totals">
             <div class="totals-box">
-              <div class="total-row"><span style="color: #454651;">Subtotal:</span> <span>₦${totalAmount.toLocaleString()}</span></div>
-              <div class="total-row"><span style="color: #454651;">Amount Paid:</span> <span>₦${totalPaid.toLocaleString()}</span></div>
-              <div class="total-row balance-row"><span style="font-weight: 700; font-size: 16px;">Balance Due:</span> <span style="font-weight: 800; font-size: 16px; color: #2e388d;">₦${balance.toLocaleString()}</span></div>
+              <div class="total-row"><span style="color: #454651;">Subtotal:</span> <span>${formatCurrency(totalAmount)}</span></div>
+              <div class="total-row"><span style="color: #454651;">Amount Paid:</span> <span>${formatCurrency(totalPaid)}</span></div>
+              <div class="total-row balance-row"><span style="font-weight: 700; font-size: 16px;">Balance Due:</span> <span style="font-weight: 800; font-size: 16px; color: #2e388d;">${formatCurrency(balance)}</span></div>
             </div>
           </div>
 
@@ -322,7 +324,7 @@ export default function InvoiceScreen() {
                 <Text style={styles.itemDescription} numberOfLines={2}>
                   {item.width}x{item.height} {item.jobUnit} {item.type || 'Print Job'}
                 </Text>
-                <Text style={styles.itemAmount}>₦{item.total?.toLocaleString()}</Text>
+                <Text style={styles.itemAmount}>{formatCurrency(item.total)}</Text>
               </View>
               <View style={styles.itemDetailsRow}>
                 <View style={styles.itemDetailCol}>
@@ -335,7 +337,7 @@ export default function InvoiceScreen() {
                 </View>
                 <View style={styles.itemDetailCol}>
                   <Text style={styles.itemDetailLabel}>Unit Price</Text>
-                  <Text style={styles.itemDetailValue}>₦{item.unitPrice?.toLocaleString()}</Text>
+                  <Text style={styles.itemDetailValue}>{formatCurrency(item.unitPrice)}</Text>
                 </View>
               </View>
             </View>
@@ -347,15 +349,15 @@ export default function InvoiceScreen() {
           <View style={styles.totalsBox}>
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Subtotal:</Text>
-              <Text style={styles.totalValue}>₦{totalAmount.toLocaleString()}</Text>
+              <Text style={styles.totalValue}>{formatCurrency(totalAmount)}</Text>
             </View>
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Amount Paid:</Text>
-              <Text style={styles.totalValue}>₦{totalPaid.toLocaleString()}</Text>
+              <Text style={styles.totalValue}>{formatCurrency(totalPaid)}</Text>
             </View>
             <View style={[styles.totalRow, styles.balanceRow]}>
               <Text style={styles.balanceLabel}>Balance Due:</Text>
-              <Text style={styles.balanceValue}>₦{balance.toLocaleString()}</Text>
+              <Text style={styles.balanceValue}>{formatCurrency(balance)}</Text>
             </View>
           </View>
         </View>

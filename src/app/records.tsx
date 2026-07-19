@@ -1,3 +1,4 @@
+import { dbService } from '@/services/db';
 import React, { useState } from 'react';
 import { Platform, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,13 +7,12 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { db } from '@/lib/firebase';
-import { ref, update } from 'firebase/database';
 
 import { useRecords } from '@/hooks/use-records';
 import { QuotaCard } from '@/components/records/quota-card';
 import { RecordsHeader } from '@/components/records/records-header';
 import { RecordsTable } from '@/components/records/records-table';
+import { formatDate } from '@/utils/date';
 
 export default function RecordsScreen() {
   const safeAreaInsets = useSafeAreaInsets();
@@ -53,7 +53,7 @@ export default function RecordsScreen() {
     let csv = "Date,Client,Job Details,Amount,Balance,Status\n";
     const batchesToExport = selectedBatches.length > 0 ? sortedBatches.filter(b => selectedBatches.includes(b.id)) : sortedBatches;
     batchesToExport.forEach(batch => {
-      const date = new Date(batch.createdAt).toLocaleDateString();
+      const date = formatDate(batch.createdAt);
       const details = batch.records.length > 1 ? `${batch.records.length} items` : `${batch.records[0]?.material} ${batch.records[0]?.quantity} qty`;
       csv += `"${date}","${batch.clientName}","${details}","${batch.totalAmount}","${batch.totalBalance}","${batch.status}"\n`;
     });
@@ -96,7 +96,7 @@ export default function RecordsScreen() {
     });
     
     try {
-      await update(ref(db), updates);
+      await dbService.updateRecord('/', updates);
       setSelectedBatches([]);
     } catch (e: any) {
       alert("Failed to mark as paid: " + e.message);

@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '@/lib/firebase';
-import { ref, onValue } from 'firebase/database';
+import { dbService } from '@/services/db';
+import { isOverdue } from '@/utils/date';
+import { getPaymentStatus } from '@/utils/payment-status';
 import { SalesRecord, SalesBatch } from '@/components/records/types';
 
 export function useRecords(theme: any) {
@@ -17,9 +19,7 @@ export function useRecords(theme: any) {
   const [loggedByFilter, setLoggedByFilter] = useState('All');
 
   useEffect(() => {
-    const salesRef = ref(db, 'sales');
-    const unsubscribe = onValue(salesRef, (snapshot) => {
-      const data = snapshot.val();
+    const unsubscribe = dbService.subscribe('sales', (data: any) => {
       if (data) {
         let legacyRecords: any[] = [];
         let parsedBatches: SalesBatch[] = [];
@@ -84,17 +84,10 @@ export function useRecords(theme: any) {
         });
 
         parsedBatches.forEach(batch => {
-          if (batch.totalPaid >= batch.totalAmount && batch.totalAmount > 0) {
-            batch.status = batch.totalPaid > batch.totalAmount ? "Overpaid" : "Paid";
-            batch.statusColor = batch.totalPaid > batch.totalAmount ? "#AF52DE" : "#34C759";
-          } else if (batch.totalPaid > 0) {
-            batch.status = "Partial";
-            batch.statusColor = "#FF9500";
-          } else {
-            const isOverdue = (new Date().getTime() - new Date(batch.createdAt).getTime()) > 7 * 24 * 60 * 60 * 1000;
-            batch.status = isOverdue ? "Overdue" : "Unpaid";
-            batch.statusColor = isOverdue ? "#FF3B30" : theme.textSecondary;
-          }
+          const overdue = isOverdue(batch.createdAt);
+          const paymentStatus = getPaymentStatus(batch.totalAmount || 0, batch.totalPaid || 0, overdue);
+          batch.status = paymentStatus.status;
+          batch.statusColor = paymentStatus.color;
         });
 
         const allFlatRecords: any[] = [];
@@ -109,9 +102,6 @@ export function useRecords(theme: any) {
         setRecords([]);
         setRawBatches([]);
       }
-      setLoading(false);
-    }, (error) => {
-      console.error("Firebase read failed: " + error.message);
       setLoading(false);
     });
 

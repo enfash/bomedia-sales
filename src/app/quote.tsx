@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { formatCurrency } from '@/utils/currency';
 
 interface QuoteItem {
   id: string;
@@ -239,7 +240,7 @@ export default function QuoteScreen() {
           <View style={[styles.resultContainer, { backgroundColor: theme.background }]}>
             <ThemedText type="small" themeColor="onSurfaceVariant">Estimated Total</ThemedText>
             <ThemedText type="subtitle" style={[styles.totalValue, { color: theme.primary }]}>
-              ₦{calculateTotal().toLocaleString()}
+              {formatCurrency(calculateTotal())}
             </ThemedText>
           </View>
 
@@ -312,7 +313,7 @@ export default function QuoteScreen() {
                       <ThemedText type="small" themeColor="onSurfaceVariant" style={{ width: 200, paddingRight: 8 }} numberOfLines={1}>{q.project}</ThemedText>
                       <ThemedText type="small" themeColor="onSurfaceVariant" style={{ width: 90, paddingRight: 8 }} numberOfLines={1}>{q.date}</ThemedText>
                       <ThemedText type="smallBold" style={{ width: 100, textAlign: 'right', color: theme.onSurface, paddingRight: 8 }} numberOfLines={1}>
-                        ₦{q.value.toLocaleString()}
+                        {formatCurrency(q.value)}
                       </ThemedText>
                       <View style={{ width: 80, paddingLeft: 16, justifyContent: 'center', alignItems: 'flex-start' }}>
                         <View style={[styles.statusBadge, { backgroundColor: col.bg }]}>
@@ -350,7 +351,7 @@ export default function QuoteScreen() {
                     </View>
                     <View style={styles.quoteValueSection}>
                       <ThemedText type="smallBold" style={styles.quoteValue}>
-                        ₦{q.value.toLocaleString()}
+                        {formatCurrency(q.value)}
                       </ThemedText>
                       <View style={[styles.statusBadge, { backgroundColor: col.bg }]}>
                         <ThemedText type="code" style={[styles.statusText, { color: col.text }]}>

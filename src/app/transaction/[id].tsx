@@ -10,6 +10,8 @@ import { IconButton, Button, Divider, Portal } from 'react-native-paper';
 import { SymbolView } from 'expo-symbols';
 import { Spacing } from '@/constants/theme';
 import { PaymentModal } from '@/components/records/payment-modal';
+import { formatCurrency } from '@/utils/currency';
+import { formatDate } from '@/utils/date';
 
 export default function TransactionDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -135,7 +137,7 @@ export default function TransactionDetails() {
                 <SymbolView name={{ ios: 'calendar', android: 'calendar_today', web: 'calendar_today' }} size={16} tintColor={theme.onSurfaceVariant} style={{ marginRight: 8 }} />
                 <ThemedText type="small" themeColor="onSurfaceVariant">Date:</ThemedText>
               </View>
-              <ThemedText style={{ fontWeight: '600' }}>{new Date(transaction.createdAt).toLocaleDateString()}</ThemedText>
+              <ThemedText style={{ fontWeight: '600' }}>{formatDate(transaction.createdAt)}</ThemedText>
             </View>
           </View>
           
@@ -165,7 +167,7 @@ export default function TransactionDetails() {
                   {item.width}x{item.height} {item.jobUnit} • Qty: {item.quantity}
                 </ThemedText>
               </View>
-              <ThemedText style={{ fontWeight: '600' }}>₦{(item.total || 0).toLocaleString()}</ThemedText>
+              <ThemedText style={{ fontWeight: '600' }}>{formatCurrency((item.total || 0))}</ThemedText>
             </View>
           ))}
         </View>
@@ -178,25 +180,25 @@ export default function TransactionDetails() {
           
           <View style={styles.breakdownRow}>
             <ThemedText themeColor="onSurfaceVariant">Subtotal:</ThemedText>
-            <ThemedText>₦{subtotal.toLocaleString()}</ThemedText>
+            <ThemedText>{formatCurrency(subtotal)}</ThemedText>
           </View>
           <View style={styles.breakdownRow}>
             <ThemedText themeColor="onSurfaceVariant">VAT (0%):</ThemedText>
-            <ThemedText>₦{vat.toLocaleString()}</ThemedText>
+            <ThemedText>{formatCurrency(vat)}</ThemedText>
           </View>
           <View style={[styles.breakdownRow, { marginTop: 8, marginBottom: 16 }]}>
             <ThemedText style={{ fontWeight: '700', fontSize: 16 }}>Grand Total:</ThemedText>
-            <ThemedText style={{ fontWeight: '700', fontSize: 16 }}>₦{grandTotal.toLocaleString()}</ThemedText>
+            <ThemedText style={{ fontWeight: '700', fontSize: 16 }}>{formatCurrency(grandTotal)}</ThemedText>
           </View>
 
           <View style={styles.breakdownRow}>
             <ThemedText themeColor="onSurfaceVariant">Amount Paid:</ThemedText>
-            <ThemedText>₦{(transaction.totalPaid || 0).toLocaleString()}</ThemedText>
+            <ThemedText>{formatCurrency((transaction.totalPaid || 0))}</ThemedText>
           </View>
           <View style={[styles.breakdownRow, { marginTop: 4 }]}>
             <ThemedText style={{ fontWeight: '700' }}>Outstanding Balance:</ThemedText>
             <ThemedText style={{ fontWeight: '700', color: transaction.totalBalance > 0 ? theme.error : '#2E7D32' }}>
-              ₦{transaction.totalBalance.toLocaleString()}
+              {formatCurrency(transaction.totalBalance)}
             </ThemedText>
           </View>
         </View>

@@ -10,6 +10,8 @@ import { useTheme } from '@/hooks/use-theme';
 import { db } from '@/lib/firebase';
 import { ref, push, set, onValue, query, orderByChild } from 'firebase/database';
 import { useSettings } from '@/context/settings-context';
+import { formatCurrency } from '@/utils/currency';
+import { formatDate } from '@/utils/date';
 
 export interface ExpenseRecord {
   id: string;
@@ -216,12 +218,12 @@ export default function ExpensesScreen() {
                 <View>
                   <ThemedText style={styles.cardTitle}>Monthly Expenses</ThemedText>
                   <ThemedText themeColor="onSurfaceVariant" style={{ fontSize: 13, marginTop: 4 }}>
-                    {new Date(selectedMonth + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    {formatDate(selectedMonth + '-01', { month: 'long', year: 'numeric' })}
                   </ThemedText>
                 </View>
                 <View style={styles.totalBadge}>
                   <ThemedText style={{ color: '#fff', fontWeight: 'bold' }}>
-                    ₦{totalMonthlyExpenses.toLocaleString()}
+                    {formatCurrency(totalMonthlyExpenses)}
                   </ThemedText>
                 </View>
               </View>
@@ -248,7 +250,7 @@ export default function ExpensesScreen() {
                     {expenses.map((item, idx) => (
                       <View key={item.id} style={[styles.tableRow, { borderBottomColor: theme.surfaceVariant }, idx === expenses.length - 1 && { borderBottomWidth: 0 }]}>
                         <Text style={[styles.td, { width: 100, color: theme.onSurfaceVariant, paddingRight: 8 }]} numberOfLines={1}>
-                          {new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                          {formatDate(item.createdAt, { month: 'short', day: 'numeric' })}
                         </Text>
                         <Text style={[styles.td, { width: 220, color: theme.onSurface, fontWeight: '500', paddingRight: 8 }]} numberOfLines={2}>
                           {item.description}
@@ -259,7 +261,7 @@ export default function ExpensesScreen() {
                            </View>
                         </View>
                         <Text style={[styles.td, { width: 120, color: (theme.error || '#FF3B30'), textAlign: 'right', fontWeight: '600' }]} numberOfLines={1}>
-                          -₦{item.amount.toLocaleString()}
+                          -{formatCurrency(item.amount)}
                         </Text>
                       </View>
                     ))}

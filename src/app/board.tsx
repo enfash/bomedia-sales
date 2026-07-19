@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { formatCurrency } from '@/utils/currency';
 
 interface Deal {
   id: string;
@@ -129,13 +130,13 @@ export default function BoardScreen() {
           <ThemedView type="surface" style={styles.statBox}>
             <ThemedText type="code" themeColor="onSurfaceVariant">Active Pipeline</ThemedText>
             <ThemedText type="smallBold" style={[styles.statValue, { color: theme.primary }]}>
-              ₦{getPipelineTotal().toLocaleString()}
+              {formatCurrency(getPipelineTotal())}
             </ThemedText>
           </ThemedView>
           <ThemedView type="surface" style={styles.statBox}>
             <ThemedText type="code" themeColor="onSurfaceVariant">Total Won</ThemedText>
             <ThemedText type="smallBold" style={[styles.statValue, { color: '#2E7D32' }]}>
-              ₦{getWonTotal().toLocaleString()}
+              {formatCurrency(getWonTotal())}
             </ThemedText>
           </ThemedView>
           <ThemedView type="surface" style={styles.statBox}>
@@ -190,7 +191,7 @@ export default function BoardScreen() {
                     </ThemedView>
                   </View>
                   <ThemedText type="code" themeColor="onSurfaceVariant" style={styles.columnTotal}>
-                    ₦{getStageTotal(stage).toLocaleString()}
+                    {formatCurrency(getStageTotal(stage))}
                   </ThemedText>
 
                   {/* Cards */}
@@ -210,7 +211,7 @@ export default function BoardScreen() {
                         
                         <View style={styles.cardFooter}>
                           <ThemedText type="smallBold" style={{ color: theme.primary }}>
-                            ₦{deal.value.toLocaleString()}
+                            {formatCurrency(deal.value)}
                           </ThemedText>
                           <ThemedText type="code" themeColor="onSurfaceVariant">
                             {deal.daysActive}d
@@ -235,7 +236,7 @@ export default function BoardScreen() {
                   {selectedMobileStage} Deals
                 </ThemedText>
                 <ThemedText type="smallBold" style={{ color: theme.primary }}>
-                  Total: ₦{getStageTotal(selectedMobileStage).toLocaleString()}
+                  Total: {formatCurrency(getStageTotal(selectedMobileStage))}
                 </ThemedText>
               </View>
 
@@ -260,7 +261,7 @@ export default function BoardScreen() {
                       <ThemedText type="small" themeColor="onSurfaceVariant">{deal.client}</ThemedText>
                     </View>
                     <ThemedText type="smallBold" style={{ color: theme.primary, fontSize: 16 }}>
-                      ₦{deal.value.toLocaleString()}
+                      {formatCurrency(deal.value)}
                     </ThemedText>
                   </View>
 
@@ -328,7 +329,7 @@ export default function BoardScreen() {
                 <View style={styles.infoRow}>
                   <ThemedText type="small" themeColor="onSurfaceVariant">Deal Value</ThemedText>
                   <ThemedText type="smallBold" style={{ fontSize: 18, color: theme.primary }}>
-                    ₦{activeDeal.value.toLocaleString()}
+                    {formatCurrency(activeDeal.value)}
                   </ThemedText>
                 </View>
                 <View style={styles.infoRow}>

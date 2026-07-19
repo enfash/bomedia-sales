@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { KPICard } from '@/components/ui/kpi-card';
+import { formatCurrency } from '@/utils/currency';
 
 interface QuotaCardProps {
   theme: any;
@@ -13,21 +14,21 @@ export function QuotaCard({ theme, totalRevenue, totalPaid }: QuotaCardProps) {
     { 
       id: 'All', 
       label: 'Total Billed', 
-      value: `₦${totalRevenue.toLocaleString()}`, 
+      value: `${formatCurrency(totalRevenue)}`, 
       iconName: { ios: 'doc.text', android: 'receipt', web: 'receipt' } as const,
       color: theme.primary 
     },
     { 
       id: 'Paid', 
       label: 'Collected', 
-      value: `₦${totalPaid.toLocaleString()}`, 
+      value: `${formatCurrency(totalPaid)}`, 
       iconName: { ios: 'checkmark.circle', android: 'check_circle', web: 'check_circle' } as const,
       color: '#2E7D32' 
     },
     { 
       id: 'Unpaid', 
       label: 'Outstanding', 
-      value: `₦${(totalRevenue - totalPaid).toLocaleString()}`, 
+      value: `${formatCurrency((totalRevenue - totalPaid))}`, 
       iconName: { ios: 'exclamationmark.circle', android: 'error', web: 'error' } as const,
       color: theme.error 
     }
