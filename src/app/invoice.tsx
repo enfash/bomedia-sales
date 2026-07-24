@@ -1,20 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Pressable, Platform, ScrollView } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Button, TextInput as PaperTextInput, Surface } from 'react-native-paper';
+import { PageContainer } from '@/components/ui/page-container';
+import { PrimaryButton } from '@/components/ui/primary-button';
+import { SecondaryButton } from '@/components/ui/secondary-button';
+import { ThemedTextInput } from '@/components/ui/themed-text-input';
 import { useTheme } from '@/hooks/use-theme';
-import { SymbolView } from 'expo-symbols';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import * as Print from 'expo-print';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system/legacy';
+import { SymbolView } from 'expo-symbols';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
+import { Surface } from 'react-native-paper';
 
-import { db } from '@/lib/firebase';
-import { ref, get, update } from 'firebase/database';
-import { useSettings } from '@/context/settings-context';
+import type { SalesRecord } from '@/components/records/types';
 import { MaxContentWidth } from '@/constants/theme';
+import { useSettings } from '@/context/settings-context';
+import { fetchBatchesByReceiptIds, updateBatchDetails } from '@/services/sales-repository';
 import { formatCurrency } from '@/utils/currency';
-import { formatDate } from '@/utils/date';
+import { formatDate, isOverdue } from '@/utils/date';
+import { computePaymentStatus, STATUS_META } from '@/utils/payment-status';
 
 export default function InvoiceScreen() {
   const { batchId } = useLocalSearchParams();
@@ -22,105 +27,111 @@ export default function InvoiceScreen() {
   const { settings, isLoading: settingsLoading } = useSettings();
   const theme = useTheme();
   
-  const [loading, setLoading] = useState(true);
-  const [records, setRecords] = useState<any[]>([]);
+  const [loading, setLoading] = useState(() => !!batchId);
+  const [records, setRecords] = useState<SalesRecord[]>([]);
+  const [batchPaths, setBatchPaths] = useState<string[]>([]);
+  const [totals, setTotals] = useState({ totalAmount: 0, totalPaid: 0 });
+  const [clientName, setClientName] = useState('Unknown Client');
+  const [contact, setContact] = useState('');
+  const [createdAt, setCreatedAt] = useState('');
   const [notes, setNotes] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [isSavingDetails, setIsSavingDetails] = useState(false);
 
   useEffect(() => {
     if (!batchId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setLoading(false);
       return;
     }
 
-    const fetchRecords = async () => {
+    let isActive = true;
+
+    const run = async () => {
+      setLoading(true);
       try {
-        const salesRef = ref(db, 'sales');
-        const snapshot = await get(salesRef);
-        const data = snapshot.val();
-        
-        if (data) {
-          const allRecords = Object.keys(data).map(key => ({
-            ...data[key],
-            id: key,
-          }));
-          
-          const batchIds = typeof batchId === 'string' ? batchId.split(',') : (Array.isArray(batchId) ? batchId : []);
-          const batchRecords = allRecords.filter(r => batchIds.includes(r.batchId) || batchIds.includes(r.id));
-          setRecords(batchRecords);
-          
-          if (batchRecords.length > 0) {
-            setNotes(batchRecords[0].notes || '');
-            setDueDate(batchRecords[0].dueDate || '');
-          }
-        }
+        const ids =
+          typeof batchId === 'string' ? batchId.split(',') : Array.isArray(batchId) ? batchId : [];
+        const batches = await fetchBatchesByReceiptIds(ids);
+        if (!isActive) return;
+
+        const items = batches.flatMap((b) =>
+          b.records.map((r) => ({
+            ...r,
+            clientName: b.clientName,
+            contact: b.contact || '',
+            createdAt: b.createdAt,
+          })),
+        );
+
+        setRecords(items);
+        setBatchPaths(batches.map((b) => b.dbPath));
+        setTotals({
+          totalAmount: batches.reduce((s, b) => s + (b.totalAmount || 0), 0),
+          totalPaid: batches.reduce((s, b) => s + (b.totalPaid || 0), 0),
+        });
+
+        const primary = batches[0];
+        setClientName(primary?.clientName || 'Unknown Client');
+        setContact(primary?.contact || '');
+        setCreatedAt(primary?.createdAt || '');
+        setNotes(primary?.notes || '');
+        setDueDate(primary?.dueDate || '');
       } catch (err) {
-        console.error("Error fetching invoice records", err);
+        if (isActive) console.error('Error fetching invoice records', err);
       } finally {
-        setLoading(false);
+        if (isActive) setLoading(false);
       }
     };
 
-    fetchRecords();
+    run();
+
+    return () => {
+      isActive = false;
+    };
   }, [batchId]);
 
   if (loading || settingsLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2e388d" />
-        <Text style={{ marginTop: 12, color: '#666' }}>Generating Invoice...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+        <Text style={{ marginTop: 12, color: theme.onSurfaceVariant }}>Generating Invoice...</Text>
       </View>
     );
   }
 
   if (records.length === 0) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Invoice not found.</Text>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>Go Back</Text>
-        </Pressable>
+      <View style={[styles.errorContainer, { backgroundColor: theme.background }]}>
+        <Text style={[styles.errorText, { color: theme.onSurfaceVariant }]}>Invoice not found.</Text>
+        <SecondaryButton onPress={() => router.back()}>
+          Go Back
+        </SecondaryButton>
       </View>
     );
   }
 
-  const clientName = records[0].clientName || 'Unknown Client';
-  const contact = records[0].contact || '';
-  const dateStr = formatDate(records[0].createdAt);
+  const dateStr = formatDate(createdAt || records[0].createdAt);
   const batchIds = typeof batchId === 'string' ? batchId.split(',') : (Array.isArray(batchId) ? batchId : []);
   const invoiceNo = `INV-${batchIds.map(id => id.slice(-6)).join('-').toUpperCase()}`;
 
-  const totalAmount = records.reduce((sum, r) => sum + (r.total || 0), 0);
-  const totalPaid = records.reduce((sum, r) => sum + (r.amountPaid || 0), 0);
+  const { totalAmount, totalPaid } = totals;
   const balance = totalAmount - totalPaid;
 
-  let status = "UNPAID";
-  let statusColor = "#ba1a1a"; // Error Red
-  if (totalPaid >= totalAmount && totalAmount > 0) {
-    status = totalPaid > totalAmount ? "OVERPAID" : "PAID";
-    statusColor = totalPaid > totalAmount ? "#2e388d" : "#10B981"; // Primary or Green
-  } else if (totalPaid > 0) {
-    status = "PARTIAL";
-    statusColor = "#e88f09"; // Amber
-  } else {
-    const isOverdue = (new Date().getTime() - new Date(records[0].createdAt).getTime()) > 7 * 24 * 60 * 60 * 1000;
-    if (isOverdue) {
-      status = "OVERDUE";
-      statusColor = "#ba1a1a";
-    }
-  }
+  // Single source of truth for status + colour (shared with every other screen).
+  const paymentStatus = computePaymentStatus(
+    totalAmount,
+    totalPaid,
+    isOverdue(createdAt || records[0].createdAt),
+  );
+  const status = paymentStatus.toUpperCase();
+  const statusColor = STATUS_META[paymentStatus].color;
 
   const handleSaveDetails = async () => {
     setIsSavingDetails(true);
     try {
-      const updates: Record<string, any> = {};
-      records.forEach(r => {
-        updates[`sales/${r.id}/notes`] = notes;
-        updates[`sales/${r.id}/dueDate`] = dueDate;
-      });
-      await update(ref(db), updates);
+      await updateBatchDetails(
+        batchPaths.map((dbPath) => ({ dbPath })),
+        { notes, dueDate },
+      );
       alert('Details saved successfully!');
     } catch (e: any) {
       alert("Failed to save: " + e.message);
@@ -266,27 +277,25 @@ export default function InvoiceScreen() {
   };
 
   return (
-    <View style={[styles.mainContainer, { backgroundColor: theme.background }]}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
-        <View style={styles.container}>
+    <PageContainer padHorizontalMobile>
           <View style={styles.controls}>
-        <Button mode="text" onPress={() => router.back()} icon="arrow-left" style={{ marginBottom: 12 }}>
+        <SecondaryButton onPress={() => router.back()} icon={() => <SymbolView name={{ ios: 'arrow.left', android: 'arrow_back', web: 'arrow_back' }} size={16} tintColor={theme.primary} />} style={{ marginBottom: 12 }}>
           Back
-        </Button>
+        </SecondaryButton>
         
-        <Button mode="contained" onPress={handleExport} icon="download">
+        <PrimaryButton onPress={handleExport} icon={() => <SymbolView name={{ ios: 'square.and.arrow.down', android: 'download', web: 'download' }} size={16} tintColor="#FFF" />}>
           {Platform.OS === 'web' ? 'Save as PDF / Print' : 'Save / Share PDF'}
-        </Button>
+        </PrimaryButton>
       </View>
 
-      <Surface elevation={2} style={styles.invoiceSheet}>
+      <Surface elevation={2} style={[styles.invoiceSheet, { backgroundColor: theme.surface, borderColor: theme.surfaceVariant }]}>
         {/* Status Stamp */}
         <View style={[styles.stampContainer, { borderColor: statusColor }]}>
           <Text style={[styles.stampText, { color: statusColor }]}>{status}</Text>
         </View>
 
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { borderBottomColor: theme.primary }]}>
           <View style={styles.logoContainer}>
             {settings.logoUrl ? (
               <Image 
@@ -295,49 +304,49 @@ export default function InvoiceScreen() {
                 contentFit="contain"
               />
             ) : (
-              <Text style={{ fontSize: 24, fontWeight: '800', marginBottom: 8, color: '#2e388d' }}>{settings.businessName}</Text>
+              <Text style={{ fontSize: 24, fontWeight: '800', marginBottom: 8, color: theme.primary }}>{settings.businessName}</Text>
             )}
-            <Text style={styles.companyDetails}>{settings.address}</Text>
-            <Text style={styles.companyDetails}>{settings.contactEmail} | {settings.contactPhone}</Text>
+            <Text style={[styles.companyDetails, { color: theme.onSurfaceVariant }]}>{settings.address}</Text>
+            <Text style={[styles.companyDetails, { color: theme.onSurfaceVariant }]}>{settings.contactEmail} | {settings.contactPhone}</Text>
           </View>
           
           <View style={styles.invoiceTitleContainer}>
-            <Text style={styles.invoiceTitle}>INVOICE</Text>
-            <Text style={styles.metaLabel}>INV #: <Text style={styles.metaValue}>{invoiceNo}</Text></Text>
-            <Text style={styles.metaLabel}>Date: <Text style={styles.metaValue}>{dateStr}</Text></Text>
+            <Text style={[styles.invoiceTitle, { color: theme.primary }]}>INVOICE</Text>
+            <Text style={[styles.metaLabel, { color: theme.onSurfaceVariant }]}>INV #: <Text style={[styles.metaValue, { color: theme.onSurface }]}>{invoiceNo}</Text></Text>
+            <Text style={[styles.metaLabel, { color: theme.onSurfaceVariant }]}>Date: <Text style={[styles.metaValue, { color: theme.onSurface }]}>{dateStr}</Text></Text>
           </View>
         </View>
 
         {/* Bill To */}
         <View style={styles.billToSection}>
-          <Text style={styles.sectionTitle}>BILL TO</Text>
-          <Text style={styles.clientName}>{clientName}</Text>
-          {contact ? <Text style={styles.clientContact}>{contact}</Text> : null}
+          <Text style={[styles.sectionTitle, { color: theme.primary }]}>BILL TO</Text>
+          <Text style={[styles.clientName, { color: theme.onSurface }]}>{clientName}</Text>
+          {contact ? <Text style={[styles.clientContact, { color: theme.onSurfaceVariant }]}>{contact}</Text> : null}
         </View>
 
         {/* Mobile-Friendly Line Items (Cards instead of Table) */}
         <View style={styles.itemsContainer}>
-          <Text style={[styles.sectionTitle, { marginBottom: 12 }]}>LINE ITEMS</Text>
+          <Text style={[styles.sectionTitle, { marginBottom: 12, color: theme.primary }]}>LINE ITEMS</Text>
           {records.map((item, idx) => (
-            <View key={item.id} style={styles.itemCard}>
-              <View style={styles.itemHeader}>
-                <Text style={styles.itemDescription} numberOfLines={2}>
+            <View key={item.id} style={[styles.itemCard, { backgroundColor: theme.surfaceVariant, borderColor: theme.outlineVariant }]}>
+              <View style={[styles.itemHeader, { borderBottomColor: theme.outlineVariant }]}>
+                <Text style={[styles.itemDescription, { color: theme.onSurface }]} numberOfLines={2}>
                   {item.width}x{item.height} {item.jobUnit} {item.type || 'Print Job'}
                 </Text>
-                <Text style={styles.itemAmount}>{formatCurrency(item.total)}</Text>
+                <Text style={[styles.itemAmount, { color: theme.onSurface }]}>{formatCurrency(item.total)}</Text>
               </View>
               <View style={styles.itemDetailsRow}>
                 <View style={styles.itemDetailCol}>
-                  <Text style={styles.itemDetailLabel}>Material</Text>
-                  <Text style={styles.itemDetailValue}>{item.material || 'N/A'}</Text>
+                  <Text style={[styles.itemDetailLabel, { color: theme.onSurfaceVariant }]}>Material</Text>
+                  <Text style={[styles.itemDetailValue, { color: theme.onSurface }]}>{item.material || 'N/A'}</Text>
                 </View>
                 <View style={styles.itemDetailCol}>
-                  <Text style={styles.itemDetailLabel}>Qty</Text>
-                  <Text style={styles.itemDetailValue}>{item.quantity}</Text>
+                  <Text style={[styles.itemDetailLabel, { color: theme.onSurfaceVariant }]}>Qty</Text>
+                  <Text style={[styles.itemDetailValue, { color: theme.onSurface }]}>{item.quantity}</Text>
                 </View>
                 <View style={styles.itemDetailCol}>
-                  <Text style={styles.itemDetailLabel}>Unit Price</Text>
-                  <Text style={styles.itemDetailValue}>{formatCurrency(item.unitPrice)}</Text>
+                  <Text style={[styles.itemDetailLabel, { color: theme.onSurfaceVariant }]}>Unit Price</Text>
+                  <Text style={[styles.itemDetailValue, { color: theme.onSurface }]}>{formatCurrency(item.unitPrice)}</Text>
                 </View>
               </View>
             </View>
@@ -347,27 +356,26 @@ export default function InvoiceScreen() {
         {/* Totals */}
         <View style={styles.totalsContainer}>
           <View style={styles.totalsBox}>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Subtotal:</Text>
-              <Text style={styles.totalValue}>{formatCurrency(totalAmount)}</Text>
+            <View style={[styles.totalRow, { borderBottomColor: theme.outlineVariant }]}>
+              <Text style={[styles.totalLabel, { color: theme.onSurfaceVariant }]}>Subtotal:</Text>
+              <Text style={[styles.totalValue, { color: theme.onSurface }]}>{formatCurrency(totalAmount)}</Text>
             </View>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Amount Paid:</Text>
-              <Text style={styles.totalValue}>{formatCurrency(totalPaid)}</Text>
+            <View style={[styles.totalRow, { borderBottomColor: theme.outlineVariant }]}>
+              <Text style={[styles.totalLabel, { color: theme.onSurfaceVariant }]}>Amount Paid:</Text>
+              <Text style={[styles.totalValue, { color: theme.onSurface }]}>{formatCurrency(totalPaid)}</Text>
             </View>
-            <View style={[styles.totalRow, styles.balanceRow]}>
-              <Text style={styles.balanceLabel}>Balance Due:</Text>
-              <Text style={styles.balanceValue}>{formatCurrency(balance)}</Text>
+            <View style={[styles.totalRow, styles.balanceRow, { backgroundColor: theme.surfaceVariant, borderBottomColor: 'transparent' }]}>
+              <Text style={[styles.balanceLabel, { color: theme.onSurface }]}>Balance Due:</Text>
+              <Text style={[styles.balanceValue, { color: theme.primary }]}>{formatCurrency(balance)}</Text>
             </View>
           </View>
         </View>
 
         {/* Editable Due Date & Notes */}
-        <View style={styles.editableSection}>
+        <View style={[styles.editableSection, { borderTopColor: theme.outlineVariant }]}>
           <View style={styles.editableRow}>
-            <Text style={styles.sectionTitle}>DUE DATE</Text>
-            <PaperTextInput
-              mode="outlined"
+            <Text style={[styles.sectionTitle, { color: theme.primary }]}>DUE DATE</Text>
+            <ThemedTextInput
               dense
               value={dueDate}
               onChangeText={setDueDate}
@@ -376,9 +384,8 @@ export default function InvoiceScreen() {
           </View>
 
           <View style={[styles.editableRow, { marginTop: 16 }]}>
-            <Text style={styles.sectionTitle}>NOTES</Text>
-            <PaperTextInput
-              mode="outlined"
+            <Text style={[styles.sectionTitle, { color: theme.primary }]}>NOTES</Text>
+            <ThemedTextInput
               multiline
               numberOfLines={3}
               value={notes}
@@ -387,29 +394,25 @@ export default function InvoiceScreen() {
             />
           </View>
 
-          <Button 
-            mode="contained"
+          <PrimaryButton 
             onPress={handleSaveDetails}
             loading={isSavingDetails}
             disabled={isSavingDetails}
             style={{ marginTop: 16 }}
-            contentStyle={{ height: 48 }}
           >
             Save Notes
-          </Button>
+          </PrimaryButton>
         </View>
         
         {/* Payment Details */}
         <View style={{ marginTop: 32 }}>
-          <Text style={styles.sectionTitle}>PAYMENT DETAILS</Text>
-          <View style={styles.paymentBox}>
-            <Text style={styles.paymentText}>{settings.bankDetails}</Text>
+          <Text style={[styles.sectionTitle, { color: theme.primary }]}>PAYMENT DETAILS</Text>
+          <View style={[styles.paymentBox, { backgroundColor: theme.surfaceVariant, borderLeftColor: theme.primary }]}>
+            <Text style={[styles.paymentText, { color: theme.onSurfaceVariant }]}>{settings.bankDetails}</Text>
           </View>
         </View>
         </Surface>
-        </View>
-      </ScrollView>
-    </View>
+    </PageContainer>
   );
 }
 

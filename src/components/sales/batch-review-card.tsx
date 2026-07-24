@@ -1,10 +1,11 @@
-import React from 'react';
-import { View, StyleSheet, Pressable, Platform } from 'react-native';
-import { Surface, TextInput as PaperTextInput, SegmentedButtons } from 'react-native-paper';
 import { ThemedText } from '@/components/themed-text';
-import { useTheme } from '@/hooks/use-theme';
+import { ThemedTextInput } from '@/components/ui/themed-text-input';
 import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { formatCurrency } from '@/utils/currency';
+import React from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { SegmentedButtons, Surface } from 'react-native-paper';
 
 export interface BatchReviewCardProps {
   batchItems: any[];
@@ -71,7 +72,7 @@ export const BatchReviewCard = React.memo(({
                   {formatCurrency(item.total)}
                 </ThemedText>
                 <Pressable onPress={() => onRemoveItem(item.id)}>
-                  <ThemedText type="smallBold" style={{ color: '#EF4444' }}>Remove</ThemedText>
+                  <ThemedText type="smallBold" style={{ color: theme.error }}>Remove</ThemedText>
                 </Pressable>
               </View>
             </View>
@@ -81,10 +82,7 @@ export const BatchReviewCard = React.memo(({
 
       <View style={[styles.formGroup, { marginTop: Spacing.four }]}>
         <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Delivery / Dispatch Cost (₦)</ThemedText>
-        <PaperTextInput 
-          mode="outlined"
-          dense
-          style={{ backgroundColor: theme.background }}
+        <ThemedTextInput 
           placeholder="e.g. 2000 (0 for pickup)"
           keyboardType="numeric"
           value={deliveryCost}
@@ -95,10 +93,7 @@ export const BatchReviewCard = React.memo(({
       <View style={[styles.row, { marginTop: Spacing.two }]}>
         <View style={[styles.formGroup, { flex: 1, minWidth: 140 }]}>
           <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Advance / Paid Amount (₦)</ThemedText>
-          <PaperTextInput 
-            mode="outlined"
-            dense
-            style={{ backgroundColor: theme.background }}
+          <ThemedTextInput 
             placeholder="e.g. 5000"
             keyboardType="numeric"
             value={advancePayment}
@@ -124,9 +119,11 @@ export const BatchReviewCard = React.memo(({
   );
 });
 
+BatchReviewCard.displayName = 'BatchReviewCard';
+
 const styles = StyleSheet.create({
   card: {
-    borderRadius: Platform.OS === 'web' ? 16 : 0,
+    borderRadius: 16,
     padding: Spacing.four,
     marginBottom: Spacing.four,
   },
@@ -145,6 +142,7 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.three,
   },
 });

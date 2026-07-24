@@ -1,0 +1,227 @@
+import { BarList, type BarRow } from '@/components/dashboard/bar-list';
+import { DashboardLayout } from '@/components/dashboard/dashboard-layout';
+import { MonthlyComparisonChart } from '@/components/dashboard/monthly-comparison-chart';
+import { Panel } from '@/components/dashboard/panel';
+import { RevenueBarChart } from '@/components/dashboard/revenue-bar-chart';
+import { SplitBar } from '@/components/dashboard/split-bar';
+import { StatCard } from '@/components/dashboard/stat-card';
+import { ThemedText } from '@/components/themed-text';
+import type { ProductionStage } from '@/components/records/types';
+import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
+import { Spacing } from '@/constants/theme';
+import { useAllExpenses } from '@/hooks/use-all-expenses';
+import { useRecords } from '@/hooks/use-records';
+import { useTheme } from '@/hooks/use-theme';
+import { parseDate } from '@/utils/date';
+import {
+  collectedVsOutstanding,
+  expensesVsRevenue,
+  productionThroughput,
+  revenueByMaterial,
+  revenueByMonth,
+  topClients,
+} from '@/services/analytics';
+import { formatCurrency } from '@/utils/currency';
+import { STATUS_META } from '@/utils/payment-status';
+import { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+
+/** Stage accents (mirrors the Production Board's semantic pipeline colours). */
+const STAGE_ACCENT: Record<ProductionStage, string> = {
+  Queued: '#767683',
+  Printing: '#2e388d',
+  Finishing: '#b26a00',
+  Ready: '#1c7d4d',
+  Delivered: '#454651',
+};
+
+type RangeMonths = 3 | 6 | 12;
+const RANGES: { label: string; value: RangeMonths }[] = [
+  { label: '3M', value: 3 },
+  { label: '6M', value: 6 },
+  { label: '12M', value: 12 },
+];
+
+export default function AnalyticsWeb() {
+  const theme = useTheme();
+  const { sortedBatches: batches, loading: recordsLoading } = useRecords(theme);
+  const { expenses, loading: expensesLoading } = useAllExpenses();
+  const loading = recordsLoading || expensesLoading;
+
+  // Page-level date range — one control drives every widget.
+  const [range, setRange] = useState<RangeMonths>(6);
+  const rangeLabel = `Last ${range} months`;
+
+  const cutoff = useMemo(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth() - (range - 1), 1).getTime();
+  }, [range]);
+  const windowBatches = useMemo(
+    () => batches.filter((b) => parseDate(b.createdAt).getTime() >= cutoff),
+    [batches, cutoff],
+  );
+  const windowExpenses = useMemo(
+    () => expenses.filter((e) => parseDate(e.createdAt).getTime() >= cutoff),
+    [expenses, cutoff],
+  );
+
+  const trend = useMemo(() => revenueByMonth(windowBatches, range), [windowBatches, range]);
+  const evr = useMemo(() => expensesVsRevenue(windowBatches, windowExpenses, range), [windowBatches, windowExpenses, range]);
+  const split = useMemo(() => collectedVsOutstanding(windowBatches), [windowBatches]);
+  const throughput = useMemo(() => productionThroughput(windowBatches), [windowBatches]);
+  const materials = useMemo(() => revenueByMaterial(windowBatches, 6), [windowBatches]);
+  const clients = useMemo(() => topClients(windowBatches, 6), [windowBatches]);
+
+  const totals = useMemo(() => {
+    const revenue = windowBatches.reduce((s, b) => s + (b.totalAmount || 0), 0);
+    const spend = windowExpenses.reduce((s, e) => s + (e.amount || 0), 0);
+    const net = revenue - spend;
+    return { revenue, spend, net, margin: revenue > 0 ? (net / revenue) * 100 : 0 };
+  }, [windowBatches, windowExpenses]);
+
+  const rangeControl = (
+    <View style={[styles.segment, { borderColor: theme.outlineVariant }]}>
+      {RANGES.map((r) => {
+        const active = range === r.value;
+        return (
+          <Pressable
+            key={r.value}
+            onPress={() => setRange(r.value)}
+            style={[styles.segmentItem, active && { backgroundColor: theme.primary }]}
+          >
+            <ThemedText type="smallBold" style={{ color: active ? theme.onPrimary : theme.onSurfaceVariant, fontSize: 12 }}>
+              {r.label}
+            </ThemedText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+
+  const throughputRows: BarRow[] = throughput.map((t) => ({
+    label: t.stage,
+    value: t.count,
+    caption: formatCurrency(t.value),
+    accent: STAGE_ACCENT[t.stage],
+  }));
+
+  const materialRows: BarRow[] = materials.map((m) => ({
+    label: m.material,
+    value: m.revenue,
+    caption: `${m.jobs} job${m.jobs !== 1 ? 's' : ''}`,
+  }));
+
+  const clientRows: BarRow[] = clients.map((c) => ({
+    label: c.clientName,
+    value: c.revenue,
+    caption: c.balance > 0 ? `${formatCurrency(c.balance)} owing` : undefined,
+  }));
+
+  return (
+    <DashboardLayout
+      eyebrow="Insights"
+      title="Analytics"
+      subtitle="Revenue, spend and production performance across your business."
+      right={loading ? undefined : rangeControl}
+    >
+      {loading ? (
+        <View style={{ gap: Spacing.four }}>
+          <View style={styles.row}>
+            {[0, 1, 2, 3].map((i) => (
+              <LoadingSkeleton key={i} height={116} borderRadius={18} style={{ flex: 1, minWidth: 210 }} />
+            ))}
+          </View>
+          <View style={styles.row}>
+            <LoadingSkeleton height={300} borderRadius={20} style={{ flex: 2, minWidth: 340 }} />
+            <LoadingSkeleton height={300} borderRadius={20} style={{ flex: 1, minWidth: 300 }} />
+          </View>
+          <LoadingSkeleton height={300} borderRadius={20} />
+        </View>
+      ) : (
+        <>
+          {/* KPI row */}
+          <View style={styles.row}>
+            <StatCard
+              label="Revenue"
+              value={formatCurrency(totals.revenue)}
+              icon={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }}
+              accent={theme.primary}
+              caption={rangeLabel}
+            />
+            <StatCard
+              label="Expenses"
+              value={formatCurrency(totals.spend)}
+              icon={{ ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' }}
+              accent={STATUS_META.Partial.color}
+              caption={rangeLabel}
+            />
+            <StatCard
+              label="Net Profit"
+              value={formatCurrency(totals.net)}
+              icon={{ ios: 'banknote.fill', android: 'account_balance_wallet', web: 'account_balance_wallet' }}
+              accent={totals.net >= 0 ? STATUS_META.Paid.color : STATUS_META.Unpaid.color}
+              caption={`${totals.margin.toFixed(1)}% margin`}
+              captionColor={totals.net >= 0 ? STATUS_META.Paid.color : STATUS_META.Unpaid.color}
+            />
+            <StatCard
+              label="Collected"
+              value={`${split.collectedPct.toFixed(0)}%`}
+              icon={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
+              accent={STATUS_META.Paid.color}
+              caption={`${formatCurrency(split.outstanding)} outstanding`}
+              captionColor={split.outstanding > 0 ? STATUS_META.Unpaid.color : undefined}
+            />
+          </View>
+
+          {/* Revenue trend + collected split */}
+          <View style={styles.row}>
+            <Panel title="Revenue trend" subtitle={rangeLabel} style={{ flex: 2, minWidth: 340 }}>
+              <RevenueBarChart data={trend} />
+            </Panel>
+            <Panel title="Collected vs outstanding" subtitle={rangeLabel} style={{ flex: 1, minWidth: 300 }}>
+              <SplitBar split={split} />
+            </Panel>
+          </View>
+
+          {/* Expenses vs revenue + throughput */}
+          <View style={styles.row}>
+            <Panel title="Revenue vs expenses" subtitle={rangeLabel} style={{ flex: 2, minWidth: 340 }}>
+              <MonthlyComparisonChart data={evr} />
+            </Panel>
+            <Panel title="Production throughput" subtitle="Jobs by stage" style={{ flex: 1, minWidth: 300 }}>
+              <BarList data={throughputRows} formatValue={(n) => `${n} job${n !== 1 ? 's' : ''}`} emptyText="No jobs in production" />
+            </Panel>
+          </View>
+
+          {/* Revenue by material + top clients */}
+          <View style={styles.row}>
+            <Panel title="Revenue by material" subtitle="Top materials" style={{ flex: 1, minWidth: 320 }}>
+              <BarList data={materialRows} formatValue={formatCurrency} accent={theme.primary} emptyText="No sales recorded yet" />
+            </Panel>
+            <Panel title="Top clients" subtitle="By lifetime revenue" style={{ flex: 1, minWidth: 320 }}>
+              <BarList data={clientRows} formatValue={formatCurrency} accent={theme.primary} emptyText="No clients yet" />
+            </Panel>
+          </View>
+        </>
+      )}
+    </DashboardLayout>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    gap: Spacing.four,
+    flexWrap: 'wrap',
+  },
+  segment: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  segmentItem: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 7,
+  },
+});

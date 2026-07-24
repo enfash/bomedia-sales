@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
 import { dbService } from '@/services/db';
+import { useEffect, useState } from 'react';
 
 export interface ExpenseRecord {
   id: string;
@@ -16,8 +16,8 @@ export function useExpenses(selectedMonth: string) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
     const unsubscribe = dbService.subscribe(`expenses/${selectedMonth}`, (data: any) => {
+      // Loading is set to false in the callback below
       if (data) {
         const recordsArray = Object.keys(data).map(key => ({
           ...data[key],

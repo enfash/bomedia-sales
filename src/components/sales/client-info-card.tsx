@@ -1,7 +1,8 @@
 import React, { useState, forwardRef, useImperativeHandle, useRef } from 'react';
 import { Platform, View, Pressable, StyleSheet } from 'react-native';
-import { Surface, TextInput as PaperTextInput } from 'react-native-paper';
+import { Surface } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { ThemedTextInput } from '@/components/ui/themed-text-input';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/hooks/use-theme';
 import { Spacing } from '@/constants/theme';
@@ -106,10 +107,7 @@ export const ClientInfoCard = React.memo(
           <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>
             Client / Company Name
           </ThemedText>
-          <PaperTextInput
-            mode="outlined"
-            dense
-            style={{ backgroundColor: theme.background }}
+          <ThemedTextInput
             placeholder="Enter client name"
             value={clientName}
             onChangeText={setClientName}
@@ -122,10 +120,7 @@ export const ClientInfoCard = React.memo(
           <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>
             Contact (Phone / Email)
           </ThemedText>
-          <PaperTextInput
-            mode="outlined"
-            dense
-            style={{ backgroundColor: theme.background }}
+          <ThemedTextInput
             placeholder="e.g. 08012345678"
             value={contact}
             onChangeText={setContact}
@@ -140,7 +135,7 @@ export const ClientInfoCard = React.memo(
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: Platform.OS === 'web' ? 16 : 0,
+    borderRadius: 16,
     padding: Spacing.four,
     marginBottom: Spacing.four,
   },

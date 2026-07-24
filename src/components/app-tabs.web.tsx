@@ -1,51 +1,65 @@
 import { Feather } from "@expo/vector-icons";
 import {
-  TabList,
-  TabListProps,
-  Tabs,
-  TabSlot,
-  TabTrigger,
-  TabTriggerSlotProps,
+    TabList,
+    TabListProps,
+    Tabs,
+    TabSlot,
+    TabTrigger,
+    TabTriggerSlotProps,
 } from "expo-router/ui";
-import { forwardRef } from "react";
 import {
-  Image,
-  Pressable,
-  StyleSheet,
-  useColorScheme,
-  useWindowDimensions,
-  View,
+    Image,
+    Pressable,
+    StyleSheet,
+    useWindowDimensions,
+    View,
 } from "react-native";
 
 import { ThemedText } from "./themed-text";
 import { ThemedView } from "./themed-view";
 
+import { CommandPalette, OPEN_COMMAND_PALETTE_EVENT } from "@/components/dashboard/command-palette";
 import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
+import { withAlpha } from "@/utils/color";
 
+/**
+ * Web/desktop navigation. Desktop has room for every destination, so the
+ * sidebar lists all eight — the four daily-use tabs on top, then the secondary
+ * destinations (the ones behind "More" on mobile) below a divider.
+ */
 export default function AppTabs() {
   const theme = useTheme();
 
   return (
-    <Tabs
-      style={[styles.dashboardContainer, { backgroundColor: theme.background }]}
-    >
+    <>
+    <Tabs style={[styles.dashboardContainer, { backgroundColor: theme.background }]}>
+      {/*
+       * TabTriggers must be *direct* children of the TabList (CustomSidebar).
+       * expo-router's trigger parser only recurses into Fragments and nested
+       * TabLists — never into <View> wrappers — so grouping the triggers in
+       * <View>s silently drops those routes and leaves the buttons dead.
+       * Grouping is done via spacing + plain divider/spacer siblings instead.
+       */}
       <TabList asChild>
         <CustomSidebar>
           <TabTrigger name="index" href="/" asChild>
             <TabButton icon="home">Home</TabButton>
           </TabTrigger>
           <TabTrigger name="quote" href="/quote" asChild>
-            <TabButton icon="file-text">Quote</TabButton>
+            <TabButton icon="file-text">Quotes</TabButton>
           </TabTrigger>
           <TabTrigger name="new-sales" href="/new-sales" asChild>
-            <TabButton icon="plus-circle">New Sales</TabButton>
-          </TabTrigger>
-          <TabTrigger name="board" href="/board" asChild>
-            <TabButton icon="layout">Job Board</TabButton>
+            <TabButton icon="plus-circle">New Sale</TabButton>
           </TabTrigger>
           <TabTrigger name="records" href="/records" asChild>
             <TabButton icon="archive">Records</TabButton>
+          </TabTrigger>
+
+          <View style={[styles.divider, { backgroundColor: theme.surfaceVariant }]} />
+
+          <TabTrigger name="board" href="/board" asChild>
+            <TabButton icon="layout">Production Board</TabButton>
           </TabTrigger>
           <TabTrigger name="clients" href="/clients" asChild>
             <TabButton icon="users">Clients</TabButton>
@@ -53,15 +67,23 @@ export default function AppTabs() {
           <TabTrigger name="expenses" href="/expenses" asChild>
             <TabButton icon="dollar-sign">Expenses</TabButton>
           </TabTrigger>
-          <View style={{ flex: 1 }} />
+          <TabTrigger name="analytics" href="/analytics" asChild>
+            <TabButton icon="bar-chart-2">Analytics</TabButton>
+          </TabTrigger>
+
+          <View style={styles.spacer} />
+
           <TabTrigger name="settings" href="/settings" asChild>
-            <SettingsButton />
+            <TabButton icon="settings">Settings</TabButton>
           </TabTrigger>
         </CustomSidebar>
       </TabList>
 
       <TabSlot style={styles.mainContent} />
     </Tabs>
+    {/* Global ⌘K command palette overlay (web power-user polish). */}
+    <CommandPalette />
+    </>
   );
 }
 
@@ -82,7 +104,7 @@ export function TabButton({
         style={[
           styles.tabButtonView,
           isCompact && { justifyContent: "center", paddingHorizontal: 0 },
-          isFocused && { backgroundColor: theme.onSurface + "15" },
+          isFocused && { backgroundColor: withAlpha(theme.onSurface, 0.1) },
         ]}
       >
         {icon && (
@@ -107,6 +129,7 @@ export function TabButton({
 }
 
 export function CustomSidebar(props: TabListProps) {
+  const { children, ...rest } = props;
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const isCompact = width < 768;
@@ -141,58 +164,40 @@ export function CustomSidebar(props: TabListProps) {
         )}
       </View>
 
-      <View {...props} style={styles.tabListContainer}>
-        {props.children}
+      <Pressable
+        onPress={() => {
+          if (typeof window !== "undefined") window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT));
+        }}
+        style={({ pressed }) => [
+          styles.searchBtn,
+          { borderColor: theme.outlineVariant, backgroundColor: withAlpha(theme.surfaceVariant, 0.35) },
+          isCompact && { justifyContent: "center", paddingHorizontal: 0 },
+          pressed && styles.pressed,
+        ]}
+      >
+        <Feather name="search" size={16} color={theme.onSurfaceVariant} />
+        {!isCompact && (
+          <>
+            <ThemedText type="small" themeColor="onSurfaceVariant" style={{ flex: 1 }}>Search…</ThemedText>
+            <View style={[styles.kbd, { borderColor: theme.outlineVariant }]}>
+              <ThemedText type="small" themeColor="onSurfaceVariant" style={{ fontSize: 11 }}>⌘K</ThemedText>
+            </View>
+          </>
+        )}
+      </Pressable>
+
+      <View {...rest} style={styles.navArea}>
+        {children}
       </View>
     </ThemedView>
   );
 }
 
-const SettingsButton = forwardRef((props: any, ref: any) => {
-  const theme = useTheme();
-  const { width } = useWindowDimensions();
-  const isCompact = width < 768;
-  const { style, isFocused, ...restProps } = props;
-
-  return (
-    <Pressable
-      ref={ref}
-      {...restProps}
-      style={({ pressed }) =>
-        StyleSheet.flatten([
-          style,
-          styles.externalPressable,
-          isCompact && { justifyContent: "center", paddingHorizontal: 0 },
-          isFocused && { backgroundColor: theme.onSurface + "15", opacity: 1 },
-          pressed && styles.pressed,
-        ])
-      }
-    >
-      <Feather
-        color={isFocused ? theme.onSurface : theme.onSurfaceVariant}
-        name="settings"
-        size={20}
-      />
-      {!isCompact && (
-        <ThemedText
-          type="small"
-          themeColor={isFocused ? "onSurface" : "onSurfaceVariant"}
-          style={{ fontWeight: isFocused ? "600" : "normal" }}
-        >
-          Settings
-        </ThemedText>
-      )}
-    </Pressable>
-  );
-});
-
-SettingsButton.displayName = 'SettingsButton';
-
 const styles = StyleSheet.create({
   dashboardContainer: {
     flex: 1,
     flexDirection: "row",
-    height: "100%", // Web typical viewport height
+    height: "100%",
     overflow: "hidden",
   },
   sidebarContainer: {
@@ -201,7 +206,7 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     borderRightWidth: 1,
     flexDirection: "column",
-    transitionDuration: "0.2s", // slight transition for smooth collapse on web
+    transitionDuration: "0.2s",
   },
   sidebarContainerCompact: {
     width: 80,
@@ -215,15 +220,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.two,
     height: 48,
   },
-  tabListContainer: {
+  searchBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.two,
+    height: 40,
+    paddingHorizontal: Spacing.three,
+    borderWidth: 1,
+    borderRadius: Spacing.two,
+    marginBottom: Spacing.four,
+  },
+  kbd: {
+    borderWidth: 1,
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  navArea: {
     flex: 1,
     flexDirection: "column",
     gap: Spacing.two,
   },
+  spacer: {
+    flex: 1,
+  },
+  divider: {
+    height: 1,
+    marginVertical: Spacing.two,
+  },
   mainContent: {
     flex: 1,
     height: "100%",
-    overflow: "hidden", // scrolling handled by screens inside TabSlot
+    overflow: "hidden",
   },
   pressed: {
     opacity: 0.7,
@@ -235,13 +263,5 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.three,
     borderRadius: Spacing.two,
-  },
-  externalPressable: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    opacity: 0.7,
   },
 });

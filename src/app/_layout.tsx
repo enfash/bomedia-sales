@@ -1,15 +1,12 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router";
-import { PaperProvider } from 'react-native-paper';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { Text, useColorScheme, View } from "react-native";
-import { useWindowDimensions } from "react-native";
+import { Text, useColorScheme } from "react-native";
+import { PaperProvider } from 'react-native-paper';
 
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
-import AppTabs from "@/components/app-tabs";
 import { SettingsProvider } from "@/context/settings-context";
-import DesktopSidebar from "@/components/desktop-sidebar";
-import { useTheme } from "@/hooks/use-theme";
 import { usePaperTheme } from "@/hooks/use-paper-theme";
+import { useTheme } from "@/hooks/use-theme";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -19,22 +16,30 @@ SplashScreen.preventAutoHideAsync();
 if ((Text as any).defaultProps == null) (Text as any).defaultProps = {};
 (Text as any).defaultProps.allowFontScaling = false;
 
-function LayoutContent() {
-  const { width } = useWindowDimensions();
-  const isDesktop = width > 768;
+function RootStack() {
   const theme = useTheme();
 
   return (
-    <View style={{ flex: 1, flexDirection: isDesktop ? 'row' : 'column', backgroundColor: theme.background }}>
-      <DesktopSidebar />
-      <View style={{ flex: 1 }}>
-        <AppTabs />
-      </View>
-    </View>
+    <Stack
+      screenOptions={{
+        headerStyle: { backgroundColor: theme.surface },
+        headerTintColor: theme.primary,
+        headerTitleStyle: { color: theme.onSurface, fontWeight: '600' },
+        headerShadowVisible: false,
+        contentStyle: { backgroundColor: theme.background },
+      }}
+    >
+      {/* The tab navigator — owns its own chrome, so no stack header. */}
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+
+      {/* Detail screens push over the tabs with a real back button. */}
+      <Stack.Screen name="transaction/[id]" options={{ title: 'Transaction Details' }} />
+      <Stack.Screen name="invoice" options={{ headerShown: false }} />
+    </Stack>
   );
 }
 
-export default function TabLayout() {
+export default function RootLayout() {
   const colorScheme = useColorScheme();
   const paperTheme = usePaperTheme();
 
@@ -43,7 +48,7 @@ export default function TabLayout() {
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
         <SettingsProvider>
           <AnimatedSplashOverlay />
-          <LayoutContent />
+          <RootStack />
         </SettingsProvider>
       </ThemeProvider>
     </PaperProvider>

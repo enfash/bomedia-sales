@@ -1,11 +1,11 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { View, Pressable, StyleSheet, TouchableOpacity, Modal, Animated, PanResponder, Platform } from 'react-native';
-import { Surface, TextInput as PaperTextInput, Button, SegmentedButtons, Checkbox, ActivityIndicator } from 'react-native-paper';
 import { ThemedText } from '@/components/themed-text';
-import { useTheme } from '@/hooks/use-theme';
 import { Spacing } from '@/constants/theme';
-import { formatCurrency } from '@/utils/currency';
 import { useSettings } from '@/context/settings-context';
+import { useTheme } from '@/hooks/use-theme';
+import { formatCurrency } from '@/utils/currency';
+import React, { useCallback, useRef, useState } from 'react';
+import { Animated, Modal, PanResponder, Platform, Pressable, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Button, Checkbox, TextInput as PaperTextInput, SegmentedButtons, Surface } from 'react-native-paper';
 
 export interface JobDetailCardProps {
   onAddToBatch: (item: any) => void;
@@ -478,6 +478,8 @@ export const JobDetailCard = React.memo(({ onAddToBatch }: JobDetailCardProps) =
   );
 });
 
+JobDetailCard.displayName = 'JobDetailCard';
+
 const styles = StyleSheet.create({
   card: {
     borderRadius: Platform.OS === 'web' ? 16 : 0,
@@ -492,6 +494,7 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.three,
   },
   inputButton: {
