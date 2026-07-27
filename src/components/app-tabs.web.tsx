@@ -1,5 +1,4 @@
 import { Feather } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import {
     TabList,
     TabListProps,
@@ -20,6 +19,7 @@ import {
 import { ThemedText } from "./themed-text";
 import { ThemedView } from "./themed-view";
 
+import { ActivityDrawer, OPEN_ACTIVITY_DRAWER_EVENT } from "@/components/dashboard/activity-drawer";
 import { CommandPalette, OPEN_COMMAND_PALETTE_EVENT } from "@/components/dashboard/command-palette";
 import { AccountSection } from "@/components/user/account-section";
 import { UserAvatar } from "@/components/user/user-avatar";
@@ -98,6 +98,8 @@ export default function AppTabs() {
     </Tabs>
     {/* Global ⌘K command palette overlay (web power-user polish). */}
     <CommandPalette />
+    {/* Activity feed as a right-side drawer (admin), opened from the sidebar bell. */}
+    <ActivityDrawer />
     </>
   );
 }
@@ -108,14 +110,17 @@ export default function AppTabs() {
  */
 function SidebarActivityButton() {
   const theme = useTheme();
-  const router = useRouter();
   const { width } = useWindowDimensions();
   const isCompact = width < 768;
   const { unreadCount } = useActivity();
   const badge = unreadCount > 99 ? "99+" : String(unreadCount);
 
+  const openDrawer = () => {
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(OPEN_ACTIVITY_DRAWER_EVENT));
+  };
+
   return (
-    <Pressable onPress={() => router.push("/activity")} style={({ pressed }) => pressed && styles.pressed}>
+    <Pressable onPress={openDrawer} style={({ pressed }) => pressed && styles.pressed}>
       <ThemedView
         type="surface"
         style={[styles.tabButtonView, isCompact && { justifyContent: "center", paddingHorizontal: 0 }]}

@@ -27,7 +27,7 @@ export default function InvoiceScreen() {
   const { batchId } = useLocalSearchParams();
   const router = useRouter();
   const { settings, isLoading: settingsLoading } = useSettings();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const theme = useTheme();
   
   const [loading, setLoading] = useState(() => !!batchId);
@@ -380,7 +380,10 @@ export default function InvoiceScreen() {
           </View>
         </View>
 
-        {/* Editable Due Date & Notes */}
+        {/* Editable Due Date & Notes — admin-only. Editing an existing sale's
+            details is blocked for staff by the security rules, so we hide the
+            controls rather than let them hit a permission error. */}
+        {isAdmin && (
         <View style={[styles.editableSection, { borderTopColor: theme.outlineVariant }]}>
           <View style={styles.editableRow}>
             <Text style={[styles.sectionTitle, { color: theme.primary }]}>DUE DATE</Text>
@@ -412,7 +415,8 @@ export default function InvoiceScreen() {
             Save Notes
           </PrimaryButton>
         </View>
-        
+        )}
+
         {/* Payment Details */}
         <View style={{ marginTop: 32 }}>
           <Text style={[styles.sectionTitle, { color: theme.primary }]}>PAYMENT DETAILS</Text>
