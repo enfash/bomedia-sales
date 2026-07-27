@@ -15,7 +15,9 @@ import { Surface } from 'react-native-paper';
 
 import type { SalesRecord } from '@/components/records/types';
 import { MaxContentWidth } from '@/constants/theme';
+import { useAuth } from '@/context/auth-context';
 import { useSettings } from '@/context/settings-context';
+import { actorFrom, logActivity } from '@/services/activity';
 import { fetchBatchesByReceiptIds, updateBatchDetails } from '@/services/sales-repository';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate, isOverdue } from '@/utils/date';
@@ -25,6 +27,7 @@ export default function InvoiceScreen() {
   const { batchId } = useLocalSearchParams();
   const router = useRouter();
   const { settings, isLoading: settingsLoading } = useSettings();
+  const { user } = useAuth();
   const theme = useTheme();
   
   const [loading, setLoading] = useState(() => !!batchId);
@@ -132,6 +135,12 @@ export default function InvoiceScreen() {
         batchPaths.map((dbPath) => ({ dbPath })),
         { notes, dueDate },
       );
+      logActivity({
+        type: 'sale_edited',
+        actor: actorFrom(user),
+        message: `${actorFrom(user).name} edited invoice details for ${clientName}`,
+        meta: { receiptIds: batchIds, clientName },
+      });
       alert('Details saved successfully!');
     } catch (e: any) {
       alert("Failed to save: " + e.message);

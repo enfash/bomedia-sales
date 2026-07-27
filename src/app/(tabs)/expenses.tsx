@@ -9,6 +9,7 @@ import { useAuth } from '@/context/auth-context';
 import { useExpenses } from '@/hooks/use-expenses';
 import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useTheme } from '@/hooks/use-theme';
+import { actorFrom, logActivity } from '@/services/activity';
 import { dbService } from '@/services/db';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate, isToday as isTodayIso } from '@/utils/date';
@@ -134,6 +135,13 @@ export default function ExpensesScreen() {
         uid: user?.uid ?? '',
         loggedBy: user?.displayName || user?.email || 'Unknown',
         createdAt: date.toISOString(),
+      });
+
+      logActivity({
+        type: 'expense_logged',
+        actor: actorFrom(user),
+        message: `${actorFrom(user).name} logged a ${formatCurrency(numAmount)} expense (${category})`,
+        meta: { amount: numAmount, category },
       });
 
       setAmount('');

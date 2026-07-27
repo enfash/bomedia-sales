@@ -37,6 +37,7 @@ function RootStack() {
       {/* Detail screens push over the tabs with a real back button. */}
       <Stack.Screen name="transaction/[id]" options={{ title: 'Transaction Details' }} />
       <Stack.Screen name="invoice" options={{ headerShown: false }} />
+      <Stack.Screen name="activity" options={{ title: 'Activity' }} />
     </Stack>
   );
 }

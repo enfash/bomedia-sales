@@ -8,8 +8,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { useAuth } from '@/context/auth-context';
 import { useSettings } from '@/context/settings-context';
 import { useTheme } from '@/hooks/use-theme';
+import { actorFrom, logActivity } from '@/services/activity';
 import { formatCurrency } from '@/utils/currency';
 
 import { BatchReviewCard } from '@/components/sales/batch-review-card';
@@ -19,6 +21,7 @@ import { JobDetailCard } from '@/components/sales/job-detail-card';
 export default function NewSalesScreen() {
   const safeAreaInsets = useSafeAreaInsets();
   const { settings } = useSettings();
+  const { user } = useAuth();
   const insets = {
     ...safeAreaInsets,
     bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
@@ -67,6 +70,13 @@ export default function NewSalesScreen() {
         totalPaid: parseFloat(advancePayment) || 0,
         paymentMethod,
         items: batchItems,
+      });
+
+      logActivity({
+        type: 'sale_created',
+        actor: actorFrom(user),
+        message: `${actorFrom(user).name} created a ${formatCurrency(finalBatchTotal)} sale for ${clientData.clientName}`,
+        meta: { receiptId, amount: finalBatchTotal, clientName: clientData.clientName },
       });
 
       Alert.alert('Success', `Batch submitted successfully!\nReceipt: ${receiptId}`);

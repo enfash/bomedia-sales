@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import {
     TabList,
     TabListProps,
@@ -24,6 +25,7 @@ import { AccountSection } from "@/components/user/account-section";
 import { UserAvatar } from "@/components/user/user-avatar";
 import { Spacing } from "@/constants/theme";
 import { useAuth } from "@/context/auth-context";
+import { useActivity } from "@/hooks/use-activity";
 import { useTheme } from "@/hooks/use-theme";
 import { withAlpha } from "@/utils/color";
 
@@ -83,6 +85,10 @@ export default function AppTabs() {
               <TabTrigger name="settings" href="/settings" asChild>
                 <TabButton icon="settings">Settings</TabButton>
               </TabTrigger>
+              {/* Activity is a root-stack route (not a tab), so it's a plain
+                  navigation button rather than a TabTrigger. Non-trigger children
+                  are fine here — the divider above is one too. */}
+              <SidebarActivityButton />
             </>
           ) : null}
         </CustomSidebar>
@@ -93,6 +99,47 @@ export default function AppTabs() {
     {/* Global ⌘K command palette overlay (web power-user polish). */}
     <CommandPalette />
     </>
+  );
+}
+
+/**
+ * Sidebar nav button for the admin Activity feed. Unlike the tab destinations
+ * it pushes a root-stack route and carries an unread badge.
+ */
+function SidebarActivityButton() {
+  const theme = useTheme();
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isCompact = width < 768;
+  const { unreadCount } = useActivity();
+  const badge = unreadCount > 99 ? "99+" : String(unreadCount);
+
+  return (
+    <Pressable onPress={() => router.push("/activity")} style={({ pressed }) => pressed && styles.pressed}>
+      <ThemedView
+        type="surface"
+        style={[styles.tabButtonView, isCompact && { justifyContent: "center", paddingHorizontal: 0 }]}
+      >
+        <View>
+          <Feather name="bell" size={isCompact ? 20 : 18} color={theme.onSurfaceVariant} />
+          {unreadCount > 0 && isCompact && (
+            <View style={[styles.dot, { backgroundColor: theme.error, borderColor: theme.surface }]} />
+          )}
+        </View>
+        {!isCompact && (
+          <>
+            <ThemedText type="default" themeColor="onSurfaceVariant" style={{ flex: 1 }}>
+              Activity
+            </ThemedText>
+            {unreadCount > 0 && (
+              <View style={[styles.badge, { backgroundColor: theme.error }]}>
+                <ThemedText style={{ color: theme.onError, fontSize: 11, fontWeight: "700" }}>{badge}</ThemedText>
+              </View>
+            )}
+          </>
+        )}
+      </ThemedView>
+    </Pressable>
   );
 }
 
@@ -283,6 +330,23 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+  },
+  badge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dot: {
+    position: "absolute",
+    top: -3,
+    right: -3,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1.5,
   },
   tabButtonView: {
     flexDirection: "row",

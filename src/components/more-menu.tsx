@@ -1,6 +1,7 @@
 import { ThemedText } from '@/components/themed-text';
 import { AccountSection } from '@/components/user/account-section';
 import { useAuth } from '@/context/auth-context';
+import { useActivity } from '@/hooks/use-activity';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { STATUS_META } from '@/utils/payment-status';
@@ -39,10 +40,19 @@ export function MoreMenu({ visible, onClose, counts = {} }: MoreMenuProps) {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { isAdmin } = useAuth();
+  const { unreadCount } = useActivity();
   const [translateX] = useState(() => new Animated.Value(-PANEL_WIDTH));
 
-  // Settings (materials/pricing) is admin-only.
-  const items = MORE_ITEMS.filter((i) => i.href !== '/settings' || isAdmin);
+  // Settings (materials/pricing) and the Activity feed are admin-only.
+  const items = [
+    ...MORE_ITEMS.filter((i) => i.href !== '/settings' || isAdmin),
+    ...(isAdmin
+      ? [{ href: '/activity', label: 'Activity', icon: 'bell', desc: "Your team's recent actions", badgeColor: theme.error } as const]
+      : []),
+  ];
+
+  // The Activity row's badge shows the live unread count.
+  const mergedCounts: Record<string, number> = { ...counts, '/activity': unreadCount };
 
   useEffect(() => {
     Animated.timing(translateX, {
@@ -52,9 +62,9 @@ export function MoreMenu({ visible, onClose, counts = {} }: MoreMenuProps) {
     }).start();
   }, [visible, translateX]);
 
-  const go = (href: (typeof MORE_ITEMS)[number]['href']) => {
+  const go = (href: string) => {
     onClose();
-    router.push(href);
+    router.push(href as Parameters<typeof router.push>[0]);
   };
 
   return (
@@ -84,7 +94,7 @@ export function MoreMenu({ visible, onClose, counts = {} }: MoreMenuProps) {
           <View style={styles.items}>
             {items.map((item) => {
               const active = pathname === item.href;
-              const count = counts[item.href] || 0;
+              const count = mergedCounts[item.href] || 0;
               const badgeColor = item.badgeColor || theme.primary;
               return (
                 <Pressable

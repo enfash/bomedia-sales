@@ -10,6 +10,7 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
+import { actorFrom, logActivity } from '@/services/activity';
 import { markBatchesPaid } from '@/services/sales-repository';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
@@ -39,7 +40,7 @@ function jobSummary(batch: SalesBatch): string {
 export default function RecordsWeb() {
   const theme = useTheme();
   const router = useRouter();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
 
   const {
     loading,
@@ -96,6 +97,13 @@ export default function RecordsWeb() {
     const batches = sortedBatches.filter((b) => selected.includes(b.id));
     try {
       await markBatchesPaid(batches);
+      const paidTotal = batches.reduce((s, b) => s + (b.totalBalance || 0), 0);
+      logActivity({
+        type: 'payment_recorded',
+        actor: actorFrom(user),
+        message: `${actorFrom(user).name} marked ${batches.length} sale${batches.length !== 1 ? 's' : ''} paid (${formatCurrency(paidTotal)})`,
+        meta: { batchIds: batches.map((b) => b.id), amount: paidTotal },
+      });
       setSelected([]);
     } catch (e: any) {
       alert('Failed to mark as paid: ' + (e?.message ?? e));

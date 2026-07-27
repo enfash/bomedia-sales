@@ -1,4 +1,5 @@
 import { MoreMenu, OPEN_MORE_EVENT } from "@/components/more-menu";
+import { useActivity } from "@/hooks/use-activity";
 import { useMoreBadges } from "@/hooks/use-more-badges";
 import { useTheme } from "@/hooks/use-theme";
 import { Feather } from "@expo/vector-icons";
@@ -49,6 +50,7 @@ function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const badges = useMoreBadges();
+  const { unreadCount } = useActivity();
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Let other surfaces (e.g. the Home-header avatar) open the More menu.
@@ -99,7 +101,7 @@ function CustomTabBar({ state, navigation }: any) {
             onPress={() => setMenuOpen(true)}
             iconName="menu"
             label="More"
-            showDot={badges.hasAny}
+            showDot={badges.hasAny || unreadCount > 0}
           />
         </View>
       </View>

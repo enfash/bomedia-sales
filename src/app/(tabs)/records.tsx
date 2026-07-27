@@ -3,7 +3,9 @@ import { ThemedView } from '@/components/themed-view';
 import { usePageContainerStyles } from '@/components/ui/page-container';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { actorFrom, logActivity } from '@/services/activity';
 import { markBatchesPaid } from '@/services/sales-repository';
+import { formatCurrency } from '@/utils/currency';
 import { useState } from 'react';
 import { Platform, RefreshControl, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Surface } from 'react-native-paper';
@@ -18,7 +20,7 @@ import { formatDate } from '@/utils/date';
 
 export default function RecordsScreen() {
   const theme = useTheme();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
 
   const {
     loading,
@@ -81,6 +83,13 @@ export default function RecordsScreen() {
     const batches = sortedBatches.filter(b => selectedBatches.includes(b.id));
     try {
       await markBatchesPaid(batches);
+      const paidTotal = batches.reduce((s, b) => s + (b.totalBalance || 0), 0);
+      logActivity({
+        type: 'payment_recorded',
+        actor: actorFrom(user),
+        message: `${actorFrom(user).name} marked ${batches.length} sale${batches.length !== 1 ? 's' : ''} paid (${formatCurrency(paidTotal)})`,
+        meta: { batchIds: batches.map((b) => b.id), amount: paidTotal },
+      });
       setSelectedBatches([]);
     } catch (e: any) {
       alert("Failed to mark as paid: " + e.message);

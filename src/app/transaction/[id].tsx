@@ -4,8 +4,10 @@ import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { PageContainer } from '@/components/ui/page-container';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { Spacing } from '@/constants/theme';
+import { useAuth } from '@/context/auth-context';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
+import { actorFrom, logActivity } from '@/services/activity';
 import { deleteBatch, recordPayment } from '@/services/sales-repository';
 import { withAlpha } from '@/utils/color';
 import { formatCurrency } from '@/utils/currency';
@@ -35,6 +37,7 @@ export default function TransactionDetails() {
   const router = useRouter();
   const theme = useTheme();
 
+  const { user } = useAuth();
   const { sortedBatches, loading } = useRecords(theme);
   const transaction = sortedBatches.find(b => b.id === id);
 
@@ -48,6 +51,12 @@ export default function TransactionDetails() {
 
     try {
       await recordPayment(transaction, amount);
+      logActivity({
+        type: 'payment_recorded',
+        actor: actorFrom(user),
+        message: `${actorFrom(user).name} recorded a ${formatCurrency(amount)} payment for ${transaction.clientName || 'a client'}`,
+        meta: { batchId: transaction.id, amount },
+      });
       setPaymentModalVisible(false);
       setPaymentAmount('');
     } catch (e: any) {
@@ -69,6 +78,12 @@ export default function TransactionDetails() {
           onPress: async () => {
             try {
               await deleteBatch(transaction);
+              logActivity({
+                type: 'sale_deleted',
+                actor: actorFrom(user),
+                message: `${actorFrom(user).name} deleted a ${formatCurrency(transaction.totalAmount)} sale for ${transaction.clientName || 'a client'}`,
+                meta: { batchId: transaction.id },
+              });
               router.back();
             } catch (error: any) {
               Alert.alert('Error', 'Failed to delete transaction: ' + error.message);
