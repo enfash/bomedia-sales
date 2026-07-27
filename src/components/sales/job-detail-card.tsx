@@ -7,6 +7,9 @@ import React, { useCallback, useRef, useState } from 'react';
 import { Animated, Modal, PanResponder, Platform, Pressable, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { ActivityIndicator, Button, Checkbox, TextInput as PaperTextInput, SegmentedButtons, Surface } from 'react-native-paper';
 
+// No native animated driver on web — the sheet transform animates in JS there.
+const USE_NATIVE_DRIVER = Platform.OS !== 'web';
+
 export interface JobDetailCardProps {
   onAddToBatch: (item: any) => void;
 }
@@ -68,7 +71,7 @@ export const JobDetailCard = React.memo(({ onAddToBatch }: JobDetailCardProps) =
           Animated.timing(sheetTranslateY, {
             toValue: 600,
             duration: 200,
-            useNativeDriver: true,
+            useNativeDriver: USE_NATIVE_DRIVER,
           }).start(() => {
             setShowMaterialSheet(false);
             sheetTranslateY.setValue(0);
@@ -77,7 +80,7 @@ export const JobDetailCard = React.memo(({ onAddToBatch }: JobDetailCardProps) =
           // Snap back
           Animated.spring(sheetTranslateY, {
             toValue: 0,
-            useNativeDriver: true,
+            useNativeDriver: USE_NATIVE_DRIVER,
             bounciness: 4,
           }).start();
         }
@@ -95,7 +98,7 @@ export const JobDetailCard = React.memo(({ onAddToBatch }: JobDetailCardProps) =
     Animated.timing(sheetTranslateY, {
       toValue: 600,
       duration: 220,
-      useNativeDriver: true,
+      useNativeDriver: USE_NATIVE_DRIVER,
     }).start(() => {
       setShowMaterialSheet(false);
       sheetTranslateY.setValue(0);

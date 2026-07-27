@@ -49,7 +49,7 @@ export function RevenueBarChart({ data }: { data: MonthPoint[] }) {
         })}
 
         {!hasData ? (
-          <View style={styles.emptyOverlay} pointerEvents="none">
+          <View style={[styles.emptyOverlay, { pointerEvents: 'none' }]}>
             <ThemedText type="small" themeColor="onSurfaceVariant">No revenue recorded yet</ThemedText>
           </View>
         ) : null}

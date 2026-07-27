@@ -48,7 +48,7 @@ export function MonthlyComparisonChart({ data }: { data: MonthMoney[] }) {
         })}
 
         {!hasData ? (
-          <View style={styles.emptyOverlay} pointerEvents="none">
+          <View style={[styles.emptyOverlay, { pointerEvents: 'none' }]}>
             <ThemedText type="small" themeColor="onSurfaceVariant">No revenue or expenses recorded yet</ThemedText>
           </View>
         ) : null}

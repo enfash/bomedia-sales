@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Animated, StyleSheet, StyleProp, ViewStyle, DimensionValue } from 'react-native';
+import { Animated, DimensionValue, Platform, StyleProp, StyleSheet, ViewStyle } from 'react-native';
 import { useTheme } from '@/hooks/use-theme';
+
+// The native animated driver doesn't exist on web (opacity animates in JS there).
+const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 
 export interface LoadingSkeletonProps {
   style?: StyleProp<ViewStyle>;
@@ -33,12 +36,12 @@ export function LoadingSkeleton({
         Animated.timing(fadeAnim, {
           toValue: 0.7,
           duration: 800,
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
         Animated.timing(fadeAnim, {
           toValue: 0.3,
           duration: 800,
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
       ])
     ).start();

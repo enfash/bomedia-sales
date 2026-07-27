@@ -439,20 +439,14 @@ const styles = StyleSheet.create({
     minWidth: '20%',
   },
   activeTabButton: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    boxShadow: '0px 1px 2px rgba(0,0,0,0.05)',
     elevation: 2,
   },
   card: {
     padding: 24,
     borderRadius: 16,
     gap: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.02,
-    shadowRadius: 8,
+    boxShadow: '0px 2px 8px rgba(0,0,0,0.02)',
     elevation: 1,
   },
   cardHeader: {
