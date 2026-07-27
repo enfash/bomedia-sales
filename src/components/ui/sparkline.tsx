@@ -24,12 +24,17 @@ export function Sparkline({ values, color, endColor, height = 40, strokeWidth = 
   const n = values.length;
   const max = Math.max(...values, 1);
   const pad = strokeWidth + 2; // keep the line/dot off the edges
+  const yFor = (v: number) => pad + (1 - v / max) * (height - pad * 2);
 
-  const points = values.map((v, i) => {
-    const x = n > 1 ? (i / (n - 1)) * width : 0;
-    const y = pad + (1 - v / max) * (height - pad * 2);
-    return { x, y };
-  });
+  // A single data point (or none) has no trend — draw a flat line so it reads
+  // cleanly instead of collapsing to an edge dot.
+  const points =
+    n > 1
+      ? values.map((v, i) => ({ x: (i / (n - 1)) * width, y: yFor(v) }))
+      : [
+          { x: 0, y: height * 0.4 },
+          { x: width, y: height * 0.4 },
+        ];
 
   const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
   const area = width > 0 ? `${line} L${width.toFixed(1)},${height} L0,${height} Z` : '';

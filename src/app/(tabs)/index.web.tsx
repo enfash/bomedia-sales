@@ -2,9 +2,9 @@ import { ThemedText } from '@/components/themed-text';
 import { DashboardLayout } from '@/components/dashboard/dashboard-layout';
 import { Panel } from '@/components/dashboard/panel';
 import { RangeControl } from '@/components/dashboard/range-control';
-import { RevenueBarChart } from '@/components/dashboard/revenue-bar-chart';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
+import { Sparkline } from '@/components/ui/sparkline';
 import { StatusChip } from '@/components/ui/status-chip';
 import { Spacing } from '@/constants/theme';
 import { useSettings } from '@/context/settings-context';
@@ -188,8 +188,9 @@ export default function DashboardWeb() {
             />
           </View>
 
-          {/* Chart + needs attention */}
-          <View style={styles.row}>
+          {/* Chart + needs attention — top-align so a tall Needs-attention list
+              doesn't stretch the trend panel (which left the chart floating). */}
+          <View style={[styles.row, { alignItems: 'flex-start' }]}>
             <Panel
               title="Revenue trend"
               subtitle={rangeLabel}
@@ -200,7 +201,19 @@ export default function DashboardWeb() {
                 </ThemedText>
               }
             >
-              <RevenueBarChart data={trend} />
+              <Sparkline values={trend.map((t) => t.value)} color={theme.primary} height={150} />
+              <View style={styles.trendLabels}>
+                {trend.map((t) => (
+                  <ThemedText
+                    key={t.key}
+                    type="small"
+                    numberOfLines={1}
+                    style={{ flex: 1, textAlign: 'center', fontSize: 11, color: t.isCurrent ? theme.primary : theme.onSurfaceVariant, fontWeight: t.isCurrent ? '700' : '500' }}
+                  >
+                    {t.label}
+                  </ThemedText>
+                ))}
+              </View>
             </Panel>
 
             <Panel title="Needs attention" style={{ flex: 1, minWidth: 300 }}>
@@ -368,6 +381,10 @@ const styles = StyleSheet.create({
     width: 1,
     height: 28,
     alignSelf: 'center',
+  },
+  trendLabels: {
+    flexDirection: 'row',
+    marginTop: 8,
   },
   row: {
     flexDirection: 'row',
