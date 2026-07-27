@@ -53,7 +53,7 @@ export default function RecordsWeb() {
     sortDirection,
     handleSort,
     sortedBatches,
-  } = useRecords(theme, { persistKey: 'bomedia:records-filters' });
+  } = useRecords(theme, { persistKey: 'bomedia:records-filters', staffTodayOnly: !isAdmin });
 
   const [selected, setSelected] = useState<string[]>([]);
   const [dateMenu, setDateMenu] = useState(false);

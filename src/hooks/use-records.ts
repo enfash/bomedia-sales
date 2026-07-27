@@ -1,5 +1,6 @@
 import { SalesBatch, SalesRecord } from '@/components/records/types';
 import { subscribeToBatches } from '@/services/sales-repository';
+import { isToday } from '@/utils/date';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 type SortColumn = 'Date' | 'Amount' | 'Balance' | 'Client' | 'Status' | 'LoggedBy';
@@ -12,6 +13,13 @@ interface UseRecordsOptions {
    * Dashboard, Analytics) keep their default unfiltered view.
    */
   persistKey?: string;
+  /**
+   * When true, only today's batches are visible. Used to scope the Records
+   * screen for staff (role-based) — they don't see prior days' sales here.
+   * Kept local to the Records screens: Clients / Board / Debt still aggregate
+   * across all sales, so this flag is intentionally NOT set by those consumers.
+   */
+  staffTodayOnly?: boolean;
 }
 
 interface PersistedFilters {
@@ -32,7 +40,7 @@ function loadPersistedFilters(key?: string): PersistedFilters | null {
 }
 
 export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
-  const { persistKey } = options;
+  const { persistKey, staffTodayOnly } = options;
   const [persisted] = useState(() => loadPersistedFilters(persistKey));
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -70,10 +78,16 @@ export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
 
   const refresh = useCallback(() => setRefreshNonce((n) => n + 1), []);
 
+  // Role scoping: staff only see today's batches on the Records screen.
+  const scopedBatches = useMemo(
+    () => (staffTodayOnly ? rawBatches.filter((b) => isToday(b.createdAt)) : rawBatches),
+    [rawBatches, staffTodayOnly],
+  );
+
   // Flat, newest-first list of every line item (with batch context denormalized).
   const records = useMemo<SalesRecord[]>(() => {
     const flat: SalesRecord[] = [];
-    rawBatches.forEach((b) => {
+    scopedBatches.forEach((b) => {
       b.records.forEach((r) =>
         flat.push({ ...r, clientName: b.clientName, createdAt: b.createdAt, batchId: b.id }),
       );
@@ -81,15 +95,15 @@ export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
     return flat.sort(
       (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
     );
-  }, [rawBatches]);
+  }, [scopedBatches]);
 
   const totalRevenue = useMemo(
-    () => rawBatches.reduce((sum, b) => sum + (b.totalAmount || 0), 0),
-    [rawBatches],
+    () => scopedBatches.reduce((sum, b) => sum + (b.totalAmount || 0), 0),
+    [scopedBatches],
   );
   const totalPaid = useMemo(
-    () => rawBatches.reduce((sum, b) => sum + (b.totalPaid || 0), 0),
-    [rawBatches],
+    () => scopedBatches.reduce((sum, b) => sum + (b.totalPaid || 0), 0),
+    [scopedBatches],
   );
   const targetRevenue = 1000000;
   const revenuePercent = Math.min((totalRevenue / targetRevenue) * 100, 100);
@@ -97,7 +111,7 @@ export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
   const sortedBatches = useMemo(() => {
     const searchLower = searchQuery.toLowerCase();
 
-    const searchedBatches = rawBatches.filter((batch) => {
+    const searchedBatches = scopedBatches.filter((batch) => {
       const matchClient = (batch.clientName || '').toLowerCase().includes(searchLower);
       const matchItem = batch.records.some((r) =>
         (r.material || '').toLowerCase().includes(searchLower),
@@ -162,7 +176,7 @@ export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
       if (sortDirection === 'asc') return valA > valB ? 1 : -1;
       return valA < valB ? 1 : -1;
     });
-  }, [rawBatches, searchQuery, statusFilter, loggedByFilter, dateFilter, sortColumn, sortDirection]);
+  }, [scopedBatches, searchQuery, statusFilter, loggedByFilter, dateFilter, sortColumn, sortDirection]);
 
   const handleSort = (column: string) => {
     if (sortColumn === column) {

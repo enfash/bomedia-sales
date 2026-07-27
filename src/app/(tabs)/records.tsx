@@ -11,12 +11,14 @@ import { Surface } from 'react-native-paper';
 import { QuotaCard } from '@/components/records/quota-card';
 import { RecordsHeader } from '@/components/records/records-header';
 import { RecordsTable } from '@/components/records/records-table';
+import { useAuth } from '@/context/auth-context';
 import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useRecords } from '@/hooks/use-records';
 import { formatDate } from '@/utils/date';
 
 export default function RecordsScreen() {
   const theme = useTheme();
+  const { isAdmin } = useAuth();
 
   const {
     loading,
@@ -33,7 +35,7 @@ export default function RecordsScreen() {
     totalRevenue,
     totalPaid,
     refresh,
-  } = useRecords(theme);
+  } = useRecords(theme, { staffTodayOnly: !isAdmin });
 
   const { refreshing, onRefresh } = usePullRefresh([refresh]);
 

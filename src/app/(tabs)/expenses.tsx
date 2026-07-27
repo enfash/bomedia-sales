@@ -5,12 +5,13 @@ import { PageContainer } from '@/components/ui/page-container';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { ThemedTextInput } from '@/components/ui/themed-text-input';
 import { Spacing } from '@/constants/theme';
+import { useAuth } from '@/context/auth-context';
 import { useExpenses } from '@/hooks/use-expenses';
 import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useTheme } from '@/hooks/use-theme';
 import { dbService } from '@/services/db';
 import { formatCurrency } from '@/utils/currency';
-import { formatDate } from '@/utils/date';
+import { formatDate, isToday as isTodayIso } from '@/utils/date';
 import { SymbolView } from 'expo-symbols';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
@@ -22,6 +23,7 @@ export interface ExpenseRecord {
   category: string;
   description: string;
   loggedBy: string;
+  uid?: string;
   createdAt: string;
   dbPath?: string;
 }
@@ -47,6 +49,7 @@ const SORTS: { key: SortKey; label: string }[] = [
 
 export default function ExpensesScreen() {
   const theme = useTheme();
+  const { user, isAdmin } = useAuth();
 
   // 'list' = logged expenses (default); 'new' = the entry form.
   const [mode, setMode] = useState<'list' | 'new'>('list');
@@ -66,8 +69,14 @@ export default function ExpensesScreen() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
 
-  const { expenses, loading, refresh } = useExpenses(selectedMonth);
+  const { expenses: allExpenses, loading, refresh } = useExpenses(selectedMonth);
   const { refreshing, onRefresh } = usePullRefresh([refresh]);
+
+  // Role scoping: staff only see the expenses they logged today. Admins see all.
+  const expenses = useMemo(() => {
+    if (isAdmin) return allExpenses;
+    return allExpenses.filter((e) => e.uid === user?.uid && isTodayIso(e.createdAt));
+  }, [allExpenses, isAdmin, user?.uid]);
 
   const total = useMemo(() => expenses.reduce((sum, e) => sum + e.amount, 0), [expenses]);
 
@@ -119,7 +128,11 @@ export default function ExpensesScreen() {
         amount: numAmount,
         category,
         description: description.trim(),
-        loggedBy: 'Admin',
+        // uid is required by the security rules for staff-created expenses
+        // (rules check newData.child('uid') === auth.uid); also drives the
+        // staff "own expenses only" filter below.
+        uid: user?.uid ?? '',
+        loggedBy: user?.displayName || user?.email || 'Unknown',
         createdAt: date.toISOString(),
       });
 
@@ -235,7 +248,9 @@ export default function ExpensesScreen() {
         <Surface elevation={0} style={[styles.summary, { backgroundColor: theme.surfaceVariant }]}>
           <View>
             <ThemedText type="small" themeColor="onSurfaceVariant">
-              {formatDate(selectedMonth + '-01', { month: 'long', year: 'numeric' })}
+              {isAdmin
+                ? formatDate(selectedMonth + '-01', { month: 'long', year: 'numeric' })
+                : 'Today'}
             </ThemedText>
             <ThemedText type="small" themeColor="onSurfaceVariant">
               {expenses.length} {expenses.length === 1 ? 'entry' : 'entries'}

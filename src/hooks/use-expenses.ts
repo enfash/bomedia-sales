@@ -7,6 +7,7 @@ export interface ExpenseRecord {
   category: string;
   description: string;
   loggedBy: string;
+  uid?: string;
   createdAt: string;
   dbPath?: string;
 }

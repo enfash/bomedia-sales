@@ -30,7 +30,7 @@ import {
 } from '@/services/analytics';
 import { withAlpha } from '@/utils/color';
 import { formatCurrency } from '@/utils/currency';
-import { parseDate } from '@/utils/date';
+import { isToday, parseDate } from '@/utils/date';
 import { STATUS_META } from '@/utils/payment-status';
 
 const STAGE_ACCENT: Record<ProductionStage, string> = {
@@ -53,7 +53,7 @@ function compactMoney(v: number): string {
 export default function DashboardScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
 
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -67,7 +67,12 @@ export default function DashboardScreen() {
   const ready = useMemo(() => readyJobs(sortedBatches), [sortedBatches]);
   const owing = useMemo(() => clientsOwing(sortedBatches), [sortedBatches]);
   const days7 = useMemo(() => revenueByDay(sortedBatches, 7), [sortedBatches]);
-  const recent = useMemo(() => recentSales(sortedBatches, 3), [sortedBatches]);
+  // Staff don't see prior days' sales in Records, so keep the dashboard's
+  // "Recent" list consistent — today only for staff, full history for admins.
+  const recent = useMemo(() => {
+    const source = isAdmin ? sortedBatches : sortedBatches.filter((b) => isToday(b.createdAt));
+    return recentSales(source, 3);
+  }, [sortedBatches, isAdmin]);
 
   // Collected vs owed over the last 7 days — a weekly cash pulse, not all-time.
   const split7 = useMemo(() => {
