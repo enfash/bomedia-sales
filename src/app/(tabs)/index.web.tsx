@@ -28,7 +28,7 @@ import { STATUS_META } from '@/utils/payment-status';
 import { useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 export default function DashboardWeb() {
   const theme = useTheme();
@@ -188,13 +188,14 @@ export default function DashboardWeb() {
             />
           </View>
 
-          {/* Chart + needs attention — top-align so a tall Needs-attention list
-              doesn't stretch the trend panel (which left the chart floating). */}
-          <View style={[styles.row, { alignItems: 'flex-start' }]}>
+          {/* Chart + needs attention — top-align (and don't stretch the single
+              wrapped flex line) so a tall Needs-attention list can't stretch the
+              trend panel and leave the chart floating. */}
+          <View style={[styles.row, { alignItems: 'flex-start', alignContent: 'flex-start' }]}>
             <Panel
               title="Revenue trend"
               subtitle={rangeLabel}
-              style={{ flex: 2, minWidth: 340 }}
+              style={{ flex: 2, minWidth: 340, alignSelf: 'flex-start' }}
               right={
                 <ThemedText type="defaultSemiBold" style={{ color: theme.primary, fontVariant: ['tabular-nums'] }}>
                   {formatCurrency(metrics.revenue)}
@@ -216,7 +217,8 @@ export default function DashboardWeb() {
               </View>
             </Panel>
 
-            <Panel title="Needs attention" style={{ flex: 1, minWidth: 300 }}>
+            <Panel title="Needs attention" style={{ flex: 1, minWidth: 300, alignSelf: 'flex-start' }} bodyStyle={{ padding: 0 }}>
+              <ScrollView style={styles.attnScroll} contentContainerStyle={styles.attnScrollContent} showsVerticalScrollIndicator>
               {ready.length === 0 && owing.length === 0 ? (
                 <View style={styles.clearState}>
                   <SymbolView name={{ ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' }} size={30} tintColor={STATUS_META.Paid.color} />
@@ -261,6 +263,7 @@ export default function DashboardWeb() {
                   </View>
                 </View>
               )}
+              </ScrollView>
             </Panel>
           </View>
 
@@ -385,6 +388,12 @@ const styles = StyleSheet.create({
   trendLabels: {
     flexDirection: 'row',
     marginTop: 8,
+  },
+  attnScroll: {
+    maxHeight: 300,
+  },
+  attnScrollContent: {
+    padding: Spacing.four,
   },
   row: {
     flexDirection: 'row',
