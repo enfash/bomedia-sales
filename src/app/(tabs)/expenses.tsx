@@ -6,6 +6,7 @@ import { PrimaryButton } from '@/components/ui/primary-button';
 import { ThemedTextInput } from '@/components/ui/themed-text-input';
 import { Spacing } from '@/constants/theme';
 import { useExpenses } from '@/hooks/use-expenses';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useTheme } from '@/hooks/use-theme';
 import { dbService } from '@/services/db';
 import { formatCurrency } from '@/utils/currency';
@@ -65,7 +66,8 @@ export default function ExpensesScreen() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
 
-  const { expenses, loading } = useExpenses(selectedMonth);
+  const { expenses, loading, refresh } = useExpenses(selectedMonth);
+  const { refreshing, onRefresh } = usePullRefresh([refresh]);
 
   const total = useMemo(() => expenses.reduce((sum, e) => sum + e.amount, 0), [expenses]);
 
@@ -210,7 +212,7 @@ export default function ExpensesScreen() {
 
   /* ---------------------------------- LIST ---------------------------------- */
   return (
-    <PageContainer>
+    <PageContainer refreshing={refreshing} onRefresh={onRefresh}>
       <ThemedView style={styles.container}>
         <View style={[styles.formHeader, { alignItems: 'center' }]}>
           <View style={{ flex: 1 }}>

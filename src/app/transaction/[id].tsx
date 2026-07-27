@@ -7,18 +7,28 @@ import { Spacing } from '@/constants/theme';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
 import { deleteBatch, recordPayment } from '@/services/sales-repository';
+import { withAlpha } from '@/utils/color';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
+import { STATUS_META } from '@/utils/payment-status';
+import { SymbolView } from 'expo-symbols';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Share, StyleSheet, View } from 'react-native';
-import { Avatar, Portal, Surface } from 'react-native-paper';
+import { Alert, Linking, Pressable, Share, StyleSheet, View } from 'react-native';
+import { Portal, Surface } from 'react-native-paper';
 
 import { TransactionActionBar } from '@/components/records/transaction-action-bar';
 import { TransactionCostBreakdown } from '@/components/records/transaction-cost-breakdown';
 import { TransactionItemRow } from '@/components/records/transaction-item-row';
 import { TransactionSummaryCard } from '@/components/records/transaction-summary-card';
 import { ThemedText } from '@/components/themed-text';
+
+/** Best-effort international format for wa.me (numbers are Nigerian: 0… → 234…). */
+function toWhatsAppNumber(contact: string): string {
+  let n = contact.replace(/\D/g, '');
+  if (n.startsWith('0')) n = `234${n.slice(1)}`;
+  return n;
+}
 
 export default function TransactionDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -143,18 +153,35 @@ ${itemsString}`;
             style={[styles.clientCard, { backgroundColor: theme.elevation?.level1 || theme.surface }]}
             elevation={0}
           >
-            <Avatar.Text size={46} label={initials} style={{ backgroundColor: theme.primary }} />
+            <View style={[styles.avatar, { backgroundColor: theme.primary }]}>
+              <ThemedText style={{ color: theme.onPrimary, fontWeight: '700', fontSize: 18 }}>{initials}</ThemedText>
+            </View>
             <View style={{ flex: 1 }}>
-              <ThemedText style={{ fontWeight: '700', fontSize: 16 }}>
+              <ThemedText style={{ fontWeight: '700', fontSize: 16 }} numberOfLines={1}>
                 {transaction.clientName || 'Unknown Client'}
               </ThemedText>
               <ThemedText type="small" themeColor="onSurfaceVariant" style={{ fontVariant: ['tabular-nums'] }}>
                 #{transaction.id.substring(0, 8).toUpperCase()} · {formatDate(transaction.createdAt)}
               </ThemedText>
-              {transaction.contact ? (
-                <ThemedText type="small" themeColor="onSurfaceVariant">{transaction.contact}</ThemedText>
-              ) : null}
             </View>
+            {transaction.contact ? (
+              <View style={styles.contactBtns}>
+                <Pressable
+                  onPress={() => Linking.openURL(`https://wa.me/${toWhatsAppNumber(transaction.contact!)}`)}
+                  style={[styles.contactBtn, { backgroundColor: withAlpha(STATUS_META.Paid.color, 0.14) }]}
+                  accessibilityLabel="Message client on WhatsApp"
+                >
+                  <SymbolView name={{ ios: 'message.fill', android: 'chat', web: 'chat' }} size={18} tintColor={STATUS_META.Paid.color} />
+                </Pressable>
+                <Pressable
+                  onPress={() => Linking.openURL(`tel:${transaction.contact}`)}
+                  style={[styles.contactBtn, { backgroundColor: withAlpha(theme.primary, 0.12) }]}
+                  accessibilityLabel="Call client"
+                >
+                  <SymbolView name={{ ios: 'phone.fill', android: 'call', web: 'call' }} size={18} tintColor={theme.primary} />
+                </Pressable>
+              </View>
+            ) : null}
           </Surface>
 
           {/* Items */}
@@ -171,7 +198,7 @@ ${itemsString}`;
               style={[styles.itemsCard, { backgroundColor: theme.elevation?.level1 || theme.surface }]}
               elevation={0}
             >
-              {transaction.records.map((item) => (
+              {transaction.records.map((item, index) => (
                 <TransactionItemRow
                   key={item.id}
                   material={item.material}
@@ -180,6 +207,7 @@ ${itemsString}`;
                   jobUnit={item.jobUnit}
                   quantity={item.quantity}
                   total={item.total || 0}
+                  showDivider={index > 0}
                 />
               ))}
             </Surface>
@@ -241,6 +269,24 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     borderRadius: 22,
   },
+  avatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contactBtns: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  contactBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   sectionHead: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -254,7 +300,6 @@ const styles = StyleSheet.create({
   },
   itemsCard: {
     borderRadius: 22,
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.one,
+    padding: Spacing.two,
   },
 });

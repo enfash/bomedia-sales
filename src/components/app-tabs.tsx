@@ -1,10 +1,10 @@
-import { MoreMenu } from "@/components/more-menu";
+import { MoreMenu, OPEN_MORE_EVENT } from "@/components/more-menu";
 import { useMoreBadges } from "@/hooks/use-more-badges";
 import { useTheme } from "@/hooks/use-theme";
 import { Feather } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { DeviceEventEmitter, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -50,6 +50,12 @@ function CustomTabBar({ state, navigation }: any) {
   const theme = useTheme();
   const badges = useMoreBadges();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Let other surfaces (e.g. the Home-header avatar) open the More menu.
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(OPEN_MORE_EVENT, () => setMenuOpen(true));
+    return () => sub.remove();
+  }, []);
 
   const currentRouteName = state.routes[state.index]?.name;
   const onSecondaryPage = !TAB_META[currentRouteName];

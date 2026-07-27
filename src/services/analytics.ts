@@ -82,14 +82,17 @@ export interface MonthPoint {
   isCurrent: boolean;
 }
 
-/** Revenue bucketed by calendar month for the last `monthsBack` months (incl. current). */
-export function revenueByMonth(batches: SalesBatch[], monthsBack = 6): MonthPoint[] {
-  const now = new Date();
+/**
+ * Revenue bucketed by calendar month for the `monthsBack` months ending at
+ * `endRef` (inclusive). `endRef` lets a custom range anchor the chart to a past
+ * month instead of always ending at "now".
+ */
+export function revenueByMonth(batches: SalesBatch[], monthsBack = 6, endRef: Date = new Date()): MonthPoint[] {
   const points: MonthPoint[] = [];
   const index: Record<string, number> = {};
 
   for (let i = monthsBack - 1; i >= 0; i--) {
-    const dt = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const dt = new Date(endRef.getFullYear(), endRef.getMonth() - i, 1);
     const key = monthKey(dt);
     points.push({
       key,
@@ -105,6 +108,35 @@ export function revenueByMonth(batches: SalesBatch[], monthsBack = 6): MonthPoin
     if (key in index) points[index[key]].value += b.totalAmount || 0;
   }
 
+  return points;
+}
+
+export interface DayPoint {
+  key: string;
+  label: string;
+  value: number;
+  isToday: boolean;
+}
+
+function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Revenue per calendar day for the last `days` days (incl. today), oldest → newest. */
+export function revenueByDay(batches: SalesBatch[], days = 7): DayPoint[] {
+  const now = new Date();
+  const points: DayPoint[] = [];
+  const index: Record<string, number> = {};
+  for (let i = days - 1; i >= 0; i--) {
+    const dt = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const key = dayKey(dt);
+    points.push({ key, label: dt.toLocaleDateString('en-US', { weekday: 'short' }), value: 0, isToday: i === 0 });
+    index[key] = points.length - 1;
+  }
+  for (const b of batches) {
+    const key = dayKey(parseDate(b.createdAt));
+    if (key in index) points[index[key]].value += b.totalAmount || 0;
+  }
   return points;
 }
 
@@ -207,18 +239,18 @@ export interface MonthMoney {
   net: number;
 }
 
-/** Revenue vs expenses per calendar month for the last `monthsBack` months. */
+/** Revenue vs expenses per calendar month for the `monthsBack` months ending at `endRef`. */
 export function expensesVsRevenue(
   batches: SalesBatch[],
   expenses: ExpenseRecord[],
   monthsBack = 6,
+  endRef: Date = new Date(),
 ): MonthMoney[] {
-  const now = new Date();
   const points: MonthMoney[] = [];
   const index: Record<string, number> = {};
 
   for (let i = monthsBack - 1; i >= 0; i--) {
-    const dt = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const dt = new Date(endRef.getFullYear(), endRef.getMonth() - i, 1);
     const key = monthKey(dt);
     points.push({ key, label: dt.toLocaleDateString('en-US', { month: 'short' }), revenue: 0, expenses: 0, net: 0 });
     index[key] = points.length - 1;
@@ -275,4 +307,63 @@ export function collectedVsOutstanding(batches: SalesBatch[]): CollectedSplit {
   }
   const total = collected + outstanding;
   return { collected, outstanding, total, collectedPct: total > 0 ? (collected / total) * 100 : 0 };
+}
+
+/* ------------------------------------------------------------------ *
+ * Date-range control (web dashboard + Analytics). Mobile stays fixed to "today".
+ * ------------------------------------------------------------------ */
+
+export type RangePreset = 'today' | '1m' | '3m' | '6m' | '12m' | 'custom';
+
+export interface DateWindow {
+  /** Inclusive [start, end] epoch ms for filtering batches/expenses. */
+  start: number;
+  end: number;
+  /** Month buckets for the time-series charts. */
+  months: number;
+  /** Anchor month for the charts (end of the window). */
+  endRef: Date;
+  label: string;
+}
+
+/** Resolve a preset (or a custom start/end `YYYY-MM-DD`) into a concrete window. */
+export function rangeToWindow(preset: RangePreset, customStart?: string, customEnd?: string): DateWindow {
+  const now = new Date();
+  const end = now.getTime();
+
+  if (preset === 'today') {
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    return { start, end, months: 1, endRef: now, label: 'Today' };
+  }
+
+  if (preset === 'custom') {
+    const startDate = customStart ? new Date(`${customStart}T00:00:00`) : new Date(now.getFullYear(), now.getMonth(), 1);
+    const endDate = customEnd ? new Date(`${customEnd}T23:59:59`) : now;
+    const months = Math.max(
+      1,
+      (endDate.getFullYear() - startDate.getFullYear()) * 12 + (endDate.getMonth() - startDate.getMonth()) + 1,
+    );
+    return { start: startDate.getTime(), end: endDate.getTime(), months, endRef: endDate, label: 'Custom range' };
+  }
+
+  const monthsMap: Record<string, number> = { '1m': 1, '3m': 3, '6m': 6, '12m': 12 };
+  const m = monthsMap[preset];
+  const start = new Date(now.getFullYear(), now.getMonth() - (m - 1), 1).getTime();
+  return { start, end, months: m, endRef: now, label: m === 1 ? 'Last month' : `Last ${m} months` };
+}
+
+/** Filter batches to a window by their createdAt. */
+export function filterBatchesByWindow(batches: SalesBatch[], win: DateWindow): SalesBatch[] {
+  return batches.filter((b) => {
+    const t = parseDate(b.createdAt).getTime();
+    return t >= win.start && t <= win.end;
+  });
+}
+
+/** Filter expenses to a window by their createdAt. */
+export function filterExpensesByWindow(expenses: ExpenseRecord[], win: DateWindow): ExpenseRecord[] {
+  return expenses.filter((e) => {
+    const t = parseDate(e.createdAt).getTime();
+    return t >= win.start && t <= win.end;
+  });
 }

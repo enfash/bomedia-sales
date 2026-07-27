@@ -6,12 +6,13 @@ import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { usePageContainerStyles } from '@/components/ui/page-container';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Spacing } from '@/constants/theme';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
 import { useMemo, useState } from 'react';
-import { FlatList, Platform, StyleSheet, View } from 'react-native';
+import { FlatList, Platform, RefreshControl, StyleSheet, View } from 'react-native';
 
 interface ClientAgg {
   clientName: string;
@@ -26,7 +27,8 @@ export default function ClientsScreen() {
 
   const theme = useTheme();
 
-  const { sortedBatches: batches, loading } = useRecords(theme);
+  const { sortedBatches: batches, loading, refresh } = useRecords(theme);
+  const { refreshing, onRefresh } = usePullRefresh([refresh]);
   const [searchQuery, setSearchQuery] = useState('');
 
   const clientsList = useMemo(() => {
@@ -104,6 +106,11 @@ export default function ClientsScreen() {
               keyExtractor={(item) => item.clientName}
               contentContainerStyle={contentStyle}
               showsVerticalScrollIndicator={false}
+              refreshControl={
+                Platform.OS !== 'web'
+                  ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />
+                  : undefined
+              }
               ListHeaderComponent={headerComponent}
               ListEmptyComponent={
                 <EmptyState

@@ -1,7 +1,7 @@
 import { BottomTabInset, MaxContentWidth, Spacing, WebContentMaxWidth, WebContentPaddingH } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import React, { forwardRef } from 'react';
-import { Platform, ScrollView, ScrollViewProps, StyleSheet, View, ViewProps } from 'react-native';
+import { Platform, RefreshControl, ScrollView, ScrollViewProps, StyleSheet, View, ViewProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export interface PageContainerProps extends ScrollViewProps {
@@ -13,7 +13,10 @@ export interface PageContainerProps extends ScrollViewProps {
   /** Extra bottom padding if there is a sticky footer. Default is 0. */
   footerHeight?: number;
   /** If true, adds horizontal padding on mobile. If false (default), content fits 100% width on phone. */
-  padHorizontalMobile?: boolean; 
+  padHorizontalMobile?: boolean;
+  /** Pull-to-refresh (mobile). When `onRefresh` is set, a RefreshControl is shown on native. */
+  refreshing?: boolean;
+  onRefresh?: () => void;
 }
 
 export function usePageContainerStyles(padHorizontalMobile = false, footerHeight = 0) {
@@ -39,18 +42,26 @@ export function usePageContainerStyles(padHorizontalMobile = false, footerHeight
   };
 }
 
-export const PageContainer = forwardRef<ScrollView, PageContainerProps>(({ 
-  children, 
-  scroll = true, 
-  contentContainerStyle, 
+export const PageContainer = forwardRef<ScrollView, PageContainerProps>(({
+  children,
+  scroll = true,
+  contentContainerStyle,
   footerHeight = 0,
   padHorizontalMobile = false,
-  style, 
-  ...rest 
+  refreshing,
+  onRefresh,
+  style,
+  ...rest
 }, ref) => {
   const { contentStyle, theme } = usePageContainerStyles(padHorizontalMobile, footerHeight);
 
   const finalContentStyle = [contentStyle, contentContainerStyle];
+
+  // Pull-to-refresh is a native gesture; skip it on web.
+  const refreshControl =
+    onRefresh && Platform.OS !== 'web' ? (
+      <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />
+    ) : undefined;
 
   if (scroll) {
     return (
@@ -59,6 +70,7 @@ export const PageContainer = forwardRef<ScrollView, PageContainerProps>(({
         style={[styles.container, { backgroundColor: theme.background }, style]}
         contentContainerStyle={finalContentStyle}
         keyboardShouldPersistTaps="handled"
+        refreshControl={refreshControl}
         {...rest}
       >
         {children}

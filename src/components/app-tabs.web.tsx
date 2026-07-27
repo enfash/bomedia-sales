@@ -10,6 +10,7 @@ import {
 import {
     Image,
     Pressable,
+    ScrollView,
     StyleSheet,
     useWindowDimensions,
     View,
@@ -19,7 +20,10 @@ import { ThemedText } from "./themed-text";
 import { ThemedView } from "./themed-view";
 
 import { CommandPalette, OPEN_COMMAND_PALETTE_EVENT } from "@/components/dashboard/command-palette";
+import { AccountSection } from "@/components/user/account-section";
+import { UserAvatar } from "@/components/user/user-avatar";
 import { Spacing } from "@/constants/theme";
+import { useAuth } from "@/context/auth-context";
 import { useTheme } from "@/hooks/use-theme";
 import { withAlpha } from "@/utils/color";
 
@@ -70,8 +74,6 @@ export default function AppTabs() {
           <TabTrigger name="analytics" href="/analytics" asChild>
             <TabButton icon="bar-chart-2">Analytics</TabButton>
           </TabTrigger>
-
-          <View style={styles.spacer} />
 
           <TabTrigger name="settings" href="/settings" asChild>
             <TabButton icon="settings">Settings</TabButton>
@@ -131,6 +133,7 @@ export function TabButton({
 export function CustomSidebar(props: TabListProps) {
   const { children, ...rest } = props;
   const theme = useTheme();
+  const { user } = useAuth();
   const { width } = useWindowDimensions();
   const isCompact = width < 768;
 
@@ -186,9 +189,22 @@ export function CustomSidebar(props: TabListProps) {
         )}
       </Pressable>
 
-      <View {...rest} style={styles.navArea}>
+      <ScrollView
+        {...rest}
+        style={styles.navArea}
+        contentContainerStyle={styles.navContent}
+        showsVerticalScrollIndicator={false}
+      >
         {children}
-      </View>
+      </ScrollView>
+
+      {isCompact ? (
+        <View style={styles.compactAccount}>
+          <UserAvatar name={user?.displayName} email={user?.email} size={36} />
+        </View>
+      ) : (
+        <AccountSection />
+      )}
     </ThemedView>
   );
 }
@@ -201,34 +217,34 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   sidebarContainer: {
-    width: 250,
+    width: 220,
     height: "100%",
-    padding: Spacing.four,
+    padding: Spacing.three,
     borderRightWidth: 1,
     flexDirection: "column",
     transitionDuration: "0.2s",
   },
   sidebarContainerCompact: {
-    width: 80,
+    width: 76,
     paddingHorizontal: Spacing.two,
   },
   brandContainer: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.three,
-    marginBottom: Spacing.six,
+    marginBottom: Spacing.four,
     paddingHorizontal: Spacing.two,
-    height: 48,
+    height: 40,
   },
   searchBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.two,
-    height: 40,
+    height: 38,
     paddingHorizontal: Spacing.three,
     borderWidth: 1,
     borderRadius: Spacing.two,
-    marginBottom: Spacing.four,
+    marginBottom: Spacing.three,
   },
   kbd: {
     borderWidth: 1,
@@ -238,11 +254,16 @@ const styles = StyleSheet.create({
   },
   navArea: {
     flex: 1,
-    flexDirection: "column",
-    gap: Spacing.two,
+    minHeight: 0,
   },
-  spacer: {
-    flex: 1,
+  navContent: {
+    flexDirection: "column",
+    gap: Spacing.half,
+    paddingBottom: Spacing.two,
+  },
+  compactAccount: {
+    alignItems: "center",
+    paddingTop: Spacing.three,
   },
   divider: {
     height: 1,
@@ -260,7 +281,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.three,
-    paddingVertical: Spacing.three,
+    paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
     borderRadius: Spacing.two,
   },

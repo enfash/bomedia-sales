@@ -1,4 +1,5 @@
 import { ThemedText } from '@/components/themed-text';
+import { AccountSection } from '@/components/user/account-section';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { STATUS_META } from '@/utils/payment-status';
@@ -9,6 +10,9 @@ import { Animated, Dimensions, Modal, Pressable, StyleSheet, View } from 'react-
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const PANEL_WIDTH = Math.min(300, Dimensions.get('window').width * 0.82);
+
+/** Emit this (via DeviceEventEmitter) to open the More menu from anywhere. */
+export const OPEN_MORE_EVENT = 'bomedia:open-more';
 
 /**
  * Secondary destinations, shown behind the "More" button on mobile. `badgeTone`
@@ -119,6 +123,12 @@ export function MoreMenu({ visible, onClose, counts = {} }: MoreMenuProps) {
               );
             })}
           </View>
+
+          <View style={{ flex: 1 }} />
+
+          <View style={styles.account}>
+            <AccountSection />
+          </View>
         </Animated.View>
       </View>
     </Modal>
@@ -146,6 +156,9 @@ const styles = StyleSheet.create({
   },
   items: {
     gap: Spacing.one,
+  },
+  account: {
+    paddingHorizontal: Spacing.three,
   },
   item: {
     flexDirection: 'row',

@@ -197,7 +197,9 @@ export function DataTable<T>({
               {columns.map((col) => (
                 <View
                   key={col.key}
-                  style={[styles.cell, styles.bodyCell, { flex: col.flex ?? 1, alignItems: alignItemsFor(col.align) }]}
+                  // bodyCell is flexDirection:row, so horizontal alignment is
+                  // justifyContent (alignItems would only move content vertically).
+                  style={[styles.cell, styles.bodyCell, { flex: col.flex ?? 1, justifyContent: alignItemsFor(col.align) }]}
                 >
                   {col.render(row)}
                 </View>

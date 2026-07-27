@@ -1,5 +1,5 @@
 import React from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { BottomActionBar } from '@/components/ui/bottom-action-bar';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { IconButton } from '@/components/ui/icon-button';
@@ -40,13 +40,16 @@ export function TransactionActionBar({
             size={24} 
             onPress={onShare} 
           />
-          <IconButton 
-            icon="delete" 
-            mode="outlined" 
-            iconColor={theme.error} 
-            size={24} 
-            onPress={onDelete} 
-          />
+          {/* Delete is admin-only — web dashboard only, hidden on the mobile field app. */}
+          {Platform.OS === 'web' && (
+            <IconButton
+              icon="delete"
+              mode="outlined"
+              iconColor={theme.error}
+              size={24}
+              onPress={onDelete}
+            />
+          )}
         </View>
         
         <View style={{ flex: 1 }} />

@@ -1,5 +1,5 @@
 import { dbService } from '@/services/db';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export interface ExpenseRecord {
   id: string;
@@ -14,6 +14,7 @@ export interface ExpenseRecord {
 export function useExpenses(selectedMonth: string) {
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   useEffect(() => {
     const unsubscribe = dbService.subscribe(`expenses/${selectedMonth}`, (data: any) => {
@@ -35,7 +36,9 @@ export function useExpenses(selectedMonth: string) {
     });
 
     return () => unsubscribe();
-  }, [selectedMonth]);
+  }, [selectedMonth, refreshNonce]);
 
-  return { expenses, loading };
+  const refresh = useCallback(() => setRefreshNonce((n) => n + 1), []);
+
+  return { expenses, loading, refresh };
 }

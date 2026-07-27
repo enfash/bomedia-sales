@@ -3,28 +3,31 @@ import { DashboardLayout } from '@/components/dashboard/dashboard-layout';
 import { MonthlyComparisonChart } from '@/components/dashboard/monthly-comparison-chart';
 import { Panel } from '@/components/dashboard/panel';
 import { RevenueBarChart } from '@/components/dashboard/revenue-bar-chart';
+import { RangeControl } from '@/components/dashboard/range-control';
 import { SplitBar } from '@/components/dashboard/split-bar';
 import { StatCard } from '@/components/dashboard/stat-card';
-import { ThemedText } from '@/components/themed-text';
 import type { ProductionStage } from '@/components/records/types';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { Spacing } from '@/constants/theme';
 import { useAllExpenses } from '@/hooks/use-all-expenses';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
-import { parseDate } from '@/utils/date';
 import {
   collectedVsOutstanding,
   expensesVsRevenue,
+  filterBatchesByWindow,
+  filterExpensesByWindow,
   productionThroughput,
+  rangeToWindow,
   revenueByMaterial,
   revenueByMonth,
   topClients,
+  type RangePreset,
 } from '@/services/analytics';
 import { formatCurrency } from '@/utils/currency';
 import { STATUS_META } from '@/utils/payment-status';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 /** Stage accents (mirrors the Production Board's semantic pipeline colours). */
 const STAGE_ACCENT: Record<ProductionStage, string> = {
@@ -35,13 +38,6 @@ const STAGE_ACCENT: Record<ProductionStage, string> = {
   Delivered: '#454651',
 };
 
-type RangeMonths = 3 | 6 | 12;
-const RANGES: { label: string; value: RangeMonths }[] = [
-  { label: '3M', value: 3 },
-  { label: '6M', value: 6 },
-  { label: '12M', value: 12 },
-];
-
 export default function AnalyticsWeb() {
   const theme = useTheme();
   const { sortedBatches: batches, loading: recordsLoading } = useRecords(theme);
@@ -49,24 +45,18 @@ export default function AnalyticsWeb() {
   const loading = recordsLoading || expensesLoading;
 
   // Page-level date range — one control drives every widget.
-  const [range, setRange] = useState<RangeMonths>(6);
-  const rangeLabel = `Last ${range} months`;
+  const [preset, setPreset] = useState<RangePreset>('6m');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
 
-  const cutoff = useMemo(() => {
-    const d = new Date();
-    return new Date(d.getFullYear(), d.getMonth() - (range - 1), 1).getTime();
-  }, [range]);
-  const windowBatches = useMemo(
-    () => batches.filter((b) => parseDate(b.createdAt).getTime() >= cutoff),
-    [batches, cutoff],
-  );
-  const windowExpenses = useMemo(
-    () => expenses.filter((e) => parseDate(e.createdAt).getTime() >= cutoff),
-    [expenses, cutoff],
-  );
+  const win = useMemo(() => rangeToWindow(preset, customStart, customEnd), [preset, customStart, customEnd]);
+  const rangeLabel = win.label;
 
-  const trend = useMemo(() => revenueByMonth(windowBatches, range), [windowBatches, range]);
-  const evr = useMemo(() => expensesVsRevenue(windowBatches, windowExpenses, range), [windowBatches, windowExpenses, range]);
+  const windowBatches = useMemo(() => filterBatchesByWindow(batches, win), [batches, win]);
+  const windowExpenses = useMemo(() => filterExpensesByWindow(expenses, win), [expenses, win]);
+
+  const trend = useMemo(() => revenueByMonth(windowBatches, win.months, win.endRef), [windowBatches, win]);
+  const evr = useMemo(() => expensesVsRevenue(windowBatches, windowExpenses, win.months, win.endRef), [windowBatches, windowExpenses, win]);
   const split = useMemo(() => collectedVsOutstanding(windowBatches), [windowBatches]);
   const throughput = useMemo(() => productionThroughput(windowBatches), [windowBatches]);
   const materials = useMemo(() => revenueByMaterial(windowBatches, 6), [windowBatches]);
@@ -80,22 +70,14 @@ export default function AnalyticsWeb() {
   }, [windowBatches, windowExpenses]);
 
   const rangeControl = (
-    <View style={[styles.segment, { borderColor: theme.outlineVariant }]}>
-      {RANGES.map((r) => {
-        const active = range === r.value;
-        return (
-          <Pressable
-            key={r.value}
-            onPress={() => setRange(r.value)}
-            style={[styles.segmentItem, active && { backgroundColor: theme.primary }]}
-          >
-            <ThemedText type="smallBold" style={{ color: active ? theme.onPrimary : theme.onSurfaceVariant, fontSize: 12 }}>
-              {r.label}
-            </ThemedText>
-          </Pressable>
-        );
-      })}
-    </View>
+    <RangeControl
+      value={preset}
+      onChange={setPreset}
+      customStart={customStart}
+      customEnd={customEnd}
+      onCustomStart={setCustomStart}
+      onCustomEnd={setCustomEnd}
+    />
   );
 
   const throughputRows: BarRow[] = throughput.map((t) => ({
@@ -213,15 +195,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.four,
     flexWrap: 'wrap',
-  },
-  segment: {
-    flexDirection: 'row',
-    borderWidth: 1,
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-  segmentItem: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: 7,
   },
 });

@@ -5,12 +5,13 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { markBatchesPaid } from '@/services/sales-repository';
 import { useState } from 'react';
-import { Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Platform, RefreshControl, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Surface } from 'react-native-paper';
 
 import { QuotaCard } from '@/components/records/quota-card';
 import { RecordsHeader } from '@/components/records/records-header';
 import { RecordsTable } from '@/components/records/records-table';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useRecords } from '@/hooks/use-records';
 import { formatDate } from '@/utils/date';
 
@@ -31,7 +32,10 @@ export default function RecordsScreen() {
     sortedBatches,
     totalRevenue,
     totalPaid,
+    refresh,
   } = useRecords(theme);
+
+  const { refreshing, onRefresh } = usePullRefresh([refresh]);
 
   // Additional component state
   const [selectedBatches, setSelectedBatches] = useState<string[]>([]);
@@ -136,6 +140,11 @@ export default function RecordsScreen() {
           searchQuery={searchQuery}
           ListHeaderComponent={headerComponent}
           contentContainerStyle={contentStyle}
+          refreshControl={
+            Platform.OS !== 'web'
+              ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />
+              : undefined
+          }
         />
       </Surface>
     </View>

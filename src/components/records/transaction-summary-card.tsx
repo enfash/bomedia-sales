@@ -1,6 +1,7 @@
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { withAlpha } from '@/utils/color';
 import { formatCurrency } from '@/utils/currency';
 import { STATUS_META } from '@/utils/payment-status';
 import type { PaymentMethod, PaymentStatus } from '@/components/records/types';
@@ -80,7 +81,7 @@ export function TransactionSummaryCard({
       </View>
 
       {/* Collection progress */}
-      <View style={[styles.track, { backgroundColor: theme.surfaceVariant }]}>
+      <View style={[styles.track, { backgroundColor: withAlpha(theme.primary, 0.14) }]}>
         <View style={[styles.fill, { width: `${pct * 100}%`, backgroundColor: theme.primary }]} />
       </View>
 
@@ -102,7 +103,7 @@ export function TransactionSummaryCard({
 
 const styles = StyleSheet.create({
   card: {
-    padding: Spacing.six,
+    padding: Spacing.four,
     borderRadius: 22,
     gap: Spacing.two,
   },
@@ -128,12 +129,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   balanceRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 2 },
-  currency: { fontSize: 24, fontWeight: '700', marginTop: 6 },
+  currency: { fontSize: 26, fontWeight: '700', marginTop: 6 },
   balance: {
-    fontSize: 46,
-    lineHeight: 50,
+    fontSize: 50,
+    lineHeight: 54,
     fontWeight: '800',
-    letterSpacing: -1.5,
+    letterSpacing: -1.6,
     fontVariant: ['tabular-nums'],
   },
   track: {

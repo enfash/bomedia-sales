@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Pressable, FlatList } from 'react-native';
+import { View, StyleSheet, Pressable, FlatList, type RefreshControlProps } from 'react-native';
 import { Checkbox, useTheme as usePaperTheme } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { SalesBatch } from './types';
@@ -24,11 +24,12 @@ interface RecordsTableProps {
   searchQuery: string;
   ListHeaderComponent?: React.ReactElement;
   contentContainerStyle?: any;
+  refreshControl?: React.ReactElement<RefreshControlProps>;
 }
 
 export function RecordsTable({
   sortedBatches, loading, theme, selectedBatches, toggleSelectBatch,
-  searchQuery, ListHeaderComponent, contentContainerStyle
+  searchQuery, ListHeaderComponent, contentContainerStyle, refreshControl
 }: RecordsTableProps) {
   const router = useRouter();
   const paperTheme = usePaperTheme();
@@ -58,6 +59,7 @@ export function RecordsTable({
         );
       }}
       contentContainerStyle={contentContainerStyle || { paddingBottom: 100, paddingHorizontal: Spacing.four }}
+      refreshControl={refreshControl}
       showsVerticalScrollIndicator={false}
       renderItem={({ item: batch }) => {
         const isSelected = selectedBatches.includes(batch.id);

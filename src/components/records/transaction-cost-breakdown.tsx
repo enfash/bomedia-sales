@@ -98,7 +98,7 @@ function Row({
 
 const styles = StyleSheet.create({
   card: {
-    padding: Spacing.six,
+    padding: Spacing.four,
     borderRadius: 22,
     gap: Spacing.three,
   },

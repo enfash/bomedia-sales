@@ -1,6 +1,6 @@
 import { SalesBatch, SalesRecord } from '@/components/records/types';
 import { subscribeToBatches } from '@/services/sales-repository';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 type SortColumn = 'Date' | 'Amount' | 'Balance' | 'Client' | 'Status' | 'LoggedBy';
 
@@ -38,6 +38,9 @@ export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
   const [searchQuery, setSearchQuery] = useState('');
   const [rawBatches, setRawBatches] = useState<SalesBatch[]>([]);
   const [loading, setLoading] = useState(true);
+  // Bumping this re-runs the subscription effect (pull-to-refresh re-pulls a
+  // fresh snapshot even though the underlying listener is already realtime).
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   // Filter & Sort State (status/date/sort auto-remembered when persistKey is set;
   // search stays transient so a stale query never hides records on return).
@@ -63,7 +66,9 @@ export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [refreshNonce]);
+
+  const refresh = useCallback(() => setRefreshNonce((n) => n + 1), []);
 
   // Flat, newest-first list of every line item (with batch context denormalized).
   const records = useMemo<SalesRecord[]>(() => {
@@ -186,5 +191,6 @@ export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
     totalRevenue,
     totalPaid,
     revenuePercent,
+    refresh,
   };
 }

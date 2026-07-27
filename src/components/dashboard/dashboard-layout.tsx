@@ -1,5 +1,7 @@
 import { ThemedText } from '@/components/themed-text';
+import { UserAvatar } from '@/components/user/user-avatar';
 import { Spacing, WebContentMaxWidth, WebContentPaddingH, WebContentPaddingV } from '@/constants/theme';
+import { useAuth } from '@/context/auth-context';
 import { useTheme } from '@/hooks/use-theme';
 import React from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
@@ -19,6 +21,7 @@ interface DashboardLayoutProps {
  */
 export function DashboardLayout({ eyebrow, title, subtitle, right, children }: DashboardLayoutProps) {
   const theme = useTheme();
+  const { user } = useAuth();
 
   return (
     <ScrollView
@@ -41,7 +44,10 @@ export function DashboardLayout({ eyebrow, title, subtitle, right, children }: D
               </ThemedText>
             ) : null}
           </View>
-          {right ? <View>{right}</View> : null}
+          <View style={styles.headerRight}>
+            {right ? <View>{right}</View> : null}
+            <UserAvatar name={user?.displayName} email={user?.email} size={40} />
+          </View>
         </View>
 
         {children}
@@ -68,6 +74,11 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.three,
     marginBottom: Spacing.one,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
   },
   eyebrow: {
     textTransform: 'uppercase',

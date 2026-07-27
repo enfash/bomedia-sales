@@ -2,6 +2,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { PRODUCTION_STAGES, type ProductionStage, type SalesBatch } from '@/components/records/types';
 import { BottomTabInset, MaxContentWidth, Spacing, WebContentMaxWidth, WebContentPaddingH } from '@/constants/theme';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
 import { updateProductionStage } from '@/services/sales-repository';
@@ -11,7 +12,7 @@ import { STATUS_META } from '@/utils/payment-status';
 import { SymbolView } from 'expo-symbols';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { FlatList, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { FlatList, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /** Colour accent per production stage (semantic, brand-aligned). */
@@ -38,7 +39,8 @@ export default function BoardScreen() {
   const theme = useTheme();
   const router = useRouter();
 
-  const { sortedBatches: jobs, loading } = useRecords(theme);
+  const { sortedBatches: jobs, loading, refresh } = useRecords(theme);
+  const { refreshing, onRefresh } = usePullRefresh([refresh]);
 
   const [selectedStage, setSelectedStage] = useState<ProductionStage>('Queued');
   const [activeJob, setActiveJob] = useState<SalesBatch | null>(null);
@@ -262,6 +264,11 @@ export default function BoardScreen() {
         keyExtractor={(item) => item.id}
         ListHeaderComponent={renderHeader()}
         contentContainerStyle={contentPlatformStyle}
+        refreshControl={
+          Platform.OS !== 'web'
+            ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />
+            : undefined
+        }
         renderItem={({ item }) => (
           <View style={{ paddingHorizontal: Spacing.four, paddingBottom: Spacing.three }}>
             {renderJobCard(item)}
