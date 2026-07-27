@@ -26,10 +26,18 @@ export function Sparkline({ values, color, endColor, height, strokeWidth = 2.2 }
 
   const width = box.w;
   const h = box.h;
+  const containerStyle = height != null ? { height } : { flex: 1 };
+
+  // Draw only once we have a real box and data — avoids any path math on a
+  // 0-sized / not-yet-measured render (and can't produce NaN coordinates).
+  if (width <= 0 || h <= 0 || !values || values.length === 0) {
+    return <View style={containerStyle} onLayout={onLayout} />;
+  }
+
   const n = values.length;
   const max = Math.max(...values, 1);
   const pad = strokeWidth + 2; // keep the line/dot off the edges
-  const yFor = (v: number) => pad + (1 - v / max) * (h - pad * 2);
+  const yFor = (v: number) => pad + (1 - (v || 0) / max) * (h - pad * 2);
 
   // A single data point (or none) has no trend — draw a flat line so it reads
   // cleanly instead of collapsing to an edge dot.
@@ -42,25 +50,23 @@ export function Sparkline({ values, color, endColor, height, strokeWidth = 2.2 }
         ];
 
   const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-  const area = width > 0 ? `${line} L${width.toFixed(1)},${h} L0,${h} Z` : '';
+  const area = `${line} L${width.toFixed(1)},${h.toFixed(1)} L0,${h.toFixed(1)} Z`;
   const end = points[points.length - 1];
   const gradientId = 'sparkfill';
 
   return (
-    <View style={height != null ? { height } : { flex: 1 }} onLayout={onLayout}>
-      {width > 0 && h > 0 ? (
-        <Svg width={width} height={h}>
-          <Defs>
-            <LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={color} stopOpacity={0.3} />
-              <Stop offset="1" stopColor={color} stopOpacity={0} />
-            </LinearGradient>
-          </Defs>
-          <Path d={area} fill={`url(#${gradientId})`} />
-          <Path d={line} stroke={color} strokeWidth={strokeWidth} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          {end ? <Circle cx={end.x} cy={end.y} r={strokeWidth + 1.4} fill={endColor ?? color} /> : null}
-        </Svg>
-      ) : null}
+    <View style={containerStyle} onLayout={onLayout}>
+      <Svg width={width} height={h}>
+        <Defs>
+          <LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={color} stopOpacity={0.3} />
+            <Stop offset="1" stopColor={color} stopOpacity={0} />
+          </LinearGradient>
+        </Defs>
+        <Path d={area} fill={`url(#${gradientId})`} />
+        <Path d={line} stroke={color} strokeWidth={strokeWidth} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        {end ? <Circle cx={end.x} cy={end.y} r={strokeWidth + 1.4} fill={endColor ?? color} /> : null}
+      </Svg>
     </View>
   );
 }
