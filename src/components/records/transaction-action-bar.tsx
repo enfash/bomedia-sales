@@ -1,8 +1,9 @@
 import React from 'react';
-import { Platform, View } from 'react-native';
+import { View } from 'react-native';
 import { BottomActionBar } from '@/components/ui/bottom-action-bar';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { IconButton } from '@/components/ui/icon-button';
+import { useAuth } from '@/context/auth-context';
 import { useTheme } from '@/hooks/use-theme';
 
 interface TransactionActionBarProps {
@@ -21,6 +22,7 @@ export function TransactionActionBar({
   onRecordPayment,
 }: TransactionActionBarProps) {
   const theme = useTheme();
+  const { isAdmin } = useAuth();
 
   return (
     <BottomActionBar>
@@ -40,8 +42,8 @@ export function TransactionActionBar({
             size={24} 
             onPress={onShare} 
           />
-          {/* Delete is admin-only — web dashboard only, hidden on the mobile field app. */}
-          {Platform.OS === 'web' && (
+          {/* Delete is admin-only (role-based), hidden for staff on every platform. */}
+          {isAdmin && (
             <IconButton
               icon="delete"
               mode="outlined"

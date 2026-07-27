@@ -17,7 +17,13 @@
     "sales": {
       ".read": "auth != null",
       "$y": { "$m": { "$d": { "$id": {
-        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'staff' && newData.exists() && (!data.exists() || (data.child('createdAtMs').isNumber() && now - data.child('createdAtMs').val() < 86400000))))"
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'staff' && !data.exists() && newData.exists()))",
+        "totalPaid": {
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'staff')"
+        },
+        "productionStage": {
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'staff')"
+        }
       } } } }
     },
 

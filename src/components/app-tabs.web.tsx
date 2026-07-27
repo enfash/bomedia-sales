@@ -34,6 +34,7 @@ import { withAlpha } from "@/utils/color";
  */
 export default function AppTabs() {
   const theme = useTheme();
+  const { isAdmin } = useAuth();
 
   return (
     <>
@@ -71,13 +72,19 @@ export default function AppTabs() {
           <TabTrigger name="expenses" href="/expenses" asChild>
             <TabButton icon="dollar-sign">Expenses</TabButton>
           </TabTrigger>
-          <TabTrigger name="analytics" href="/analytics" asChild>
-            <TabButton icon="bar-chart-2">Analytics</TabButton>
-          </TabTrigger>
 
-          <TabTrigger name="settings" href="/settings" asChild>
-            <TabButton icon="settings">Settings</TabButton>
-          </TabTrigger>
+          {/* Admin-only destinations. The parser recurses into Fragments, so a
+              gated <>…</> keeps these as valid direct TabList children. */}
+          {isAdmin ? (
+            <>
+              <TabTrigger name="analytics" href="/analytics" asChild>
+                <TabButton icon="bar-chart-2">Analytics</TabButton>
+              </TabTrigger>
+              <TabTrigger name="settings" href="/settings" asChild>
+                <TabButton icon="settings">Settings</TabButton>
+              </TabTrigger>
+            </>
+          ) : null}
         </CustomSidebar>
       </TabList>
 

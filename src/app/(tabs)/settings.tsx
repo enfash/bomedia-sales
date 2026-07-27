@@ -4,6 +4,7 @@ import { PageContainer } from '@/components/ui/page-container';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { SecondaryButton } from '@/components/ui/secondary-button';
 import { ThemedTextInput } from '@/components/ui/themed-text-input';
+import { useAuth } from '@/context/auth-context';
 import { MaterialItem, PrinterItem, useSettings } from '@/context/settings-context';
 import { useTheme } from '@/hooks/use-theme';
 import { STATUS_META } from '@/utils/payment-status';
@@ -13,6 +14,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 export default function SettingsScreen() {
   const theme = useTheme();
+  const { isAdmin } = useAuth();
   const { settings, updateSettings } = useSettings();
 
   // Local state for edits
@@ -97,6 +99,19 @@ export default function SettingsScreen() {
   const removePrinter = (id: string) => {
     setPrinters(printers.filter(p => p.id !== id));
   };
+
+  if (!isAdmin) {
+    return (
+      <PageContainer padHorizontalMobile>
+        <ThemedView style={{ padding: 24, gap: 8 }}>
+          <ThemedText type="subtitle" style={{ fontWeight: '700' }}>Settings</ThemedText>
+          <ThemedText type="small" themeColor="onSurfaceVariant">
+            Business settings — materials, pricing and printers — can only be changed by an admin.
+          </ThemedText>
+        </ThemedView>
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer padHorizontalMobile>

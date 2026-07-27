@@ -7,6 +7,7 @@ import { SalesBatch } from '@/components/records/types';
 import { ThemedText } from '@/components/themed-text';
 import { StatusChip } from '@/components/ui/status-chip';
 import { Spacing } from '@/constants/theme';
+import { useAuth } from '@/context/auth-context';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
 import { markBatchesPaid } from '@/services/sales-repository';
@@ -38,6 +39,7 @@ function jobSummary(batch: SalesBatch): string {
 export default function RecordsWeb() {
   const theme = useTheme();
   const router = useRouter();
+  const { isAdmin } = useAuth();
 
   const {
     loading,
@@ -313,11 +315,13 @@ export default function RecordsWeb() {
               />
             </>
           ) : null}
-          <ToolbarButton
-            label={selectionActive ? `Export (${selected.length})` : 'Export CSV'}
-            icon={{ ios: 'square.and.arrow.down', android: 'download', web: 'download' }}
-            onPress={exportCSV}
-          />
+          {isAdmin ? (
+            <ToolbarButton
+              label={selectionActive ? `Export (${selected.length})` : 'Export CSV'}
+              icon={{ ios: 'square.and.arrow.down', android: 'download', web: 'download' }}
+              onPress={exportCSV}
+            />
+          ) : null}
         </View>
 
         <DataTable<SalesBatch>

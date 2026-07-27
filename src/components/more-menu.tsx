@@ -1,5 +1,6 @@
 import { ThemedText } from '@/components/themed-text';
 import { AccountSection } from '@/components/user/account-section';
+import { useAuth } from '@/context/auth-context';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { STATUS_META } from '@/utils/payment-status';
@@ -37,7 +38,11 @@ export function MoreMenu({ visible, onClose, counts = {} }: MoreMenuProps) {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
+  const { isAdmin } = useAuth();
   const [translateX] = useState(() => new Animated.Value(-PANEL_WIDTH));
+
+  // Settings (materials/pricing) is admin-only.
+  const items = MORE_ITEMS.filter((i) => i.href !== '/settings' || isAdmin);
 
   useEffect(() => {
     Animated.timing(translateX, {
@@ -77,7 +82,7 @@ export function MoreMenu({ visible, onClose, counts = {} }: MoreMenuProps) {
           </View>
 
           <View style={styles.items}>
-            {MORE_ITEMS.map((item) => {
+            {items.map((item) => {
               const active = pathname === item.href;
               const count = counts[item.href] || 0;
               const badgeColor = item.badgeColor || theme.primary;

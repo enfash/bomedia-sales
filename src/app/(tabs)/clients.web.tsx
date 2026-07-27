@@ -5,6 +5,7 @@ import { Panel } from '@/components/dashboard/panel';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { useAuth } from '@/context/auth-context';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
 import { formatCurrency } from '@/utils/currency';
@@ -42,6 +43,7 @@ function initials(name: string): string {
  */
 export default function ClientsWeb() {
   const theme = useTheme();
+  const { isAdmin } = useAuth();
 
   const { sortedBatches: batches, loading } = useRecords(theme);
   const [search, setSearch] = useState('');
@@ -242,13 +244,15 @@ export default function ClientsWeb() {
           />
           <View style={{ flex: 1 }} />
           <DensityToggle />
-          <Pressable
-            onPress={exportCSV}
-            style={({ pressed }) => [styles.toolBtn, { borderColor: theme.outlineVariant }, pressed && { opacity: 0.75 }]}
-          >
-            <SymbolView name={{ ios: 'square.and.arrow.down', android: 'download', web: 'download' }} size={15} tintColor={theme.onSurfaceVariant} />
-            <ThemedText type="smallBold" style={{ color: theme.onSurface, fontSize: 12 }}>Export CSV</ThemedText>
-          </Pressable>
+          {isAdmin ? (
+            <Pressable
+              onPress={exportCSV}
+              style={({ pressed }) => [styles.toolBtn, { borderColor: theme.outlineVariant }, pressed && { opacity: 0.75 }]}
+            >
+              <SymbolView name={{ ios: 'square.and.arrow.down', android: 'download', web: 'download' }} size={15} tintColor={theme.onSurfaceVariant} />
+              <ThemedText type="smallBold" style={{ color: theme.onSurface, fontSize: 12 }}>Export CSV</ThemedText>
+            </Pressable>
+          ) : null}
         </View>
 
         <DataTable<ClientAgg>
