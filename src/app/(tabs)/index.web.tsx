@@ -30,6 +30,9 @@ import { SymbolView } from 'expo-symbols';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+// Shared height for the trend + needs-attention row so both cards match.
+const TREND_ROW_HEIGHT = 340;
+
 export default function DashboardWeb() {
   const theme = useTheme();
   const router = useRouter();
@@ -188,21 +191,21 @@ export default function DashboardWeb() {
             />
           </View>
 
-          {/* Chart + needs attention — top-align (and don't stretch the single
-              wrapped flex line) so a tall Needs-attention list can't stretch the
-              trend panel and leave the chart floating. */}
-          <View style={[styles.row, { alignItems: 'flex-start', alignContent: 'flex-start' }]}>
+          {/* Chart + needs attention — both a shared fixed height so they match;
+              the sparkline fills its card and Needs-attention scrolls inside. */}
+          <View style={styles.row}>
             <Panel
               title="Revenue trend"
               subtitle={rangeLabel}
-              style={{ flex: 2, minWidth: 340, alignSelf: 'flex-start' }}
+              style={{ flex: 2, minWidth: 340, height: TREND_ROW_HEIGHT }}
+              bodyStyle={{ flex: 1 }}
               right={
                 <ThemedText type="defaultSemiBold" style={{ color: theme.primary, fontVariant: ['tabular-nums'] }}>
                   {formatCurrency(metrics.revenue)}
                 </ThemedText>
               }
             >
-              <Sparkline values={trend.map((t) => t.value)} color={theme.primary} height={150} />
+              <Sparkline values={trend.map((t) => t.value)} color={theme.primary} />
               <View style={styles.trendLabels}>
                 {trend.map((t) => (
                   <ThemedText
@@ -217,7 +220,7 @@ export default function DashboardWeb() {
               </View>
             </Panel>
 
-            <Panel title="Needs attention" style={{ flex: 1, minWidth: 300, alignSelf: 'flex-start' }} bodyStyle={{ padding: 0 }}>
+            <Panel title="Needs attention" style={{ flex: 1, minWidth: 300, height: TREND_ROW_HEIGHT }} bodyStyle={{ padding: 0, flex: 1 }}>
               <ScrollView style={styles.attnScroll} contentContainerStyle={styles.attnScrollContent} showsVerticalScrollIndicator>
               {ready.length === 0 && owing.length === 0 ? (
                 <View style={styles.clearState}>
@@ -390,7 +393,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   attnScroll: {
-    maxHeight: 300,
+    flex: 1,
   },
   attnScrollContent: {
     padding: Spacing.four,
