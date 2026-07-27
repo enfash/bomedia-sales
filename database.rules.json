@@ -1,6 +1,50 @@
 {
   "rules": {
-    ".read": "auth != null",
-    ".write": "auth != null"
+    ".read": false,
+    ".write": false,
+
+    "users": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      "$uid": {
+        ".read": "auth != null && ($uid === auth.uid || root.child('users').child(auth.uid).child('role').val() === 'admin')",
+        ".write": "auth != null && ((auth.uid === $uid && !data.exists()) || root.child('users').child(auth.uid).child('role').val() === 'admin')",
+        "role": {
+          ".validate": "(auth.uid === $uid && !data.parent().exists() && newData.val() === 'staff') || root.child('users').child(auth.uid).child('role').val() === 'admin'"
+        }
+      }
+    },
+
+    "sales": {
+      ".read": "auth != null",
+      "$y": { "$m": { "$d": { "$id": {
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'staff' && newData.exists() && (!data.exists() || (data.child('createdAtMs').isNumber() && now - data.child('createdAtMs').val() < 86400000))))"
+      } } } }
+    },
+
+    "quotes": {
+      ".read": "auth != null",
+      "$y": { "$m": { "$d": { "$id": {
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'staff' && newData.exists()))"
+      } } } }
+    },
+
+    "expenses": {
+      ".read": "auth != null",
+      "$month": { "$id": {
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'staff' && newData.exists() && !data.exists() && newData.child('uid').val() === auth.uid))"
+      } }
+    },
+
+    "settings": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+    },
+
+    "activity": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists()"
+      }
+    }
   }
 }

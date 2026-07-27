@@ -122,6 +122,8 @@ export interface StoredBatch {
   clientName?: string;
   contact?: string;
   createdAt?: string;
+  /** Epoch ms of creation — lets security rules enforce the staff 24h edit window. */
+  createdAtMs?: number;
   totalAmount?: number;
   deliveryCost?: number;
   totalPaid?: number;

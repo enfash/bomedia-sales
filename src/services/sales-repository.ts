@@ -250,6 +250,8 @@ export async function createBatch(input: NewBatchInput): Promise<string> {
     clientName: input.clientName,
     contact: input.contact ?? '',
     createdAt: now.toISOString(),
+    // Numeric timestamp so security rules can enforce the staff 24h edit window.
+    createdAtMs: now.getTime(),
     totalAmount: input.totalAmount,
     deliveryCost: input.deliveryCost,
     totalPaid: input.totalPaid,

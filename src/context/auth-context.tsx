@@ -7,6 +7,7 @@ import {
   setKeepSignedIn,
   setLastActiveAt,
 } from '@/lib/session';
+import { dbService } from '@/services/db';
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -16,9 +17,16 @@ import {
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 
+/** App role. New users self-register as `staff`; the owner promotes to `admin`. */
+export type Role = 'admin' | 'staff';
+
 interface AuthContextValue {
   /** The signed-in Firebase user, or null when signed out. */
   user: User | null;
+  /** The user's role, or null while it loads / when signed out. */
+  role: Role | null;
+  /** Convenience: role === 'admin'. Staff until proven admin (fail-safe). */
+  isAdmin: boolean;
   /** True until the first auth-state result + session check completes. */
   initializing: boolean;
   /** True when the last sign-out was an automatic 48h-idle expiry (calm notice). */
@@ -45,6 +53,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [role, setRole] = useState<Role | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [sessionExpired, setSessionExpired] = useState(false);
 
@@ -97,6 +106,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, []);
 
+  // Load the user's role. On first login, self-register as `staff` (the owner
+  // promotes to `admin` in the Firebase console). Fail-safe: any error → staff.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!user) {
+        if (!cancelled) setRole(null);
+        return;
+      }
+      const uid = user.uid;
+      try {
+        const existing = await dbService.getRecord<{ role?: string }>(`users/${uid}`);
+        if (cancelled) return;
+        if (existing?.role === 'admin') {
+          setRole('admin');
+          return;
+        }
+        if (existing?.role) {
+          setRole('staff');
+          return;
+        }
+        await dbService.setRecord(`users/${uid}`, {
+          role: 'staff',
+          email: user.email ?? '',
+          name: user.displayName ?? '',
+          createdAt: new Date().toISOString(),
+        });
+        if (!cancelled) setRole('staff');
+      } catch {
+        if (!cancelled) setRole('staff');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
   // React to foreground/background transitions for the idle timer + session-only.
   useEffect(() => {
     const sub = AppState.addEventListener('change', async (next) => {
@@ -126,6 +172,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
+      role,
+      isAdmin: role === 'admin',
       initializing,
       sessionExpired,
       clearSessionExpired: () => setSessionExpired(false),
@@ -141,7 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await clearSessionKeys();
       },
     }),
-    [user, initializing, sessionExpired],
+    [user, role, initializing, sessionExpired],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
