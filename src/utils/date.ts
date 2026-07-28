@@ -23,6 +23,18 @@ export function formatDate(dateInput: any, options?: Intl.DateTimeFormatOptions)
   return date.toLocaleDateString();
 }
 
+/** True when the given date/timestamp falls on the local calendar's current day. */
+export function isToday(dateInput: any): boolean {
+  if (!dateInput) return false;
+  const d = parseDate(dateInput);
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
+
 /**
  * Checks if a given timestamp or date string is older than a specified number of days
  * compared to the current date. Default threshold is 7 days.

@@ -1,55 +1,82 @@
 /**
- * Utility for determining payment status and associated brand colours.
- * Enforces MD3 and Brand Guidelines.
+ * Single source of truth for payment status: the canonical vocabulary, the
+ * colours each status maps to, and the rule that derives status from amounts.
+ *
+ * Every screen must render status through {@link STATUS_META} so the label and
+ * colour of "Partial", "Paid", etc. are identical everywhere.
  */
 
+import type { PaymentStatus } from '@/components/records/types';
+
+export type { PaymentStatus };
+
+export interface StatusMeta {
+  label: string;
+  /** Foreground / text colour. */
+  color: string;
+  /** Container / chip background colour. */
+  bg: string;
+}
+
+/** The one place status colours are defined. Semantic palette, brand-aligned. */
+export const STATUS_META: Record<PaymentStatus, StatusMeta> = {
+  Paid:     { label: 'Paid',     color: '#1c7d4d', bg: '#d9f2e4' },
+  Partial:  { label: 'Partially paid', color: '#b26a00', bg: '#ffeccc' },
+  Unpaid:   { label: 'Unpaid',   color: '#ba1a1a', bg: '#ffdad6' },
+  Overdue:  { label: 'Overdue',  color: '#ba1a1a', bg: '#ffdad6' },
+  Overpaid: { label: 'Overpaid', color: '#2e388d', bg: '#e5eeff' },
+};
+
 export interface PaymentStatusData {
-  status: 'Paid' | 'Overpaid' | 'Partial' | 'Unpaid' | 'Cancelled';
+  status: PaymentStatus;
   color: string;
   backgroundColor: string;
 }
 
-export function getPaymentStatus(totalAmount: number, totalPaid: number, isOverdue = false): PaymentStatusData {
-  // Overpaid
-  if (totalPaid > totalAmount && totalAmount > 0) {
-    return { status: 'Overpaid', color: '#2e388d', backgroundColor: '#e5eeff' }; // Primary, Surface
-  }
-  
-  // Paid
-  if (totalPaid >= totalAmount && totalAmount > 0) {
-    return { status: 'Paid', color: '#2E7D32', backgroundColor: '#E8F5E9' };
-  }
-  
-  // Partial
-  if (totalPaid > 0 && totalPaid < totalAmount) {
-    return { status: 'Partial', color: '#EF6C00', backgroundColor: '#FFF4E5' };
-  }
-  
-  // Unpaid (default or overdue)
-  if (isOverdue) {
-    return { status: 'Unpaid', color: '#C62828', backgroundColor: '#FDECEC' };
-  }
-  
-  // Outstanding (not yet overdue, or 0)
-  return { status: 'Unpaid', color: '#ba1a1a', backgroundColor: '#ffdad6' }; // Using MD3 Error colors
+/**
+ * Derives payment status purely from the batch totals. This is the only rule;
+ * stored `status` strings are ignored on read.
+ */
+export function getPaymentStatus(
+  totalAmount: number,
+  totalPaid: number,
+  isOverdue = false,
+): PaymentStatusData {
+  const status = computePaymentStatus(totalAmount, totalPaid, isOverdue);
+  const meta = STATUS_META[status];
+  return { status, color: meta.color, backgroundColor: meta.bg };
 }
 
-// Fallback resolver for manual statuses (e.g. from quote screens)
-export function getStatusColors(statusText: string): { text: string, bg: string } {
+/** Just the status enum (no colours). */
+export function computePaymentStatus(
+  totalAmount: number,
+  totalPaid: number,
+  isOverdue = false,
+): PaymentStatus {
+  if (totalPaid > totalAmount && totalAmount > 0) return 'Overpaid';
+  if (totalPaid >= totalAmount && totalAmount > 0) return 'Paid';
+  if (totalPaid > 0) return 'Partial';
+  return isOverdue ? 'Overdue' : 'Unpaid';
+}
+
+/**
+ * Colour resolver for manual/free-text statuses used outside sales
+ * (e.g. quote pipeline: Won / Lost / Negotiation). Falls back to a neutral.
+ */
+export function getStatusColors(statusText: string): { text: string; bg: string } {
+  if (statusText in STATUS_META) {
+    const meta = STATUS_META[statusText as PaymentStatus];
+    return { text: meta.color, bg: meta.bg };
+  }
   switch (statusText) {
-    case 'Paid':
     case 'Won':
     case 'Approved':
-      return { text: '#2E7D32', bg: '#E8F5E9' };
-    case 'Overpaid':
-      return { text: '#2e388d', bg: '#e5eeff' };
-    case 'Partial':
+      return { text: STATUS_META.Paid.color, bg: STATUS_META.Paid.bg };
     case 'Negotiation':
-      return { text: '#EF6C00', bg: '#FFF4E5' };
-    case 'Unpaid':
+      return { text: STATUS_META.Partial.color, bg: STATUS_META.Partial.bg };
     case 'Rejected':
     case 'Lost':
-      return { text: '#C62828', bg: '#FDECEC' };
+      return { text: STATUS_META.Unpaid.color, bg: STATUS_META.Unpaid.bg };
     case 'Cancelled':
       return { text: '#546E7A', bg: '#ECEFF1' };
     default:

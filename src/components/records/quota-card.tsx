@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { KPICard } from '@/components/ui/kpi-card';
 import { formatCurrency } from '@/utils/currency';
+import { STATUS_META } from '@/utils/payment-status';
 
 interface QuotaCardProps {
   theme: any;
@@ -23,7 +24,7 @@ export function QuotaCard({ theme, totalRevenue, totalPaid }: QuotaCardProps) {
       label: 'Collected', 
       value: `${formatCurrency(totalPaid)}`, 
       iconName: { ios: 'checkmark.circle', android: 'check_circle', web: 'check_circle' } as const,
-      color: '#2E7D32' 
+      color: STATUS_META.Paid.color
     },
     { 
       id: 'Unpaid', 

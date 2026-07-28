@@ -68,4 +68,15 @@ export const Spacing = {
 } as const;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+
+/** Native/mobile reading column — a narrow, centered content width. */
 export const MaxContentWidth = 800;
+
+/**
+ * Web admin dashboard content column. Every web page (dashboard, records, and
+ * the shared PageContainer screens) uses this same max-width + horizontal
+ * padding so their content edges line up when switching tabs.
+ */
+export const WebContentMaxWidth = 1440;
+export const WebContentPaddingH = 40;
+export const WebContentPaddingV = 32;

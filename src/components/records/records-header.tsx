@@ -8,6 +8,7 @@ import { SearchBar } from '@/components/ui/search-bar';
 import { FilterBar } from '@/components/ui/filter-bar';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { SecondaryButton } from '@/components/ui/secondary-button';
+import { Spacing } from '@/constants/theme';
 
 interface RecordsHeaderProps {
   searchQuery: string;
@@ -37,8 +38,8 @@ export function RecordsHeader({
   const filterOptions = statuses.map(s => ({ label: s, value: s }));
 
   return (
-    <View style={[styles.searchContainer, { flexDirection: 'column', gap: 12 }]}>
-      <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', width: '100%' }}>
+    <View style={[styles.searchContainer, { flexDirection: 'column', gap: Spacing.three }]}>
+      <View style={{ flexDirection: 'row', gap: Spacing.three, alignItems: 'center', width: '100%' }}>
         <View style={{ flex: 1 }}>
           <SearchBar
             placeholder="Search clients or dates"
@@ -76,12 +77,12 @@ export function RecordsHeader({
         options={filterOptions}
         selectedValue={statusFilter}
         onSelect={setStatusFilter}
-        style={{ marginHorizontal: -16 }}
+        style={{ marginHorizontal: -Spacing.four }}
       />
       
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', zIndex: 10 }}>
         {selectedBatches.length > 0 && (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flexDirection: 'row', gap: Spacing.two }}>
             <PrimaryButton 
               onPress={() => {
                 router.push({ pathname: '/invoice', params: { batchId: selectedBatches.join(',') } });

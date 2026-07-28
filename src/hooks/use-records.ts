@@ -1,131 +1,125 @@
-import { useState, useEffect, useMemo } from 'react';
-import { db } from '@/lib/firebase';
-import { dbService } from '@/services/db';
-import { isOverdue } from '@/utils/date';
-import { getPaymentStatus } from '@/utils/payment-status';
-import { SalesRecord, SalesBatch } from '@/components/records/types';
+import { SalesBatch, SalesRecord } from '@/components/records/types';
+import { subscribeToBatches } from '@/services/sales-repository';
+import { isToday } from '@/utils/date';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-export function useRecords(theme: any) {
+type SortColumn = 'Date' | 'Amount' | 'Balance' | 'Client' | 'Status' | 'LoggedBy';
+
+interface UseRecordsOptions {
+  /**
+   * When set (web only), the status/date/sort selection is auto-remembered in
+   * localStorage under this key and restored next time. Opt-in per call so the
+   * Records page persists while other `useRecords` consumers (Clients, Board,
+   * Dashboard, Analytics) keep their default unfiltered view.
+   */
+  persistKey?: string;
+  /**
+   * When true, only today's batches are visible. Used to scope the Records
+   * screen for staff (role-based) — they don't see prior days' sales here.
+   * Kept local to the Records screens: Clients / Board / Debt still aggregate
+   * across all sales, so this flag is intentionally NOT set by those consumers.
+   */
+  staffTodayOnly?: boolean;
+}
+
+interface PersistedFilters {
+  statusFilter?: string;
+  dateFilter?: string;
+  sortColumn?: SortColumn;
+  sortDirection?: 'asc' | 'desc';
+}
+
+function loadPersistedFilters(key?: string): PersistedFilters | null {
+  if (!key || typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as PersistedFilters) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
+  const { persistKey, staffTodayOnly } = options;
+  const [persisted] = useState(() => loadPersistedFilters(persistKey));
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [records, setRecords] = useState<SalesRecord[]>([]);
   const [rawBatches, setRawBatches] = useState<SalesBatch[]>([]);
   const [loading, setLoading] = useState(true);
+  // Bumping this re-runs the subscription effect (pull-to-refresh re-pulls a
+  // fresh snapshot even though the underlying listener is already realtime).
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
-  // Filter & Sort State
-  const [statusFilter, setStatusFilter] = useState('All');
-  const [dateFilter, setDateFilter] = useState('All Time');
-  const [sortColumn, setSortColumn] = useState('Date');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  // Filter & Sort State (status/date/sort auto-remembered when persistKey is set;
+  // search stays transient so a stale query never hides records on return).
+  const [statusFilter, setStatusFilter] = useState(persisted?.statusFilter ?? 'All');
+  const [dateFilter, setDateFilter] = useState(persisted?.dateFilter ?? 'All Time');
+  const [sortColumn, setSortColumn] = useState<SortColumn>(persisted?.sortColumn ?? 'Date');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(persisted?.sortDirection ?? 'desc');
   const [loggedByFilter, setLoggedByFilter] = useState('All');
 
+  // Write the current selection back so Records restores it (web only).
   useEffect(() => {
-    const unsubscribe = dbService.subscribe('sales', (data: any) => {
-      if (data) {
-        let legacyRecords: any[] = [];
-        let parsedBatches: SalesBatch[] = [];
+    if (!persistKey || typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem(persistKey, JSON.stringify({ statusFilter, dateFilter, sortColumn, sortDirection }));
+    } catch {
+      // ignore quota / serialization errors
+    }
+  }, [persistKey, statusFilter, dateFilter, sortColumn, sortDirection]);
 
-        Object.keys(data).forEach(key => {
-          const value = data[key];
-          
-          if (key.match(/^\d{4}-\d{2}$/) && typeof value === 'object') {
-            Object.keys(value).forEach(batchId => {
-              const b = value[batchId];
-              const batchDbPath = `sales/${key}/${batchId}`;
-              const items = b.items ? Object.keys(b.items).map(iKey => ({
-                ...b.items[iKey], 
-                id: iKey,
-                dbPath: `${batchDbPath}/items/${iKey}`
-              })) : [];
-              
-              parsedBatches.push({
-                id: batchId,
-                dbPath: batchDbPath,
-                clientName: b.clientName,
-                createdAt: b.createdAt,
-                records: items,
-                totalAmount: b.totalAmount || 0,
-                totalPaid: b.totalPaid || 0,
-                totalBalance: (b.totalAmount || 0) - (b.totalPaid || 0),
-                status: b.status || 'Pending',
-                statusColor: theme.textSecondary,
-                dueDate: b.dueDate,
-                notes: b.notes,
-              });
-            });
-          } else {
-            legacyRecords.push({ ...value, id: key, dbPath: `sales/${key}` });
-          }
-        });
-
-        const batchMap: Record<string, SalesBatch> = {};
-        legacyRecords.forEach((record) => {
-          const bId = record.batchId || record.id;
-          if (!batchMap[bId]) {
-            batchMap[bId] = {
-              id: bId,
-              dbPath: record.dbPath, // Just use the first record's path as fallback
-              clientName: record.clientName,
-              createdAt: record.createdAt,
-              records: [],
-              totalAmount: 0,
-              totalPaid: 0,
-              totalBalance: 0,
-              status: "Unpaid",
-              statusColor: theme.textSecondary,
-              dueDate: record.dueDate,
-              notes: record.notes,
-            };
-            parsedBatches.push(batchMap[bId]);
-          }
-          batchMap[bId].records.push(record);
-          batchMap[bId].totalAmount += (record.total || 0);
-          batchMap[bId].totalPaid += (record.amountPaid || 0);
-          batchMap[bId].totalBalance = batchMap[bId].totalAmount - batchMap[bId].totalPaid;
-        });
-
-        parsedBatches.forEach(batch => {
-          const overdue = isOverdue(batch.createdAt);
-          const paymentStatus = getPaymentStatus(batch.totalAmount || 0, batch.totalPaid || 0, overdue);
-          batch.status = paymentStatus.status;
-          batch.statusColor = paymentStatus.color;
-        });
-
-        const allFlatRecords: any[] = [];
-        parsedBatches.forEach(b => {
-           b.records.forEach(r => allFlatRecords.push({...r, clientName: b.clientName, createdAt: b.createdAt}));
-        });
-        
-        allFlatRecords.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setRecords(allFlatRecords as SalesRecord[]);
-        setRawBatches(parsedBatches);
-      } else {
-        setRecords([]);
-        setRawBatches([]);
-      }
+  useEffect(() => {
+    const unsubscribe = subscribeToBatches((batches) => {
+      setRawBatches(batches);
       setLoading(false);
     });
-
     return () => unsubscribe();
-  }, [theme]);
+  }, [refreshNonce]);
 
-  const totalRevenue = useMemo(() => rawBatches.reduce((sum, b) => sum + (b.totalAmount || 0), 0), [rawBatches]);
-  const totalPaid = useMemo(() => rawBatches.reduce((sum, b) => sum + (b.totalPaid || 0), 0), [rawBatches]);
+  const refresh = useCallback(() => setRefreshNonce((n) => n + 1), []);
+
+  // Role scoping: staff only see today's batches on the Records screen.
+  const scopedBatches = useMemo(
+    () => (staffTodayOnly ? rawBatches.filter((b) => isToday(b.createdAt)) : rawBatches),
+    [rawBatches, staffTodayOnly],
+  );
+
+  // Flat, newest-first list of every line item (with batch context denormalized).
+  const records = useMemo<SalesRecord[]>(() => {
+    const flat: SalesRecord[] = [];
+    scopedBatches.forEach((b) => {
+      b.records.forEach((r) =>
+        flat.push({ ...r, clientName: b.clientName, createdAt: b.createdAt, batchId: b.id }),
+      );
+    });
+    return flat.sort(
+      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+    );
+  }, [scopedBatches]);
+
+  const totalRevenue = useMemo(
+    () => scopedBatches.reduce((sum, b) => sum + (b.totalAmount || 0), 0),
+    [scopedBatches],
+  );
+  const totalPaid = useMemo(
+    () => scopedBatches.reduce((sum, b) => sum + (b.totalPaid || 0), 0),
+    [scopedBatches],
+  );
   const targetRevenue = 1000000;
   const revenuePercent = Math.min((totalRevenue / targetRevenue) * 100, 100);
 
   const sortedBatches = useMemo(() => {
     const searchLower = searchQuery.toLowerCase();
-    
-    // Filter batches by search query
-    const searchedBatches = rawBatches.filter(batch => {
+
+    const searchedBatches = scopedBatches.filter((batch) => {
       const matchClient = (batch.clientName || '').toLowerCase().includes(searchLower);
-      const matchItem = batch.records.some(r => 
-        (r.material || '').toLowerCase().includes(searchLower)
+      const matchItem = batch.records.some((r) =>
+        (r.material || '').toLowerCase().includes(searchLower),
       );
       return matchClient || matchItem;
     });
 
-    const fullyFilteredBatches = searchedBatches.filter(batch => {
+    const fullyFilteredBatches = searchedBatches.filter((batch) => {
       if (statusFilter !== 'All') {
         if (statusFilter === 'Unpaid' && (batch.status === 'Unpaid' || batch.status === 'Overdue')) {
           // allow
@@ -133,17 +127,18 @@ export function useRecords(theme: any) {
           return false;
         }
       }
-      
+
       if (loggedByFilter !== 'All') {
-        const batchLoggedBy = batch.records[0]?.loggedBy || "Admin";
+        const batchLoggedBy = batch.records[0]?.loggedBy || 'Admin';
         if (batchLoggedBy !== loggedByFilter) return false;
       }
-      
+
       if (dateFilter !== 'All Time') {
         const batchDate = new Date(batch.createdAt);
         const now = new Date();
         if (dateFilter === 'This Month') {
-          if (batchDate.getMonth() !== now.getMonth() || batchDate.getFullYear() !== now.getFullYear()) return false;
+          if (batchDate.getMonth() !== now.getMonth() || batchDate.getFullYear() !== now.getFullYear())
+            return false;
         } else if (dateFilter === 'Last Quarter') {
           const threeMonthsAgo = new Date();
           threeMonthsAgo.setMonth(now.getMonth() - 3);
@@ -153,10 +148,10 @@ export function useRecords(theme: any) {
       return true;
     });
 
-    return fullyFilteredBatches.sort((a, b) => {
-      let valA: any = 0;
-      let valB: any = 0;
-      
+    return [...fullyFilteredBatches].sort((a, b) => {
+      let valA: number | string = 0;
+      let valB: number | string = 0;
+
       if (sortColumn === 'Date') {
         valA = new Date(a.createdAt).getTime();
         valB = new Date(b.createdAt).getTime();
@@ -173,25 +168,21 @@ export function useRecords(theme: any) {
         valA = a.status;
         valB = b.status;
       } else if (sortColumn === 'LoggedBy') {
-        valA = a.records[0]?.loggedBy || "Admin";
-        valB = b.records[0]?.loggedBy || "Admin";
+        valA = a.records[0]?.loggedBy || 'Admin';
+        valB = b.records[0]?.loggedBy || 'Admin';
       }
 
       if (valA === valB) return 0;
-
-      if (sortDirection === 'asc') {
-        return valA > valB ? 1 : -1;
-      } else {
-        return valA < valB ? 1 : -1;
-      }
+      if (sortDirection === 'asc') return valA > valB ? 1 : -1;
+      return valA < valB ? 1 : -1;
     });
-  }, [rawBatches, searchQuery, statusFilter, loggedByFilter, dateFilter, sortColumn, sortDirection]);
+  }, [scopedBatches, searchQuery, statusFilter, loggedByFilter, dateFilter, sortColumn, sortDirection]);
 
   const handleSort = (column: string) => {
     if (sortColumn === column) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
-      setSortColumn(column);
+      setSortColumn(column as SortColumn);
       setSortDirection('desc');
     }
   };
@@ -214,5 +205,6 @@ export function useRecords(theme: any) {
     totalRevenue,
     totalPaid,
     revenuePercent,
+    refresh,
   };
 }

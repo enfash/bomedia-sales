@@ -38,7 +38,6 @@ export function ThemedTextInput({ errorText, ...props }: ThemedTextInputProps) {
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
   },
   input: {
     backgroundColor: 'transparent',
