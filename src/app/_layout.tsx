@@ -1,3 +1,7 @@
+// Side-effect import: silences a benign react-native-paper useNativeDriver
+// warning on web. Must run before any component mounts.
+import "@/lib/suppress-web-warnings";
+
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { ActivityIndicator, Text, useColorScheme, View } from "react-native";
