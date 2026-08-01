@@ -10,7 +10,6 @@
 
 import type { StoredBatch } from '@/components/records/types';
 import {
-  adaptLegacyRecords,
   normalizeBatch,
   normalizeItem,
   parseSalesTree,
@@ -161,6 +160,8 @@ describe('normalizeBatch', () => {
     const result = normalizeBatch({}, BATCH_PATH);
     expect(result.clientName).toBe('Unknown Client');
     expect(result.createdAt).toBe('');
+    expect(result.subtotal).toBe(0);
+    expect(result.adjustments).toEqual([]);
     expect(result.totalAmount).toBe(0);
     expect(result.totalPaid).toBe(0);
     expect(result.totalBalance).toBe(0);
@@ -339,19 +340,6 @@ describe('normalizeBatch', () => {
       expect(batch.totalAmount).toBe(batch.subtotal);
     });
 
-    // The legacy path: the same money reconciles even though the node predates
-    // the fields. 1689 rounded lines against a 1687.50 stored total, so the
-    // ₦1.50 of drift surfaces as a rounded −₦1 row rather than vanishing.
-    it('reconciles a pre-fix batch by surfacing its drift as an adjustment', () => {
-      const batch = normalizeBatch(fractionalBatch(), BATCH_PATH);
-      expect(batch.records.map((r) => r.total)).toEqual([563, 563, 563]);
-      expect(batch.subtotal).toBe(1689);
-      expect(batch.adjustments).toEqual([{ kind: 'legacy', label: 'Adjustment', amount: -1 }]);
-      expect(batch.totalAmount).toBe(1688);
-      expect(
-        batch.adjustments.reduce((sum, a) => sum + a.amount, batch.subtotal),
-      ).toBe(batch.totalAmount);
-    });
 
     // Survives Stage 1: the arithmetic that makes this a real case, pinned so
     // the fixture cannot drift into something that rounds cleanly by accident.
@@ -437,18 +425,6 @@ describe('normalizeBatch', () => {
       expect(batch.subtotal + adjusted).toBe(CHARGED);
     });
 
-    // The legacy path reaches the same total. It cannot know the ₦400 was a
-    // minimum-order top-up — that fact was never stored — so it surfaces the
-    // amount under a neutral label rather than inventing provenance.
-    it('reconciles the same ₦3,000 on a pre-fix batch, labelled neutrally', () => {
-      const batch = normalizeBatch(smallJobBigDelivery(), BATCH_PATH);
-      expect(batch.subtotal).toBe(GOODS);
-      expect(batch.adjustments).toEqual([
-        { kind: 'delivery', label: 'Delivery', amount: DELIVERY },
-        { kind: 'legacy', label: 'Adjustment', amount: MOV_TOPUP },
-      ]);
-      expect(batch.totalAmount).toBe(CHARGED);
-    });
   });
 
   /* ------------------------------------------------------------------ *
@@ -571,18 +547,16 @@ describe('parseSalesTree', () => {
     expect(result[0].dbPath).toBe('sales/2026/06/30/INV-A');
   });
 
-  it('falls through to the legacy adapter for a batch with no identifying field', () => {
+  it('ignores an items node with no identifying field rather than treating it as a batch', () => {
     // `isBatchNode` requires clientName/receiptId/createdAt alongside `items`.
-    // Without one, the walk descends INTO `items` and each line item then
-    // satisfies `isLegacyRecordNode`, so it is adapted as a flat record rather
-    // than skipped. Characterizing the real behaviour, not asserting an ideal.
+    // Without one the node is not a batch, and with the legacy adapter gone
+    // there is no second interpretation — the walk descends, finds nothing
+    // batch-shaped, and yields nothing. A malformed node is skipped, never
+    // silently turned into a sale.
     const result = parseSalesTree({
       '2026': { '07': { '15': { 'INV-X': { items: { item_0: makeStoredItem() } } } } },
     });
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('item_0');
-    expect(result[0].dbPath).toBe('sales/2026/07/15/INV-X/items/item_0');
-    expect(result[0].totalAmount).toBe(5_000);
+    expect(result).toEqual([]);
   });
 
   it('treats a node with items and only a createdAt as a batch', () => {
@@ -600,112 +574,5 @@ describe('parseSalesTree', () => {
       note: 'a stray string',
     });
     expect(result).toHaveLength(1);
-  });
-});
-
-describe('adaptLegacyRecords (pre-migration shim)', () => {
-  const legacyLeaf = (node: Record<string, unknown>, path: string[]) => ({ node, path });
-
-  it('returns an empty array for no leaves', () => {
-    expect(adaptLegacyRecords([])).toEqual([]);
-  });
-
-  it('turns a flat record into a synthesized single-item batch', () => {
-    const result = adaptLegacyRecords([
-      legacyLeaf(
-        { material: 'Vinyl', width: '10', height: '4', jobUnit: 'ft', quantity: 1, unitPrice: 5_000, total: 5_000, clientName: 'Acme' },
-        ['2026', '07', '15', 'rec_1'],
-      ),
-    ]);
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('rec_1');
-    expect(result[0].clientName).toBe('Acme');
-    expect(result[0].dbPath).toBe('sales/2026/07/15/rec_1');
-    expect(result[0].records).toHaveLength(1);
-    expect(result[0].totalAmount).toBe(5_000);
-  });
-
-  it('groups several records sharing a batchId into one batch', () => {
-    const result = adaptLegacyRecords([
-      legacyLeaf({ material: 'Vinyl', total: 5_000, batchId: 'B1', clientName: 'Acme' }, ['2026', '07', '15', 'rec_1']),
-      legacyLeaf({ material: 'SAV', total: 3_000, batchId: 'B1' }, ['2026', '07', '15', 'rec_2']),
-    ]);
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('B1');
-    expect(result[0].records).toHaveLength(2);
-    expect(result[0].totalAmount).toBe(8_000);
-  });
-
-  it('keeps records with different batchIds apart', () => {
-    const result = adaptLegacyRecords([
-      legacyLeaf({ material: 'Vinyl', total: 5_000, batchId: 'B1' }, ['2026', '07', '15', 'rec_1']),
-      legacyLeaf({ material: 'SAV', total: 3_000, batchId: 'B2' }, ['2026', '07', '15', 'rec_2']),
-    ]);
-    expect(result.map((b) => b.id).sort()).toEqual(['B1', 'B2']);
-  });
-
-  it('sums amountPaid across the grouped records and derives the balance', () => {
-    const result = adaptLegacyRecords([
-      legacyLeaf({ material: 'Vinyl', total: 5_000, amountPaid: 2_000, batchId: 'B1' }, ['2026', '07', '15', 'rec_1']),
-      legacyLeaf({ material: 'SAV', total: 3_000, amountPaid: 1_000, batchId: 'B1' }, ['2026', '07', '15', 'rec_2']),
-    ]);
-    expect(result[0].totalPaid).toBe(3_000);
-    expect(result[0].totalBalance).toBe(5_000);
-    expect(result[0].status).toBe('Partial');
-  });
-
-  it('recomputes status once the group total is known', () => {
-    const result = adaptLegacyRecords([
-      legacyLeaf({ material: 'Vinyl', total: 5_000, amountPaid: 5_000, batchId: 'B1' }, ['2026', '07', '15', 'rec_1']),
-    ]);
-    expect(result[0].status).toBe('Paid');
-    expect(result[0].statusColor).toBe(STATUS_META.Paid.color);
-  });
-
-  it('fills defaults for a sparse legacy record', () => {
-    const result = adaptLegacyRecords([legacyLeaf({ total: 1_000 }, ['2026', '07', '15', 'rec_1'])]);
-    expect(result[0].clientName).toBe('Unknown Client');
-    expect(result[0].productionStage).toBe('Queued');
-    expect(result[0].records[0].jobUnit).toBe('ft');
-    expect(result[0].records[0].material).toBe('');
-  });
-
-  it('carries loggedBy onto the normalized record', () => {
-    const result = adaptLegacyRecords([
-      legacyLeaf({ material: 'Vinyl', total: 1_000, loggedBy: 'operator' }, ['2026', '07', '15', 'rec_1']),
-    ]);
-    expect(result[0].records[0].loggedBy).toBe('operator');
-  });
-});
-
-describe('parseSalesTree with legacy records', () => {
-  it('folds flat legacy records in alongside canonical batches', () => {
-    const result = parseSalesTree({
-      '2026': {
-        '07': {
-          '15': {
-            'INV-A': makeStoredBatch({ receiptId: 'INV-A' }),
-            rec_1: { material: 'Vinyl', total: 3_000, clientName: 'Legacy Co' },
-          },
-        },
-      },
-    });
-    expect(result).toHaveLength(2);
-    expect(result.map((b) => b.id).sort()).toEqual(['INV-A', 'rec_1']);
-  });
-
-  it('places canonical batches before adapted legacy ones', () => {
-    const result = parseSalesTree({
-      '2026': {
-        '07': {
-          '15': {
-            rec_1: { material: 'Vinyl', total: 3_000 },
-            'INV-A': makeStoredBatch({ receiptId: 'INV-A' }),
-          },
-        },
-      },
-    });
-    expect(result[0].id).toBe('INV-A');
-    expect(result[1].id).toBe('rec_1');
   });
 });

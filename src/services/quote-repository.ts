@@ -20,7 +20,7 @@ import type {
   TurnaroundTime,
 } from '@/components/records/types';
 import { dbService } from '@/services/db';
-import { deriveLegacyMoneyFields, roundNaira } from '@/utils/money';
+import { roundNaira } from '@/utils/money';
 import { createBatch, generateReceiptId } from '@/services/sales-repository';
 
 const QUOTES_ROOT = 'quotes';
@@ -55,15 +55,13 @@ function normalizeQuote(node: StoredQuote, quoteDbPath: string): QuoteRecord {
     ? Object.keys(node.items).map((k) => normalizeItem(node.items![k], k, quoteDbPath, quoteId))
     : [];
 
-  // Same write-time-snapshot rule as sales: trust the stored fields, and only
-  // reconstruct from the node's own numbers when they predate the fields.
-  const money = node.subtotal != null && node.adjustments != null
-    ? { subtotal: node.subtotal, adjustments: node.adjustments, totalAmount: node.totalAmount ?? 0 }
-    : deriveLegacyMoneyFields({
-        lineTotals: records.map((r) => r.total),
-        totalAmount: node.totalAmount ?? 0,
-        delivery: node.deliveryCost ?? 0,
-      });
+  // Same invariant as sales — createQuote always writes these. See normalizeBatch.
+  const totalAmount = node.totalAmount ?? 0;
+  const money = {
+    subtotal: node.subtotal ?? totalAmount,
+    adjustments: node.adjustments ?? [],
+    totalAmount,
+  };
 
   return {
     id: quoteId,

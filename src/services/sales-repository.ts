@@ -6,10 +6,10 @@
  * Canonical storage layout (the ONLY format this app writes):
  *   sales/{YYYY}/{MM}/{DD}/{receiptId} -> StoredBatch
  *
- * Legacy flat records are tolerated on READ via the single, isolated
- * {@link adaptLegacyRecords} shim so no existing data disappears before the
- * migration runs. Delete that shim (and this note) once migrate-sales has been
- * run against production.
+ * There is no legacy read path. The pre-migration `adaptLegacyRecords` shim was
+ * removed on 2026-08-01 when the database was wiped and restarted clean — every
+ * record now in `sales` was written by {@link createBatch} in the canonical
+ * layout, with `subtotal` and `adjustments[]` always present.
  */
 
 import type {
@@ -25,7 +25,7 @@ import type {
 } from '@/components/records/types';
 import { dbService } from '@/services/db';
 import { isPastDue } from '@/utils/date';
-import { deriveLegacyMoneyFields, roundNaira } from '@/utils/money';
+import { roundNaira } from '@/utils/money';
 import { computePaymentStatus, STATUS_META } from '@/utils/payment-status';
 
 const SALES_ROOT = 'sales';
@@ -79,18 +79,16 @@ export function normalizeBatch(
     ? Object.keys(node.items).map((k) => normalizeItem(node.items![k], k, batchDbPath, batchId))
     : [];
 
-  // Money fields are a write-time snapshot. When they are absent the node
-  // predates them, so reconstruct from the stored numbers alone — never from
-  // live Settings, which would restate what the customer was charged.
-  const money = node.subtotal != null && node.adjustments != null
-    ? { subtotal: node.subtotal, adjustments: node.adjustments, totalAmount: node.totalAmount ?? 0 }
-    : deriveLegacyMoneyFields({
-        lineTotals: records.map((r) => r.total),
-        totalAmount: node.totalAmount ?? 0,
-        delivery: node.deliveryCost ?? 0,
-      });
-
-  const { subtotal, adjustments, totalAmount } = money;
+  // INVARIANT: every stored batch carries `subtotal` and `adjustments[]`,
+  // because `createBatch` is the only writer and always writes them.
+  //
+  // The defaults below exist for one case only: a device still running a build
+  // from before those fields were added. Defaulting `subtotal` to `totalAmount`
+  // (rather than 0) keeps `subtotal + adjustments === totalAmount` true even
+  // then, so the detail screen and invoice still reconcile.
+  const totalAmount = node.totalAmount ?? 0;
+  const subtotal = node.subtotal ?? totalAmount;
+  const adjustments = node.adjustments ?? [];
   const totalPaid = node.totalPaid ?? 0;
   // Overdue is driven by dueDate, falling back to createdAt + terms. The
   // threshold is passed in rather than read from Settings, so this stays a
@@ -135,14 +133,12 @@ function isBatchNode(node: any): node is StoredBatch {
 
 /**
  * Parse the entire `sales` tree into normalized batches. Walks the date-bucket
- * hierarchy to find batch nodes at any depth (2026/07/22/INV-...), then folds in
- * any legacy flat records via the isolated adapter.
+ * hierarchy to find batch nodes at any depth (2026/07/22/INV-...).
  */
 export function parseSalesTree(root: any, defaultTermsDays = DEFAULT_TERMS_DAYS): SalesBatch[] {
   if (!root || typeof root !== 'object') return [];
 
   const batches: SalesBatch[] = [];
-  const legacyLeaves: { node: any; path: string[] }[] = [];
 
   const walk = (node: any, path: string[]) => {
     if (!node || typeof node !== 'object') return;
@@ -150,104 +146,15 @@ export function parseSalesTree(root: any, defaultTermsDays = DEFAULT_TERMS_DAYS)
       batches.push(normalizeBatch(node, `${SALES_ROOT}/${path.join('/')}`, defaultTermsDays));
       return;
     }
-    if (isLegacyRecordNode(node)) {
-      legacyLeaves.push({ node, path });
-      return;
-    }
+    // Not a batch and not a bucket we recognise — descend, and if there is
+    // nothing batch-shaped below, it is simply ignored.
     for (const [key, child] of Object.entries(node)) {
       walk(child, [...path, key]);
     }
   };
 
   walk(root, []);
-  return [...batches, ...adaptLegacyRecords(legacyLeaves, defaultTermsDays)];
-}
-
-/* ------------------------------------------------------------------ *
- * LEGACY SHIM — delete after running scripts/migrate-sales.mjs.
- * A flat record is an item stored directly (no wrapping batch node). We group
- * such records by batchId so they still render, and synthesize a batch path.
- * ------------------------------------------------------------------ */
-
-function isLegacyRecordNode(node: any): boolean {
-  return (
-    node && typeof node === 'object' && !('items' in node) &&
-    ('material' in node || 'width' in node || 'jobUnit' in node || 'total' in node)
-  );
-}
-
-/** @internal Exported for unit tests; not part of the repository's public API. */
-export function adaptLegacyRecords(
-  leaves: { node: any; path: string[] }[],
-  defaultTermsDays = DEFAULT_TERMS_DAYS,
-): SalesBatch[] {
-  const groups: Record<string, SalesBatch> = {};
-
-  for (const { node, path } of leaves) {
-    const recordId = path[path.length - 1] || 'unknown';
-    const dbPath = `${SALES_ROOT}/${path.join('/')}`;
-    const batchId = node.batchId || recordId;
-
-    const record: SalesRecord = {
-      id: recordId,
-      dbPath,
-      batchId,
-      material: node.material ?? '',
-      width: node.width ?? '',
-      height: node.height ?? '',
-      jobUnit: (node.jobUnit ?? 'ft') as JobUnit,
-      quantity: node.quantity ?? 0,
-      unitPrice: node.unitPrice ?? 0,
-      total: node.total ?? 0,
-      loggedBy: node.loggedBy,
-    };
-
-    if (!groups[batchId]) {
-      const status = computePaymentStatus(0, 0, isPastDue(node.createdAt, node.dueDate, defaultTermsDays));
-      groups[batchId] = {
-        id: batchId,
-        dbPath,
-        clientName: node.clientName ?? 'Unknown Client',
-        contact: node.contact,
-        createdAt: node.createdAt ?? '',
-        records: [],
-        subtotal: 0,
-        adjustments: [],
-        totalAmount: 0,
-        totalPaid: 0,
-        totalBalance: 0,
-        status,
-        statusColor: STATUS_META[status].color,
-        productionStage: (node.productionStage as ProductionStage) || 'Queued',
-        notes: node.notes,
-        dueDate: node.dueDate,
-      };
-    }
-    const batch = groups[batchId];
-    batch.records.push(record);
-    batch.totalAmount += record.total || 0;
-    batch.totalPaid += node.amountPaid || 0;
-  }
-
-  return Object.values(groups).map((b) => {
-    const status = computePaymentStatus(b.totalAmount, b.totalPaid, isPastDue(b.createdAt, b.dueDate, defaultTermsDays));
-    // Flat legacy records carry no delivery or adjustment of any kind — the
-    // batch total is purely the sum of its lines, so the subtotal is the total.
-    const money = deriveLegacyMoneyFields({
-      lineTotals: b.records.map((r) => r.total),
-      totalAmount: b.totalAmount,
-      delivery: 0,
-    });
-    return {
-      ...b,
-      subtotal: money.subtotal,
-      adjustments: money.adjustments,
-      totalAmount: money.totalAmount,
-      totalBalance: money.totalAmount - b.totalPaid,
-      status,
-      statusColor: STATUS_META[status].color,
-    };
-  });
+  return batches;
 }
 
 /* ------------------------------------------------------------------ *

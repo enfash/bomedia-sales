@@ -59,7 +59,6 @@
     "lint": "expo lint",
     "test": "jest",
     "test:watch": "jest --watch",
-    "migrate:sales": "tsx scripts/migrate-sales.ts",
     "wipe:test-data": "tsx scripts/wipe-test-data.ts"
   },
   "private": true

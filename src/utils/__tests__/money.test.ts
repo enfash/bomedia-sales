@@ -1,6 +1,5 @@
 import {
   computeBatchTotals,
-  deriveLegacyMoneyFields,
   effectiveAreaSqFt,
   lineTotal,
   roundNaira,
@@ -29,7 +28,9 @@ describe('roundNaira', () => {
     expect(roundNaira(1000)).toBe(1000);
   });
 
-  it('handles negatives — a legacy residual can go either way', () => {
+  // Adjustments may be negative — a discount is the obvious future case — so
+  // the rounding rule has to hold on that side too.
+  it('handles negative amounts', () => {
     expect(roundNaira(-1.5)).toBe(-1); // Math.round: -1.5 -> -1
     expect(roundNaira(-400)).toBe(-400);
   });
@@ -171,64 +172,6 @@ describe('computeBatchTotals', () => {
       const { subtotal, adjustments, totalAmount } = computeBatchTotals(input);
       expect(adjustments.reduce((sum, a) => sum + a.amount, subtotal)).toBe(totalAmount);
       expect(Number.isInteger(totalAmount)).toBe(true);
-    }
-  });
-});
-
-describe('deriveLegacyMoneyFields', () => {
-  it('reconstructs a ₦400 MOV top-up as a neutrally-labelled residual', () => {
-    const totals = deriveLegacyMoneyFields({ lineTotals: [600], totalAmount: 3000, delivery: 2000 });
-    expect(totals.subtotal).toBe(600);
-    expect(totals.adjustments).toEqual([
-      { kind: 'delivery', label: 'Delivery', amount: 2000 },
-      { kind: 'legacy', label: 'Adjustment', amount: 400 },
-    ]);
-    expect(totals.totalAmount).toBe(3000);
-  });
-
-  // The condition on this shim: no float-noise rows on an old invoice.
-  it('omits the residual row entirely when it rounds to zero', () => {
-    const totals = deriveLegacyMoneyFields({ lineTotals: [1000, 500], totalAmount: 1500, delivery: 0 });
-    expect(totals.adjustments).toEqual([]);
-    expect(totals.totalAmount).toBe(1500);
-  });
-
-  it('omits both rows for a plain batch with no delivery and no top-up', () => {
-    const totals = deriveLegacyMoneyFields({ lineTotals: [2500], totalAmount: 2500, delivery: 0 });
-    expect(totals.adjustments).toEqual([]);
-  });
-
-  it('reconciles a batch stored with fractional float drift', () => {
-    // Lines of 562.5 x3 stored against a total of 1687.5.
-    const totals = deriveLegacyMoneyFields({
-      lineTotals: [562.5, 562.5, 562.5],
-      totalAmount: 1687.5,
-      delivery: 0,
-    });
-    expect(totals.subtotal).toBe(1689); // rounded lines
-    expect(totals.totalAmount).toBe(1688); // stored 1687.5, to the naira
-    expect(totals.adjustments).toEqual([{ kind: 'legacy', label: 'Adjustment', amount: -1 }]);
-  });
-
-  it('never reads Settings — the same node derives identically whatever the MOV is', () => {
-    // Signature takes no MOV at all; this pins that as a property, not a comment.
-    const node = { lineTotals: [600], totalAmount: 3000, delivery: 2000 };
-    expect(deriveLegacyMoneyFields(node)).toEqual(deriveLegacyMoneyFields(node));
-    expect(deriveLegacyMoneyFields.length).toBe(1);
-  });
-
-  // Same invariant as the fresh path — this is the point of the shim.
-  it('always satisfies subtotal + adjustments === totalAmount', () => {
-    const cases = [
-      { lineTotals: [600], totalAmount: 3000, delivery: 2000 },
-      { lineTotals: [562.5, 562.5, 562.5], totalAmount: 1687.5, delivery: 0 },
-      { lineTotals: [2500], totalAmount: 2500, delivery: 0 },
-      { lineTotals: [], totalAmount: 0, delivery: 0 },
-      { lineTotals: [900], totalAmount: 1000, delivery: 0 },
-    ];
-    for (const input of cases) {
-      const { subtotal, adjustments, totalAmount } = deriveLegacyMoneyFields(input);
-      expect(adjustments.reduce((sum, a) => sum + a.amount, subtotal)).toBe(totalAmount);
     }
   });
 });
