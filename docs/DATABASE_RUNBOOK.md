@@ -178,6 +178,63 @@ Enter one deliberate small job priced **below the ₦1,000 MOV** — e.g. 2ft ×
 
 ---
 
+## Stage 2 gate — deploy the rules, then six real-payment checks
+
+### 1. Deploy the payment rules — NOT YET DONE
+
+`database.rules.json` contains the `payments` node but it is **not live**. Until
+it is deployed, the app writes ledger entries that nothing is enforcing: they
+can be edited, deleted, or written into another user's bucket.
+
+```bash
+firebase login --reauth      # the stored token expires; this opens a browser
+firebase deploy --only database
+```
+
+The change is **purely additive** — verified by parsing both versions and
+diffing: `payments` added, no existing node semantically changed (the rest of
+the diff is reformatting). So it cannot lock anyone out of what already works.
+
+Console alternative if the CLI stays unhappy: **Realtime Database → Rules**,
+paste `database.rules.json`, Publish.
+
+Confirm it took: as a staff (non-admin) account, reading another user's bucket
+must fail. The rule that matters is `payments/$day/$uid/.read`.
+
+### 2. The six real-payment checks
+
+Run these against the clean database, in order. Each has an expected value —
+if one differs, stop rather than carrying on.
+
+| # | Check | Expect |
+|---|---|---|
+| 1 | **Partial payment.** ₦10,000 sale, record ₦4,000 Cash | Balance ₦6,000, status **Partial**. History shows one entry: `Cash · +₦4,000 · your name` |
+| 2 | **Second payment, same invoice.** Record ₦6,000 POS on the same sale | Balance **₦0**, status **Paid**. History shows **two** entries, newest first. This is the concurrency fix: under the old read-modify-write the second write could erase the first |
+| 3 | **Bulk mark-paid.** Select two unpaid sales in Records → Mark as paid | A method prompt appears — Cash / POS / Transfer. It must **not** proceed without one. Each sale gets its own entry noted "Marked paid in bulk from Records" |
+| 4 | **Advance on a new sale.** New Sale, ₦20,000 total, ₦5,000 advance in Cash | See below — this is the one to watch |
+| 5 | **Cash view matches the drawer.** Open Daily Cash for today | "Cash that should be in the drawer" equals the physical cash from checks 1–4. POS and Transfer are excluded — they are in the bank, not the drawer |
+| 6 | **Admin reversal.** Reverse one payment, with a reason | Cash view shows **collected**, **reversed** and **net** as three separate figures. A day that took ₦50,000 and reversed ₦50,000 must not read like a quiet day |
+
+### Check 4 in detail — the bug that would have shorted the drawer daily
+
+`createBatch` used to write the advance straight into `totalPaid` with no ledger
+entry. Every deposit taken at the counter was invisible to reconciliation, and
+deposits are the most common cash of all — so the drawer would have been over
+by every advance taken, every single day, with nothing to explain it.
+
+After recording a ₦5,000 advance on a ₦20,000 sale:
+
+- the sale shows **₦15,000 outstanding**, status **Partial**
+- its payment history shows **one entry**: `Cash · +₦5,000`, noted
+  **"Advance taken at sale"**
+- **Daily Cash includes that ₦5,000** in today's collected and in
+  "should be in the drawer"
+
+The third bullet is the actual test. The first two would have passed before the
+fix as well.
+
+---
+
 ## Stage 2 — payments become append-only
 
 **The payment migration is gone.** With an empty database there is no historic
