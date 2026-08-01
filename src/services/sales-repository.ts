@@ -13,6 +13,7 @@
  */
 
 import type {
+  BatchAdjustment,
   JobUnit,
   PaymentMethod,
   ProductionStage,
@@ -24,6 +25,7 @@ import type {
 } from '@/components/records/types';
 import { dbService } from '@/services/db';
 import { isOverdue } from '@/utils/date';
+import { deriveLegacyMoneyFields, roundNaira } from '@/utils/money';
 import { computePaymentStatus, STATUS_META } from '@/utils/payment-status';
 
 const SALES_ROOT = 'sales';
@@ -32,7 +34,8 @@ const SALES_ROOT = 'sales';
  * Normalization
  * ------------------------------------------------------------------ */
 
-function normalizeItem(raw: StoredItem, id: string, batchDbPath: string, batchId: string): SalesRecord {
+/** @internal Exported for unit tests; not part of the repository's public API. */
+export function normalizeItem(raw: StoredItem, id: string, batchDbPath: string, batchId: string): SalesRecord {
   return {
     id,
     dbPath: `${batchDbPath}/items/${id}`,
@@ -44,7 +47,10 @@ function normalizeItem(raw: StoredItem, id: string, batchDbPath: string, batchId
     jobUnit: (raw.jobUnit ?? 'ft') as JobUnit,
     quantity: raw.quantity ?? 0,
     unitPrice: raw.unitPrice ?? 0,
-    total: raw.total ?? 0,
+    // Rounded on read as well as on write: line totals are whole naira from
+    // here on, so pre-rounding data displays consistently with fresh sales and
+    // the subtotal is the exact sum of the lines the customer is shown.
+    total: roundNaira(raw.total ?? 0),
     eyelets: raw.eyelets,
     lamination: raw.lamination,
     turnaroundTime: raw.turnaroundTime as TurnaroundTime | undefined,
@@ -52,14 +58,28 @@ function normalizeItem(raw: StoredItem, id: string, batchDbPath: string, batchId
   };
 }
 
-/** Turn a raw batch node at a known path into a normalized SalesBatch. */
-function normalizeBatch(node: StoredBatch, batchDbPath: string): SalesBatch {
+/**
+ * Turn a raw batch node at a known path into a normalized SalesBatch.
+ * @internal Exported for unit tests; not part of the repository's public API.
+ */
+export function normalizeBatch(node: StoredBatch, batchDbPath: string): SalesBatch {
   const batchId = batchDbPath.split('/').pop() || 'unknown';
   const records: SalesRecord[] = node.items
     ? Object.keys(node.items).map((k) => normalizeItem(node.items![k], k, batchDbPath, batchId))
     : [];
 
-  const totalAmount = node.totalAmount ?? 0;
+  // Money fields are a write-time snapshot. When they are absent the node
+  // predates them, so reconstruct from the stored numbers alone — never from
+  // live Settings, which would restate what the customer was charged.
+  const money = node.subtotal != null && node.adjustments != null
+    ? { subtotal: node.subtotal, adjustments: node.adjustments, totalAmount: node.totalAmount ?? 0 }
+    : deriveLegacyMoneyFields({
+        lineTotals: records.map((r) => r.total),
+        totalAmount: node.totalAmount ?? 0,
+        delivery: node.deliveryCost ?? 0,
+      });
+
+  const { subtotal, adjustments, totalAmount } = money;
   const totalPaid = node.totalPaid ?? 0;
   const status = computePaymentStatus(totalAmount, totalPaid, isOverdue(node.createdAt));
 
@@ -71,6 +91,8 @@ function normalizeBatch(node: StoredBatch, batchDbPath: string): SalesBatch {
     contact: node.contact,
     createdAt: node.createdAt ?? '',
     records,
+    subtotal,
+    adjustments,
     totalAmount,
     deliveryCost: node.deliveryCost,
     totalPaid,
@@ -136,7 +158,8 @@ function isLegacyRecordNode(node: any): boolean {
   );
 }
 
-function adaptLegacyRecords(leaves: { node: any; path: string[] }[]): SalesBatch[] {
+/** @internal Exported for unit tests; not part of the repository's public API. */
+export function adaptLegacyRecords(leaves: { node: any; path: string[] }[]): SalesBatch[] {
   const groups: Record<string, SalesBatch> = {};
 
   for (const { node, path } of leaves) {
@@ -167,6 +190,8 @@ function adaptLegacyRecords(leaves: { node: any; path: string[] }[]): SalesBatch
         contact: node.contact,
         createdAt: node.createdAt ?? '',
         records: [],
+        subtotal: 0,
+        adjustments: [],
         totalAmount: 0,
         totalPaid: 0,
         totalBalance: 0,
@@ -185,7 +210,22 @@ function adaptLegacyRecords(leaves: { node: any; path: string[] }[]): SalesBatch
 
   return Object.values(groups).map((b) => {
     const status = computePaymentStatus(b.totalAmount, b.totalPaid, isOverdue(b.createdAt));
-    return { ...b, totalBalance: b.totalAmount - b.totalPaid, status, statusColor: STATUS_META[status].color };
+    // Flat legacy records carry no delivery or adjustment of any kind — the
+    // batch total is purely the sum of its lines, so the subtotal is the total.
+    const money = deriveLegacyMoneyFields({
+      lineTotals: b.records.map((r) => r.total),
+      totalAmount: b.totalAmount,
+      delivery: 0,
+    });
+    return {
+      ...b,
+      subtotal: money.subtotal,
+      adjustments: money.adjustments,
+      totalAmount: money.totalAmount,
+      totalBalance: money.totalAmount - b.totalPaid,
+      status,
+      statusColor: STATUS_META[status].color,
+    };
   });
 }
 
@@ -223,6 +263,10 @@ export interface NewBatchInput {
   receiptId: string;
   clientName: string;
   contact?: string;
+  /** Sum of the rounded line totals, from `computeBatchTotals`. */
+  subtotal: number;
+  /** Write-time snapshot, from `computeBatchTotals`. */
+  adjustments: BatchAdjustment[];
   totalAmount: number;
   deliveryCost: number;
   totalPaid: number;
@@ -240,9 +284,11 @@ export async function createBatch(input: NewBatchInput): Promise<string> {
   const dd = String(now.getDate()).padStart(2, '0');
   const dbPath = `${SALES_ROOT}/${yyyy}/${mm}/${dd}/${input.receiptId}`;
 
+  // Round at the write boundary: every line total stored is whole naira, so
+  // the subtotal is the exact sum of what the invoice shows.
   const items: Record<string, StoredItem> = {};
   input.items.forEach((item, index) => {
-    items[`item_${index}`] = item;
+    items[`item_${index}`] = { ...item, total: roundNaira(item.total ?? 0) };
   });
 
   const node: StoredBatch = {
@@ -252,9 +298,11 @@ export async function createBatch(input: NewBatchInput): Promise<string> {
     createdAt: now.toISOString(),
     // Numeric timestamp so security rules can enforce the staff 24h edit window.
     createdAtMs: now.getTime(),
-    totalAmount: input.totalAmount,
-    deliveryCost: input.deliveryCost,
-    totalPaid: input.totalPaid,
+    subtotal: roundNaira(input.subtotal),
+    adjustments: input.adjustments,
+    totalAmount: roundNaira(input.totalAmount),
+    deliveryCost: roundNaira(input.deliveryCost),
+    totalPaid: roundNaira(input.totalPaid),
     paymentMethod: input.paymentMethod,
     status: computePaymentStatus(input.totalAmount, input.totalPaid),
     productionStage: 'Queued',

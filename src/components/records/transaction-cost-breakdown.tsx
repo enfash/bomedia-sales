@@ -1,3 +1,4 @@
+import type { BatchAdjustment } from '@/components/records/types';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -8,8 +9,13 @@ import { StyleSheet, View } from 'react-native';
 import { Surface } from 'react-native-paper';
 
 interface TransactionCostBreakdownProps {
+  /** Sum of the rounded line totals — never a figure derived by subtraction. */
   subtotal: number;
-  delivery?: number;
+  /**
+   * Every naira between the subtotal and the grand total, itemised. Delivery
+   * is one of these rows; it is no longer passed separately.
+   */
+  adjustments: BatchAdjustment[];
   vat: number;
   grandTotal: number;
   amountPaid: number;
@@ -20,7 +26,7 @@ const money = (n: number) => formatCurrency(n);
 
 export function TransactionCostBreakdown({
   subtotal,
-  delivery = 0,
+  adjustments,
   vat,
   grandTotal,
   amountPaid,
@@ -34,7 +40,15 @@ export function TransactionCostBreakdown({
       elevation={0}
     >
       <Row label="Subtotal" value={money(subtotal)} muted theme={theme} />
-      {delivery > 0 && <Row label="Delivery" value={money(delivery)} muted theme={theme} />}
+      {adjustments.map((adjustment, i) => (
+        <Row
+          key={`${adjustment.kind}-${i}`}
+          label={adjustment.label}
+          value={`${adjustment.amount < 0 ? '−' : '+'}${money(Math.abs(adjustment.amount))}`}
+          muted
+          theme={theme}
+        />
+      ))}
       <Row label="VAT (0%)" value={money(vat)} muted theme={theme} />
 
       <View style={[styles.rule, { backgroundColor: theme.outlineVariant }]} />

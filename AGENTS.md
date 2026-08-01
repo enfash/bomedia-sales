@@ -2,6 +2,35 @@
 
 Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
 
+# Remediation Standing Rules (July 2026 audit)
+
+The findings being worked through are in `docs/AUDIT_2026-07.md`. Read the relevant
+section before touching related code.
+
+## Non-negotiables for every task
+1. PLAN FIRST. Produce a written plan — files to touch, what changes in each, the
+   migration path for stored data, and what could break. Wait for approval before
+   editing anything. Never combine planning and execution in one response.
+2. Quality gate before every commit: `npx tsc --noEmit` and `npx expo lint` must be
+   clean. From Stage 0 onward, `npm test` must also pass.
+3. Scope discipline. Fix exactly what the task names. If you spot something else,
+   add it to a "Noticed, not fixed" list at the end — do not opportunistically
+   refactor.
+4. Never break existing stored data. Any change to the shape of data under
+   `sales/`, `quotes/`, `expenses/` or `activity/` needs a migration script in
+   `scripts/`, dry-run by default, `--commit` to write, and it must be idempotent.
+5. Money is never a bare float in arithmetic. Round at every write boundary.
+6. Financial records are never hard-deleted. Void, don't remove.
+7. All data access goes through the repositories in `src/services/`. Never build a
+   Firebase path in a screen or component.
+8. Status labels and colours come from `STATUS_META` only.
+9. No new hardcoded hex colours. Use `useTheme()`, `STATUS_META`, or
+   `withAlpha()` from `src/utils/color.ts`.
+10. Cross-platform: if a change affects a screen that has a `.web.tsx` twin, state
+    in the plan whether the twin needs the same change. Fixing one and not the
+    other is a bug.
+11. Update `docs/PROJECT_STATUS.md` and `docs/CHANGELOG.md` at the end of each stage.
+
 # Brand & Colour System
 
 This application follows Material Design 3.
@@ -372,8 +401,6 @@ See docs/DESIGN_SYSTEM.md, docs/UI_COMPONENTS.md, docs/BRAND_GUIDELINES.md, docs
 9. Do not rewrite working code without clear benefit.
 10. Keep changes focused.
 
-
-[1]: https://docs.expo.dev/agents/?utm_source=chatgpt.com "AI agents and Expo overview - Expo Documentation"
 
 # Screen Layouts & Padding Rule (Learned)
 

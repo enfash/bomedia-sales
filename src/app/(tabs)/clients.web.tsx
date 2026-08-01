@@ -8,7 +8,7 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
-import { formatCurrency } from '@/utils/currency';
+import { formatCurrency, formatCurrencyCompact } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
 import { withAlpha } from '@/utils/color';
 import { STATUS_META } from '@/utils/payment-status';
@@ -212,14 +212,14 @@ export default function ClientsWeb() {
         />
         <StatCard
           label="Lifetime value"
-          value={formatCurrency(kpis.lifetime)}
+          value={formatCurrencyCompact(kpis.lifetime)}
           icon={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }}
           accent={STATUS_META.Paid.color}
           caption="Total billed across clients"
         />
         <StatCard
           label="Outstanding"
-          value={formatCurrency(kpis.outstanding)}
+          value={formatCurrencyCompact(kpis.outstanding)}
           icon={{ ios: 'exclamationmark.circle.fill', android: 'error', web: 'error' }}
           accent={STATUS_META.Unpaid.color}
           caption={kpis.owing > 0 ? `${kpis.owing} client${kpis.owing !== 1 ? 's' : ''} owing` : 'All settled'}

@@ -26,7 +26,7 @@ import {
   topClients,
   type RangePreset,
 } from '@/services/analytics';
-import { formatCurrency } from '@/utils/currency';
+import { formatCurrency, formatCurrencyCompact } from '@/utils/currency';
 import { STATUS_META } from '@/utils/payment-status';
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -140,21 +140,21 @@ export default function AnalyticsWeb() {
           <View style={styles.row}>
             <StatCard
               label="Revenue"
-              value={formatCurrency(totals.revenue)}
+              value={formatCurrencyCompact(totals.revenue)}
               icon={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }}
               accent={theme.primary}
               caption={rangeLabel}
             />
             <StatCard
               label="Expenses"
-              value={formatCurrency(totals.spend)}
+              value={formatCurrencyCompact(totals.spend)}
               icon={{ ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' }}
               accent={STATUS_META.Partial.color}
               caption={rangeLabel}
             />
             <StatCard
               label="Net Profit"
-              value={formatCurrency(totals.net)}
+              value={formatCurrencyCompact(totals.net)}
               icon={{ ios: 'banknote.fill', android: 'account_balance_wallet', web: 'account_balance_wallet' }}
               accent={totals.net >= 0 ? STATUS_META.Paid.color : STATUS_META.Unpaid.color}
               caption={`${totals.margin.toFixed(1)}% margin`}

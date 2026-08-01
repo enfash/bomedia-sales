@@ -1,3 +1,4 @@
+import type { BatchAdjustment, SalesBatch } from '@/components/records/types';
 import { PageContainer } from '@/components/ui/page-container';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { SecondaryButton } from '@/components/ui/secondary-button';
@@ -23,6 +24,30 @@ import { formatCurrency } from '@/utils/currency';
 import { formatDate, isOverdue } from '@/utils/date';
 import { computePaymentStatus, STATUS_META } from '@/utils/payment-status';
 
+/**
+ * One invoice can cover several batches. Collapse their adjustment rows so the
+ * customer sees "Delivery: +₦4,000" once rather than the same label repeated
+ * per batch. Order is preserved from first appearance.
+ *
+ * NOTE: both renderers below (the HTML export and the on-screen view) read the
+ * single `totals` state this feeds, so they cannot disagree on the numbers.
+ * They still duplicate the *markup* — tracked in docs/AUDIT_2026-07.md under
+ * "Noticed, not fixed".
+ */
+function mergeAdjustments(batches: SalesBatch[]): BatchAdjustment[] {
+  const merged: BatchAdjustment[] = [];
+  for (const batch of batches) {
+    for (const adjustment of batch.adjustments || []) {
+      const existing = merged.find(
+        (m) => m.kind === adjustment.kind && m.label === adjustment.label,
+      );
+      if (existing) existing.amount += adjustment.amount;
+      else merged.push({ ...adjustment });
+    }
+  }
+  return merged.filter((m) => m.amount !== 0);
+}
+
 export default function InvoiceScreen() {
   const { batchId } = useLocalSearchParams();
   const router = useRouter();
@@ -33,7 +58,12 @@ export default function InvoiceScreen() {
   const [loading, setLoading] = useState(() => !!batchId);
   const [records, setRecords] = useState<SalesRecord[]>([]);
   const [batchPaths, setBatchPaths] = useState<string[]>([]);
-  const [totals, setTotals] = useState({ totalAmount: 0, totalPaid: 0 });
+  const [totals, setTotals] = useState<{
+    subtotal: number;
+    adjustments: BatchAdjustment[];
+    totalAmount: number;
+    totalPaid: number;
+  }>({ subtotal: 0, adjustments: [], totalAmount: 0, totalPaid: 0 });
   const [clientName, setClientName] = useState('Unknown Client');
   const [contact, setContact] = useState('');
   const [createdAt, setCreatedAt] = useState('');
@@ -68,6 +98,8 @@ export default function InvoiceScreen() {
         setRecords(items);
         setBatchPaths(batches.map((b) => b.dbPath));
         setTotals({
+          subtotal: batches.reduce((s, b) => s + (b.subtotal || 0), 0),
+          adjustments: mergeAdjustments(batches),
           totalAmount: batches.reduce((s, b) => s + (b.totalAmount || 0), 0),
           totalPaid: batches.reduce((s, b) => s + (b.totalPaid || 0), 0),
         });
@@ -116,7 +148,7 @@ export default function InvoiceScreen() {
   const batchIds = typeof batchId === 'string' ? batchId.split(',') : (Array.isArray(batchId) ? batchId : []);
   const invoiceNo = `INV-${batchIds.map(id => id.slice(-6)).join('-').toUpperCase()}`;
 
-  const { totalAmount, totalPaid } = totals;
+  const { subtotal, adjustments, totalAmount, totalPaid } = totals;
   const balance = totalAmount - totalPaid;
 
   // Single source of truth for status + colour (shared with every other screen).
@@ -218,7 +250,9 @@ export default function InvoiceScreen() {
 
           <div class="totals">
             <div class="totals-box">
-              <div class="total-row"><span style="color: #454651;">Subtotal:</span> <span>${formatCurrency(totalAmount)}</span></div>
+              <div class="total-row"><span style="color: #454651;">Subtotal:</span> <span>${formatCurrency(subtotal)}</span></div>
+              ${adjustments.map((a) => `<div class="total-row"><span style="color: #454651;">${a.label}:</span> <span>${a.amount < 0 ? '−' : '+'}${formatCurrency(Math.abs(a.amount))}</span></div>`).join('')}
+              <div class="total-row"><span style="color: #454651;">Total:</span> <span>${formatCurrency(totalAmount)}</span></div>
               <div class="total-row"><span style="color: #454651;">Amount Paid:</span> <span>${formatCurrency(totalPaid)}</span></div>
               <div class="total-row balance-row"><span style="font-weight: 700; font-size: 16px;">Balance Due:</span> <span style="font-weight: 800; font-size: 16px; color: #2e388d;">${formatCurrency(balance)}</span></div>
             </div>
@@ -367,6 +401,18 @@ export default function InvoiceScreen() {
           <View style={styles.totalsBox}>
             <View style={[styles.totalRow, { borderBottomColor: theme.outlineVariant }]}>
               <Text style={[styles.totalLabel, { color: theme.onSurfaceVariant }]}>Subtotal:</Text>
+              <Text style={[styles.totalValue, { color: theme.onSurface }]}>{formatCurrency(subtotal)}</Text>
+            </View>
+            {adjustments.map((a, i) => (
+              <View key={`${a.kind}-${i}`} style={[styles.totalRow, { borderBottomColor: theme.outlineVariant }]}>
+                <Text style={[styles.totalLabel, { color: theme.onSurfaceVariant }]}>{a.label}:</Text>
+                <Text style={[styles.totalValue, { color: theme.onSurface }]}>
+                  {a.amount < 0 ? '−' : '+'}{formatCurrency(Math.abs(a.amount))}
+                </Text>
+              </View>
+            ))}
+            <View style={[styles.totalRow, { borderBottomColor: theme.outlineVariant }]}>
+              <Text style={[styles.totalLabel, { color: theme.onSurfaceVariant }]}>Total:</Text>
               <Text style={[styles.totalValue, { color: theme.onSurface }]}>{formatCurrency(totalAmount)}</Text>
             </View>
             <View style={[styles.totalRow, { borderBottomColor: theme.outlineVariant }]}>

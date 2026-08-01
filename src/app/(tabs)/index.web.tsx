@@ -22,7 +22,7 @@ import {
   revenueByMonth,
   type RangePreset,
 } from '@/services/analytics';
-import { formatCurrency } from '@/utils/currency';
+import { formatCurrency, formatCurrencyCompact } from '@/utils/currency';
 import { formatDate, parseDate } from '@/utils/date';
 import { STATUS_META } from '@/utils/payment-status';
 import { useRouter } from 'expo-router';
@@ -162,21 +162,21 @@ export default function DashboardWeb() {
           <View style={styles.row}>
             <StatCard
               label="Revenue"
-              value={formatCurrency(metrics.revenue)}
+              value={formatCurrencyCompact(metrics.revenue)}
               icon={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }}
               accent={theme.primary}
               caption={`${rangeLabel} · ${formatCurrency(metrics.revenueAllTime)} all-time`}
             />
             <StatCard
               label="Collected"
-              value={formatCurrency(metrics.collected)}
+              value={formatCurrencyCompact(metrics.collected)}
               icon={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
               accent={STATUS_META.Paid.color}
               caption={`Payments received · ${rangeLabel.toLowerCase()}`}
             />
             <StatCard
               label="Outstanding"
-              value={formatCurrency(metrics.outstanding)}
+              value={formatCurrencyCompact(metrics.outstanding)}
               icon={{ ios: 'exclamationmark.circle.fill', android: 'error', web: 'error' }}
               accent={STATUS_META.Unpaid.color}
               caption={owing.length > 0 ? `${owing.length} client${owing.length !== 1 ? 's' : ''} owing (all-time)` : 'All settled'}
@@ -184,7 +184,7 @@ export default function DashboardWeb() {
             />
             <StatCard
               label="Net Profit"
-              value={formatCurrency(metrics.net)}
+              value={formatCurrencyCompact(metrics.net)}
               icon={{ ios: 'banknote.fill', android: 'account_balance_wallet', web: 'account_balance_wallet' }}
               accent={metrics.net >= 0 ? STATUS_META.Paid.color : STATUS_META.Unpaid.color}
               caption={`${metrics.margin.toFixed(1)}% margin · ${formatCurrency(metrics.spend)} costs`}

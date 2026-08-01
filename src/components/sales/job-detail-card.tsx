@@ -3,6 +3,7 @@ import { Spacing } from '@/constants/theme';
 import { useSettings } from '@/context/settings-context';
 import { useTheme } from '@/hooks/use-theme';
 import { formatCurrency } from '@/utils/currency';
+import { effectiveAreaSqFt, lineTotal, pricingRatesFrom } from '@/utils/money';
 import React, { useCallback, useRef, useState } from 'react';
 import { Animated, Modal, PanResponder, Platform, Pressable, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { ActivityIndicator, Button, Checkbox, TextInput as PaperTextInput, SegmentedButtons, Surface } from 'react-native-paper';
@@ -120,27 +121,25 @@ export const JobDetailCard = React.memo(({ onAddToBatch }: JobDetailCardProps) =
   const parsedWidth = parseFloat(width) || 0;
   const parsedHeight = parseFloat(height) || 0;
 
-  let areaSqFt = 0;
-  if (jobUnit === 'ft') {
-    areaSqFt = parsedWidth * parsedHeight;
-  } else {
-    areaSqFt = (parsedWidth * parsedHeight) / 144;
-  }
+  // All line arithmetic lives in utils/money.ts — see the rounding policy there.
+  const rates = pricingRatesFrom(settings);
+  const effectiveArea = effectiveAreaSqFt(parsedWidth, parsedHeight, jobUnit, rates.wasteFactor);
 
-  const wasteFactorMulti = 1 + (settings?.wasteFactor || 0) / 100;
-  const areaWithWaste = areaSqFt * wasteFactorMulti;
-  const effectiveArea = areaWithWaste > 0 ? areaWithWaste : 1;
-  
-  const baseCost = effectiveArea * parsedUnitPrice * parsedQuantity;
-  const laminationCost = addLamination ? effectiveArea * (settings?.laminationCost || 0) * parsedQuantity : 0;
-  const eyeletTotal = addEyelets ? (settings?.eyeletCost || 0) * parsedQuantity : 0;
-  
-  const turnaroundMulti = turnaroundTime === 'Standard' ? (settings?.turnaroundStandard || 1.0) : turnaroundTime === 'Rush' ? (settings?.turnaroundRush || 1.5) : (settings?.turnaroundSameDay || 2.0);
-
-  const rawTotal = (baseCost + laminationCost) * turnaroundMulti + eyeletTotal;
-  const minOrderPrice = settings?.mov || 1000;
-  const currentTotal = rawTotal > 0 ? Math.max(rawTotal, minOrderPrice) : 0;
-  const movApplied = rawTotal > 0 && currentTotal > rawTotal;
+  // The Minimum Order Value is NOT applied per line any more. It is a minimum
+  // on the order, added once as a labelled adjustment row by the batch total.
+  const currentTotal = lineTotal(
+    {
+      width: parsedWidth,
+      height: parsedHeight,
+      jobUnit,
+      quantity: parsedQuantity,
+      unitPrice: parsedUnitPrice,
+      lamination: addLamination,
+      eyelets: addEyelets,
+      turnaroundTime,
+    },
+    rates,
+  );
 
   const handleAddToBatch = () => {
     if (!materialQuery || !width || !height || !unitPrice) return;
@@ -393,13 +392,13 @@ export const JobDetailCard = React.memo(({ onAddToBatch }: JobDetailCardProps) =
                 {addEyelets ? ' + Eyelets' : ''}{addLamination ? ' + Lam' : ''}
               </ThemedText>
               <ThemedText type="small" themeColor="onSurfaceVariant" style={{ fontStyle: 'italic' }}>
-                {areaSqFt > 0 ? `${areaWithWaste.toFixed(2)} sqft (inc waste) @ ₦${parsedUnitPrice}/sqft` : `Flat rate @ ₦${parsedUnitPrice}`}
+                {parsedWidth > 0 && parsedHeight > 0
+                  ? `${effectiveArea.toFixed(2)} sqft (inc waste) @ ₦${parsedUnitPrice}/sqft`
+                  : `Flat rate @ ₦${parsedUnitPrice}`}
               </ThemedText>
-              {movApplied && (
-                <ThemedText type="smallBold" style={{ color: '#F59E0B' }}>
-                  * Minimum order price of ₦{minOrderPrice} applied
-                </ThemedText>
-              )}
+              {/* The minimum-order notice used to live here, because the MOV was
+                  applied per line. It is an order-level adjustment now and is
+                  shown once on the batch review card instead. */}
             </View>
             <ThemedText type="smallBold" style={{ color: theme.primary, alignSelf: 'center', fontSize: 16 }}>
               {formatCurrency(currentTotal)}

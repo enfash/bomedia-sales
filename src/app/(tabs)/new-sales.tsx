@@ -13,6 +13,7 @@ import { useSettings } from '@/context/settings-context';
 import { useTheme } from '@/hooks/use-theme';
 import { actorFrom, logActivity } from '@/services/activity';
 import { formatCurrency } from '@/utils/currency';
+import { computeBatchTotals } from '@/utils/money';
 
 import { BatchReviewCard } from '@/components/sales/batch-review-card';
 import { ClientInfoCard, ClientInfoRef } from '@/components/sales/client-info-card';
@@ -34,6 +35,7 @@ export default function NewSalesScreen() {
   const [deliveryCost, setDeliveryCost] = useState('');
   const [advancePayment, setAdvancePayment] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'POS' | 'Transfer'>('Transfer');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const scrollViewRef = useRef<ScrollView | null>(null);
   const clientInfoRef = useRef<ClientInfoRef>(null);
@@ -46,18 +48,28 @@ export default function NewSalesScreen() {
     setBatchItems((prev) => prev.filter(item => item.id !== id));
   }, []);
 
-  const batchSubtotal = batchItems.reduce((sum, item) => sum + item.total, 0);
-  const finalBatchTotal = batchItems.length > 0 
-    ? Math.max(batchSubtotal, settings?.mov || 1000) + (parseFloat(deliveryCost) || 0) 
-    : 0;
+  // All batch arithmetic lives in utils/money.ts. The MOV top-up and delivery
+  // come back as labelled adjustment rows rather than silently inflating the
+  // total — see the decision recorded in computeBatchTotals.
+  const { subtotal: batchSubtotal, adjustments, totalAmount: finalBatchTotal } = computeBatchTotals({
+    lineTotals: batchItems.map((item) => item.total),
+    mov: settings?.mov || 1000,
+    delivery: parseFloat(deliveryCost) || 0,
+  });
 
   const submitBatch = async () => {
+    // Double-submit guard: createBatch generates a fresh receiptId on every
+    // call, so a second tap while the first is in flight writes a second real
+    // sale under a different id. Nothing downstream can tell them apart.
+    if (isSubmitting) return;
+
     const clientData = clientInfoRef.current?.getData();
     if (!clientData || !clientInfoRef.current?.validate() || batchItems.length === 0) {
-      alert("Please enter a client name and add at least one item.");
+      Alert.alert('Missing details', 'Please enter a client name and add at least one item.');
       return;
     }
-    
+
+    setIsSubmitting(true);
     try {
       const receiptId = generateReceiptId();
 
@@ -65,6 +77,8 @@ export default function NewSalesScreen() {
         receiptId,
         clientName: clientData.clientName,
         contact: clientData.contact,
+        subtotal: batchSubtotal,
+        adjustments,
         totalAmount: finalBatchTotal,
         deliveryCost: parseFloat(deliveryCost) || 0,
         totalPaid: parseFloat(advancePayment) || 0,
@@ -89,6 +103,8 @@ export default function NewSalesScreen() {
     } catch (error) {
       console.error('Error submitting batch:', error);
       Alert.alert('Error', 'Failed to submit batch. Check your connection or Firebase config.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -119,6 +135,9 @@ export default function NewSalesScreen() {
             <BatchReviewCard 
               batchItems={batchItems}
               settings={settings}
+              subtotal={batchSubtotal}
+              adjustments={adjustments}
+              totalAmount={finalBatchTotal}
               onRemoveItem={handleRemoveItem}
               deliveryCost={deliveryCost}
               setDeliveryCost={setDeliveryCost}
@@ -150,9 +169,11 @@ export default function NewSalesScreen() {
               
               <PrimaryButton
                 onPress={submitBatch}
+                disabled={isSubmitting}
+                loading={isSubmitting}
                 style={{ paddingHorizontal: 16 }}
               >
-                Record Sale
+                {isSubmitting ? 'Recording…' : 'Record Sale'}
               </PrimaryButton>
             </View>
           </View>

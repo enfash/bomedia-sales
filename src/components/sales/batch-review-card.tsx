@@ -1,3 +1,4 @@
+import type { BatchAdjustment } from '@/components/records/types';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedTextInput } from '@/components/ui/themed-text-input';
 import { Spacing } from '@/constants/theme';
@@ -10,6 +11,12 @@ import { SegmentedButtons, Surface } from 'react-native-paper';
 export interface BatchReviewCardProps {
   batchItems: any[];
   settings: any;
+  /** Sum of the rounded line totals — the goods alone. */
+  subtotal: number;
+  /** MOV top-up, delivery, etc. Shown as labelled rows, never folded in. */
+  adjustments: BatchAdjustment[];
+  /** subtotal + adjustments. */
+  totalAmount: number;
   onRemoveItem: (id: string) => void;
   deliveryCost: string;
   setDeliveryCost: (val: string) => void;
@@ -22,6 +29,9 @@ export interface BatchReviewCardProps {
 export const BatchReviewCard = React.memo(({ 
   batchItems, 
   settings, 
+  subtotal,
+  adjustments,
+  totalAmount,
   onRemoveItem,
   deliveryCost,
   setDeliveryCost,
@@ -36,15 +46,13 @@ export const BatchReviewCard = React.memo(({
     return null;
   }
 
-  const batchSubtotal = batchItems.reduce((sum, item) => sum + item.total, 0);
-  const safeSubtotal = Math.max(batchSubtotal, settings?.mov || 1000);
 
   return (
     <Surface elevation={2} style={[styles.card, { backgroundColor: theme.surface }]}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <ThemedText type="defaultSemiBold">Items in Order ({batchItems.length})</ThemedText>
         <ThemedText type="smallBold" style={{ color: theme.primary }}>
-          Items Subtotal: {formatCurrency(safeSubtotal)}
+          Items Subtotal: {formatCurrency(subtotal)}
         </ThemedText>
       </View>
 
@@ -79,6 +87,27 @@ export const BatchReviewCard = React.memo(({
           );
         })}
       </View>
+
+      {/* Every naira between the subtotal and the order total, itemised. The
+          minimum-order top-up used to be folded silently into the subtotal. */}
+      {adjustments.length > 0 && (
+        <View style={[styles.adjustments, { borderColor: theme.surfaceVariant }]}>
+          {adjustments.map((adjustment, i) => (
+            <View key={`${adjustment.kind}-${i}`} style={styles.adjustmentRow}>
+              <ThemedText type="small" themeColor="onSurfaceVariant">{adjustment.label}</ThemedText>
+              <ThemedText type="small" themeColor="onSurfaceVariant">
+                {adjustment.amount < 0 ? '−' : '+'}{formatCurrency(Math.abs(adjustment.amount))}
+              </ThemedText>
+            </View>
+          ))}
+          <View style={styles.adjustmentRow}>
+            <ThemedText type="smallBold">Order total</ThemedText>
+            <ThemedText type="smallBold" style={{ color: theme.primary }}>
+              {formatCurrency(totalAmount)}
+            </ThemedText>
+          </View>
+        </View>
+      )}
 
       <View style={[styles.formGroup, { marginTop: Spacing.four }]}>
         <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Delivery / Dispatch Cost (₦)</ThemedText>
@@ -122,6 +151,17 @@ export const BatchReviewCard = React.memo(({
 BatchReviewCard.displayName = 'BatchReviewCard';
 
 const styles = StyleSheet.create({
+  adjustments: {
+    marginTop: Spacing.three,
+    paddingTop: Spacing.three,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: Spacing.two,
+  },
+  adjustmentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   card: {
     borderRadius: 16,
     padding: Spacing.four,

@@ -144,9 +144,14 @@ ${itemsString}`;
     );
   }
 
-  const delivery = transaction.deliveryCost || 0;
+  // BUG FIX — `subtotal` used to be `grandTotal - delivery`, which folded the
+  // MOV top-up silently into the figure labelled "Subtotal". On a ₦600 job with
+  // ₦2,000 delivery it showed ₦1,000 of printing that never existed. Both
+  // figures now come from the batch, where they are a stored write-time
+  // snapshot rather than a number reverse-engineered by subtraction.
   const grandTotal = transaction.totalAmount;
-  const subtotal = grandTotal - delivery;
+  const subtotal = transaction.subtotal;
+  const adjustments = transaction.adjustments;
   const initials = (transaction.clientName || 'U').substring(0, 2).toUpperCase();
 
   return (
@@ -233,7 +238,7 @@ ${itemsString}`;
             <ThemedText type="subtitle" style={{ marginBottom: Spacing.three }}>Cost breakdown</ThemedText>
             <TransactionCostBreakdown
               subtotal={subtotal}
-              delivery={delivery}
+              adjustments={adjustments}
               vat={0}
               grandTotal={grandTotal}
               amountPaid={transaction.totalPaid || 0}

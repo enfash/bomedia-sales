@@ -16,7 +16,9 @@ import {
   subscribeToQuotes,
   updateQuoteDetails,
 } from '@/services/quote-repository';
+import { useSettings } from '@/context/settings-context';
 import { formatCurrency } from '@/utils/currency';
+import { computeBatchTotals } from '@/utils/money';
 import { formatDate } from '@/utils/date';
 import { STATUS_META } from '@/utils/payment-status';
 import { SymbolView } from 'expo-symbols';
@@ -34,6 +36,7 @@ const QUOTE_STATUS_META: Record<QuoteStatus, { label: string; color: string; bg:
 export default function QuoteScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const { settings } = useSettings();
   const clientInfoRef = useRef<ClientInfoRef>(null);
 
   // 'list' = saved quotes; 'new' = the entry form.
@@ -56,8 +59,14 @@ export default function QuoteScreen() {
   const addItem = useCallback((item: any) => setItems((prev) => [...prev, item]), []);
   const removeItem = (id: string) => setItems((prev) => prev.filter((i) => i.id !== id));
 
-  const subtotal = items.reduce((sum, i) => sum + (i.total || 0), 0);
-  const total = subtotal + (parseFloat(deliveryCost) || 0);
+  // Same money.ts path as New Sale, so a quote and the sale it converts into
+  // are priced by identical rules — including the MOV top-up, which this screen
+  // previously skipped entirely.
+  const { subtotal, adjustments, totalAmount: total } = computeBatchTotals({
+    lineTotals: items.map((i) => i.total || 0),
+    mov: settings?.mov || 1000,
+    delivery: parseFloat(deliveryCost) || 0,
+  });
 
   const resetForm = () => {
     setItems([]);
@@ -77,6 +86,8 @@ export default function QuoteScreen() {
       await createQuote({
         clientName: client?.clientName?.trim() || '',
         contact: client?.contact?.trim() || '',
+        subtotal,
+        adjustments,
         totalAmount: total,
         deliveryCost: parseFloat(deliveryCost) || 0,
         items,

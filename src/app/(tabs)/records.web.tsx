@@ -12,7 +12,7 @@ import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
 import { actorFrom, logActivity } from '@/services/activity';
 import { markBatchesPaid } from '@/services/sales-repository';
-import { formatCurrency } from '@/utils/currency';
+import { formatCurrency, formatCurrencyCompact } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
 import { withAlpha } from '@/utils/color';
 import { STATUS_META } from '@/utils/payment-status';
@@ -203,21 +203,21 @@ export default function RecordsWeb() {
       <View style={styles.kpiRow}>
         <StatCard
           label="Revenue"
-          value={formatCurrency(kpis.revenue)}
+          value={formatCurrencyCompact(kpis.revenue)}
           icon={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }}
           accent={theme.primary}
           caption={`${kpis.count} record${kpis.count !== 1 ? 's' : ''}`}
         />
         <StatCard
           label="Collected"
-          value={formatCurrency(kpis.collected)}
+          value={formatCurrencyCompact(kpis.collected)}
           icon={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
           accent={STATUS_META.Paid.color}
           caption="Payments received"
         />
         <StatCard
           label="Outstanding"
-          value={formatCurrency(kpis.outstanding)}
+          value={formatCurrencyCompact(kpis.outstanding)}
           icon={{ ios: 'exclamationmark.circle.fill', android: 'error', web: 'error' }}
           accent={STATUS_META.Unpaid.color}
           caption={kpis.outstanding > 0 ? 'Awaiting collection' : 'All settled'}

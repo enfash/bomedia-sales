@@ -64,6 +64,23 @@ export interface SalesRecord {
 /** Convenience alias — a line item is a sales record. */
 export type SalesItem = SalesRecord;
 
+/**
+ * A priced adjustment recorded on the batch at write time.
+ *
+ * These are an **immutable snapshot**: the amounts are computed once, when the
+ * sale is created, and stored on the node. They are never recomputed from live
+ * Settings on read — otherwise raising the MOV next quarter would silently
+ * restate every historic invoice, and a reprinted receipt would not match the
+ * one the customer already paid against.
+ */
+export interface BatchAdjustment {
+  /** `legacy` is the residual derived for batches written before this field existed. */
+  kind: 'mov' | 'delivery' | 'legacy';
+  label: string;
+  /** Whole naira. May be negative (a legacy residual can go either way). */
+  amount: number;
+}
+
 /** A normalized sale (batch of one or more items), ready for the UI. */
 export interface SalesBatch {
   /** The receiptId — also the Firebase key for the batch node. */
@@ -78,6 +95,10 @@ export interface SalesBatch {
 
   records: SalesRecord[];
 
+  /** Sum of the rounded line totals. Every naira above it is a named adjustment. */
+  subtotal: number;
+  /** Write-time snapshot; `subtotal + sum(adjustments) === totalAmount`. */
+  adjustments: BatchAdjustment[];
   totalAmount: number;
   deliveryCost?: number;
   totalPaid: number;
@@ -105,6 +126,10 @@ export interface QuoteRecord {
   createdAt: string;
 
   records: SalesRecord[];
+  /** Sum of the rounded line totals. */
+  subtotal: number;
+  /** Write-time snapshot; `subtotal + sum(adjustments) === totalAmount`. */
+  adjustments: BatchAdjustment[];
   totalAmount: number;
   deliveryCost?: number;
 
@@ -124,6 +149,9 @@ export interface StoredBatch {
   createdAt?: string;
   /** Epoch ms of creation — lets security rules enforce the staff 24h edit window. */
   createdAtMs?: number;
+  /** Absent on batches written before the money fields landed — derived on read. */
+  subtotal?: number;
+  adjustments?: BatchAdjustment[];
   totalAmount?: number;
   deliveryCost?: number;
   totalPaid?: number;
@@ -141,6 +169,9 @@ export interface StoredQuote {
   clientName?: string;
   contact?: string;
   createdAt?: string;
+  /** Absent on quotes written before the money fields landed — derived on read. */
+  subtotal?: number;
+  adjustments?: BatchAdjustment[];
   totalAmount?: number;
   deliveryCost?: number;
   status?: QuoteStatus;

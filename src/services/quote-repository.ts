@@ -10,6 +10,7 @@
  */
 
 import type {
+  BatchAdjustment,
   JobUnit,
   QuoteRecord,
   QuoteStatus,
@@ -19,6 +20,7 @@ import type {
   TurnaroundTime,
 } from '@/components/records/types';
 import { dbService } from '@/services/db';
+import { deriveLegacyMoneyFields, roundNaira } from '@/utils/money';
 import { createBatch, generateReceiptId } from '@/services/sales-repository';
 
 const QUOTES_ROOT = 'quotes';
@@ -53,6 +55,16 @@ function normalizeQuote(node: StoredQuote, quoteDbPath: string): QuoteRecord {
     ? Object.keys(node.items).map((k) => normalizeItem(node.items![k], k, quoteDbPath, quoteId))
     : [];
 
+  // Same write-time-snapshot rule as sales: trust the stored fields, and only
+  // reconstruct from the node's own numbers when they predate the fields.
+  const money = node.subtotal != null && node.adjustments != null
+    ? { subtotal: node.subtotal, adjustments: node.adjustments, totalAmount: node.totalAmount ?? 0 }
+    : deriveLegacyMoneyFields({
+        lineTotals: records.map((r) => r.total),
+        totalAmount: node.totalAmount ?? 0,
+        delivery: node.deliveryCost ?? 0,
+      });
+
   return {
     id: quoteId,
     quoteId: node.quoteId ?? quoteId,
@@ -61,7 +73,9 @@ function normalizeQuote(node: StoredQuote, quoteDbPath: string): QuoteRecord {
     contact: node.contact,
     createdAt: node.createdAt ?? '',
     records,
-    totalAmount: node.totalAmount ?? 0,
+    subtotal: money.subtotal,
+    adjustments: money.adjustments,
+    totalAmount: money.totalAmount,
     deliveryCost: node.deliveryCost,
     status: (node.status as QuoteStatus) || 'Draft',
     notes: node.notes,
@@ -110,6 +124,10 @@ export function subscribeToQuotes(callback: (quotes: QuoteRecord[]) => void): ()
 export interface NewQuoteInput {
   clientName?: string;
   contact?: string;
+  /** Sum of the rounded line totals, from `computeBatchTotals`. */
+  subtotal: number;
+  /** Write-time snapshot, from `computeBatchTotals`. */
+  adjustments: BatchAdjustment[];
   totalAmount: number;
   deliveryCost?: number;
   items: StoredItem[];
@@ -124,9 +142,11 @@ export async function createQuote(input: NewQuoteInput): Promise<string> {
   const quoteId = generateReceiptId('QT');
   const dbPath = `${QUOTES_ROOT}/${yyyy}/${mm}/${dd}/${quoteId}`;
 
+  // Round at the write boundary, exactly as createBatch does — a quote and the
+  // sale it converts into must agree to the naira.
   const items: Record<string, StoredItem> = {};
   input.items.forEach((item, index) => {
-    items[`item_${index}`] = item;
+    items[`item_${index}`] = { ...item, total: roundNaira(item.total ?? 0) };
   });
 
   const node: StoredQuote = {
@@ -134,8 +154,10 @@ export async function createQuote(input: NewQuoteInput): Promise<string> {
     clientName: input.clientName ?? '',
     contact: input.contact ?? '',
     createdAt: now.toISOString(),
-    totalAmount: input.totalAmount,
-    deliveryCost: input.deliveryCost ?? 0,
+    subtotal: roundNaira(input.subtotal),
+    adjustments: input.adjustments,
+    totalAmount: roundNaira(input.totalAmount),
+    deliveryCost: roundNaira(input.deliveryCost ?? 0),
     status: 'Draft',
     ...(input.notes ? { notes: input.notes } : {}),
     items,
@@ -194,10 +216,15 @@ export async function convertQuoteToSale(quote: QuoteRecord): Promise<string> {
     type: r.type,
   }));
 
+  // The sale carries the quote's OWN money fields across unchanged. Converting
+  // must never re-price: the customer accepted this total, and recomputing it
+  // against today's MOV could quietly hand them a different number.
   const dbPath = await createBatch({
     receiptId: generateReceiptId('INV'),
     clientName: quote.clientName,
     contact: quote.contact,
+    subtotal: quote.subtotal,
+    adjustments: quote.adjustments,
     totalAmount: quote.totalAmount,
     deliveryCost: quote.deliveryCost ?? 0,
     totalPaid: 0,

@@ -2,6 +2,13 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    // Explicit, because TS does not auto-include node_modules/@types here and
+    // the test files need Jest's globals (describe/it/expect) to typecheck.
+    "types": [
+      "jest",
+      "node",
+      "react"
+    ],
     "paths": {
       "@/*": [
         "./src/*"
