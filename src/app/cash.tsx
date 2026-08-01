@@ -10,6 +10,7 @@
  */
 
 import type { PaymentEntry } from '@/components/records/types';
+import { WebDetailShell } from '@/components/web-detail-shell';
 import { ThemedText } from '@/components/themed-text';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageContainer } from '@/components/ui/page-container';
@@ -60,7 +61,8 @@ export default function CashReconciliationScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <WebDetailShell>
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
       <Stack.Screen options={{ title: 'Daily Cash', headerBackVisible: true }} />
       <PageContainer contentContainerStyle={styles.content}>
         {/* Day picker */}
@@ -180,7 +182,8 @@ export default function CashReconciliationScreen() {
           ))}
         </Surface>
       </PageContainer>
-    </View>
+      </View>
+    </WebDetailShell>
   );
 }
 
@@ -203,7 +206,11 @@ function Row({
 }
 
 const styles = StyleSheet.create({
-  content: { padding: Spacing.four, gap: Spacing.four },
+  // No horizontal padding here: PageContainer owns the shared web column
+  // (WebContentMaxWidth / WebContentPaddingH). A `padding` shorthand would
+  // override its paddingLeft/Right and knock this page out of line with the
+  // rest of the app.
+  content: { gap: Spacing.four, paddingVertical: Spacing.four },
   dayBar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   arrow: { paddingHorizontal: Spacing.four, paddingVertical: Spacing.two },
   hero: { padding: Spacing.four, borderRadius: 22, gap: Spacing.two },

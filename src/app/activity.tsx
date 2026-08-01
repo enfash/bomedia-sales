@@ -2,6 +2,7 @@ import { ActivityList } from '@/components/activity/activity-list';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { PageContainer } from '@/components/ui/page-container';
+import { WebDetailShell } from '@/components/web-detail-shell';
 import { Spacing } from '@/constants/theme';
 import { useActivity } from '@/hooks/use-activity';
 import { Stack } from 'expo-router';
@@ -23,6 +24,7 @@ export default function ActivityScreen() {
   }, [markAllSeen]);
 
   return (
+    <WebDetailShell>
     <PageContainer>
       <Stack.Screen options={{ title: 'Activity' }} />
       <ThemedView style={styles.container}>
@@ -38,6 +40,7 @@ export default function ActivityScreen() {
         </ScrollView>
       </ThemedView>
     </PageContainer>
+    </WebDetailShell>
   );
 }
 

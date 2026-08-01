@@ -28,6 +28,18 @@ BOMedia internal operations app — Expo Router + React Native (react-native-pap
   - Expenses: `expenses/{YYYY-MM}/...`.
 - **Navigation:** root **Stack** (`src/app/_layout.tsx`) wraps a **`(tabs)` group**. Detail screens (`transaction/[id]`, `invoice`) live at root and push over the tabs (real back button — this fixed the "back goes Home" bug). Tab routes live in `src/app/(tabs)/`.
 - **Two nav chromes, shared routes:** `src/components/app-tabs.tsx` = native bottom bar (4 tabs: Home/Quote/New Sale/Records + **More** side menu); `src/components/app-tabs.web.tsx` = desktop sidebar (all 8 destinations). Secondary pages (Board, Clients, Expenses, Settings) are behind **More** on mobile.
+- **Root-stack routes on web need `WebDetailShell`.** `transaction/[id]`, `cash`
+  and `activity` live in the root Stack (deliberately — that is what gives them
+  a real back button and fixed the "back goes Home" bug). The sidebar is
+  rendered by the tabs navigator, so without help those routes cover the whole
+  window on web. `src/components/web-detail-shell.web.tsx` reproduces the
+  sidebar chrome around them; the native file is a passthrough, so mobile is
+  untouched. **Any new root-level route must wrap its content in
+  `<WebDetailShell>`.** `invoice.tsx` deliberately does not — it is a printable
+  full-bleed document. The sidebar's destinations live in
+  `src/constants/web-nav.ts`; add new ones there AND as a `TabTrigger` in
+  `app-tabs.web.tsx` (see the §7 parser gotcha — the triggers cannot be mapped
+  from the list).
 - **Web sophistication pattern:** prefer `Screen.web.tsx` variants (Metro auto-swaps) and `Platform.OS==='web'` / width checks over forking routes. Example live: `src/app/(tabs)/index.web.tsx`.
 - **Quality gate:** keep `npx tsc --noEmit` and `npx expo lint` green. Watch the newer lint rules: no components created during render (`react-hooks/static-components`), no ref access during render (`react-hooks/refs`), no `Array<T>` (use `T[]`).
 

@@ -12,6 +12,7 @@ import { deleteBatch } from '@/services/sales-repository';
 import { recordPayment, subscribeToPayments } from '@/services/payment-repository';
 import { attachPayments, describeMismatch } from '@/services/payment-reconciliation';
 import { PaymentHistory } from '@/components/records/payment-history';
+import { WebDetailShell } from '@/components/web-detail-shell';
 import type { PaymentEntry, PaymentMethod } from '@/components/records/types';
 import { withAlpha } from '@/utils/color';
 import { formatCurrency } from '@/utils/currency';
@@ -20,7 +21,7 @@ import { STATUS_META } from '@/utils/payment-status';
 import { SymbolView } from 'expo-symbols';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, Share, StyleSheet, View } from 'react-native';
+import { Alert, Linking, Platform, Pressable, Share, StyleSheet, View } from 'react-native';
 import { Portal, Surface } from 'react-native-paper';
 
 import { TransactionActionBar } from '@/components/records/transaction-action-bar';
@@ -146,15 +147,18 @@ ${itemsString}`;
 
   if (loading) {
     return (
+      <WebDetailShell>
       <View style={{ flex: 1, padding: Spacing.four, backgroundColor: theme.background, gap: Spacing.four }}>
         <LoadingSkeleton width="100%" height={100} borderRadius={16} />
         <LoadingSkeleton width="100%" height={200} borderRadius={16} />
       </View>
+      </WebDetailShell>
     );
   }
 
   if (!transaction) {
     return (
+      <WebDetailShell>
       <View style={{ flex: 1, backgroundColor: theme.background, justifyContent: 'center' }}>
         <Stack.Screen options={{ title: 'Not Found', headerBackVisible: true }} />
         <EmptyState
@@ -166,6 +170,7 @@ ${itemsString}`;
           <PrimaryButton onPress={() => router.back()}>Go Back</PrimaryButton>
         </View>
       </View>
+      </WebDetailShell>
     );
   }
 
@@ -184,6 +189,7 @@ ${itemsString}`;
   const initials = (transaction.clientName || 'U').substring(0, 2).toUpperCase();
 
   return (
+    <WebDetailShell>
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <Stack.Screen options={{ title: 'Transaction Details', headerBackVisible: true }} />
 
@@ -314,6 +320,7 @@ ${itemsString}`;
         />
       </Portal>
     </View>
+    </WebDetailShell>
   );
 }
 
@@ -322,7 +329,10 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.six,
   },
   stack: {
-    padding: Spacing.four,
+    // Native needs this inset; on web PageContainer already applies
+    // WebContentPaddingH, so adding it again would push this page's column
+    // 16px narrower than every other screen.
+    padding: Platform.OS === 'web' ? 0 : Spacing.four,
     gap: Spacing.four,
   },
   clientCard: {
