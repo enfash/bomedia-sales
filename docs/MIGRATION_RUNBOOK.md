@@ -151,17 +151,65 @@ fall through onto the item, which would have put already-delivered jobs back on
 the board as not started. If any of those four shows Queued after migrating,
 the fix regressed.
 
-### ⚠️ Two data anomalies that predate the migration
+### Documented correction — `-OxdknkSYS_9ADlSCqug`, 2026-08-01
 
-The migration carries both faithfully; neither is caused by it. Both are worth
-resolving in the app before or after, but they are **not** migration bugs.
+Recorded so the ledger's history shows this figure was changed **deliberately**,
+by a named person, for a stated reason — rather than a number that quietly moved
+between two dry runs.
 
-1. **`-OxdknkSYS_9ADlSCqug` is ₦10,800,000** — 97.6% of the entire ₦11,065,040
-   ledger, from a single record on 16 July. Either a genuinely large job or a
-   data-entry error with extra zeros.
-2. **The same record is overpaid by ₦100,000** — `totalPaid` ₦10,900,000
-   against `totalAmount` ₦10,800,000, so it derives to **Overpaid**. If the
-   total is wrong, so is the payment; check them together.
+**Node:** `sales/-OxdknkSYS_9ADlSCqug`
+**Corrected by:** Elijah, in the Firebase console
+**Date:** 2026-08-01, before the legacy migration was committed
+
+#### Values before correction
+
+| Field | Value |
+|---|---|
+| `clientName` | `"new"` |
+| `contact` | `elijahfasugba@gmail.com` |
+| `createdAt` | `2026-07-16T07:10:30.294Z` |
+| `material` | `Vinyl - Matte` |
+| `width` × `height` | `2` × `3` ft → 6 sqft |
+| `unitPrice` | `180` |
+| `quantity` | **`10000`** |
+| `total` | **`10800000`** |
+| `amountPaid` | **`10900000`** |
+| `productionStage` | `Delivered` |
+
+#### Why it was corrected
+
+1. **It was 97.6% of the entire ledger.** ₦10,800,000 of a ₦11,065,040 total,
+   from one record. Every revenue, outstanding and net figure in the app was
+   dominated by this single line.
+2. **The total was arithmetically correct but the inputs were not.**
+   6 sqft × ₦180 × 10,000 = ₦10,800,000 exactly — so this was never a
+   stray-zeros error in `total`. The implausible field is `quantity: 10000`,
+   ten thousand units of a 2×3ft banner.
+3. **It carried the marks of a test entry** — a placeholder client name
+   (`"new"`) and the developer's own email address as the contact.
+4. **`amountPaid` exceeded `total` by a round ₦100,000**, so the batch derived
+   to **Overpaid** — a status no genuine fully-settled sale should show.
+
+#### Values after correction
+
+> Fill in once the console edit is made, then re-run the dry run and paste the
+> new grand total here. If the node was deleted rather than corrected, say so
+> and record the resulting record/batch counts.
+
+| Field | Value |
+|---|---|
+| `quantity` | |
+| `total` | |
+| `amountPaid` | |
+
+**Ledger before:** ₦11,065,040 across 8 legacy records → 6 batches.
+**Ledger after:** _record here._
+
+> ⚠️ **The dry run MUST be re-run after any console edit.** The plan is computed
+> from live data on every invocation — per-record totals, `grandTotalBefore`,
+> `grandTotalAfter` and the delta are all read fresh. Committing against the
+> figures above without re-running means committing against a plan nobody
+> reviewed.
 
 ---
 
