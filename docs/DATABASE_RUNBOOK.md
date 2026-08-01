@@ -11,6 +11,26 @@
 > The incident that led to the wipe is recorded in
 > [`INCIDENT_2026-08-01-data-loss.md`](INCIDENT_2026-08-01-data-loss.md).
 
+## Wipe of 2026-08-01 — what happened
+
+The entire transactional database was deleted and restarted clean.
+
+| Node | Records | Value |
+|---|---:|---:|
+| `sales` | 14 | ₦1,002,689 |
+| `quotes` | 2 | ₦31,140 |
+| `activity` | 16 | — |
+| `expenses` | 2 | ₦13,005,000 |
+| **Total** | **34** | **₦14,038,829** |
+
+`users` (one admin account) and `settings` (11 materials, 1 printer, business
+profile, metrics) were protected and verified intact afterwards by two
+independent reads.
+
+All of it was test data. The ₦13m "Machinery" expense and the ₦10.8m `new` sale
+were the two largest entries and both were fabricated, which is why every
+dashboard figure before this date was meaningless.
+
 ---
 
 ## Write access at root depth — read this before any bulk operation
@@ -49,9 +69,25 @@ read, which looks like a credentials problem and is not.
 > one-off script through — that weakens the app permanently to save a temporary
 > inconvenience.
 
-`scripts/wipe-test-data.ts` is the worked example: allow-list of touchable
-nodes, `users` and `settings` protected by two guards, dry run by default, and
-read-back verification after committing.
+### The worked example
+
+`scripts/wipe-test-data.ts` was deleted after the wipe — it could not typecheck
+once `firebase-admin` was removed, and uncompilable code in the tree breaks CI
+for everyone. Recover it from git when you need a starting point:
+
+```bash
+git show 4c74502602338d805062f05d8873f5b429ea8632opying:
+
+- an **allow-list** of nodes the script may touch, and a **protected list**
+  (`users`, `settings`) checked twice — once when building the target list, once
+  immediately before the destructive call
+- targets **hardcoded**, not taken from argv, so no flag can redirect it
+- **dry run by default**; `--commit` is opt-in, and anything unusually
+  destructive gets its own flag on top (`--include-expenses`)
+- print **every record** it will touch with counts and monetary totals, so the
+  figures can be checked against an independent survey first
+- after committing, **read back** every node it wrote or deleted, confirm the
+  protected nodes survived, and exit non-zero on any mismatch
 
 ---
 

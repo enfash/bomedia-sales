@@ -1,7 +1,16 @@
 # Incident 2026-08-01 — two genuine orders deleted with the test data
 
-**Status:** unresolved. Do not run the migration until this is closed.
-**Nothing further has been written to the database.**
+**Status:** CLOSED — superseded by the wipe of 2026-08-01.
+
+The rest of the sales tree was subsequently judged test data too, and the whole
+database was wiped and restarted clean rather than migrated. `old school` and
+`New ade` were not recovered; they went with everything else. The values below
+remain the only record that those two orders existed.
+
+**No pre-wipe export could be verified.** The user confirmed one was saved, but
+it was not present under `~/Downloads`, `~/Desktop`, `~/Documents` or
+`~/backups` at the time of the wipe. Recorded here as fact, not blame: if the
+export does exist, these records are recoverable from it.
 
 ## What happened
 
