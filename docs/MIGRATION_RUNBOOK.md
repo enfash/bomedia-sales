@@ -131,6 +131,62 @@ Open Records and a few transaction details. Check that migrated sales show the
 right client, totals and item counts, and that the subtotal plus any adjustment
 rows equals the total on screen.
 
+### Concrete post-migration checks
+
+Taken from the dry run of 2026-08-01 (8 legacy records -> 6 batches, delta ₦0).
+These are specific expected values, not general assertions — if any differ, stop.
+
+| Batch | Expect |
+|---|---|
+| `1784205859988` | 2 items, total **₦107,300**, **Paid** |
+| `1784301143681` | 2 items, total **₦80,160**, **Paid**, due "August 1 2026", note "Thank you" |
+| `-Oxdnea1Gezarkdnmn4_` | total ₦1,500, **Paid**, stage **Delivered** |
+| `-Oxdnea42Yebjqc1oCj4` | total ₦30,000, **Paid**, stage **Delivered** |
+| `-Oxdnea5YYawve4O3W9Y` | total ₦46,080, **Paid**, stage **Delivered** |
+| `-OxdknkSYS_9ADlSCqug` | total ₦10,800,000, stage **Delivered**, status **Overpaid** — see below |
+
+**Four of the six must read "Delivered" on the production board.** An earlier
+version of the planner hardcoded `Queued` on the batch and let the real stage
+fall through onto the item, which would have put already-delivered jobs back on
+the board as not started. If any of those four shows Queued after migrating,
+the fix regressed.
+
+### ⚠️ Two data anomalies that predate the migration
+
+The migration carries both faithfully; neither is caused by it. Both are worth
+resolving in the app before or after, but they are **not** migration bugs.
+
+1. **`-OxdknkSYS_9ADlSCqug` is ₦10,800,000** — 97.6% of the entire ₦11,065,040
+   ledger, from a single record on 16 July. Either a genuinely large job or a
+   data-entry error with extra zeros.
+2. **The same record is overpaid by ₦100,000** — `totalPaid` ₦10,900,000
+   against `totalAmount` ₦10,800,000, so it derives to **Overpaid**. If the
+   total is wrong, so is the payment; check them together.
+
+---
+
+## 5a. Stage 2 gate — a concrete check, not a general assertion
+
+Both multi-record batches are **fully paid today**:
+
+| Batch | totalAmount | totalPaid |
+|---|---|---|
+| `1784205859988` | ₦107,300 | ₦107,300 |
+| `1784301143681` | ₦80,160 | ₦80,160 |
+
+Stage 2 converts `totalPaid` into a synthetic opening payment entry. **After
+Stage 2's migration, both of these must still read Paid, immediately, with no
+outstanding balance.**
+
+> If either shows **Partial**, Stage 2's migration is wrong. Do not investigate
+> the UI — the opening entry did not carry the full amount, and every other
+> fully-paid invoice in the ledger is wrong the same way.
+
+Check these two by name. They are the strongest available test because they are
+multi-record: their `totalPaid` is the sum of two separate `amountPaid` values
+(₦62,500 + ₦44,800, and ₦60,000 + ₦20,160), so an opening entry that takes only
+one record's payment still looks plausible in isolation but fails here.
+
 ---
 
 ## 6. Delete the legacy shim

@@ -123,6 +123,8 @@ export function planLegacyMigration(root: any): MigrationPlan {
   interface Accum {
     batchId: string;
     base: Omit<StoredBatch, 'items'> & { items: Record<string, StoredItem> };
+    /** Batch-level keys already taken from a record, so the first wins. */
+    lifted: Set<keyof Accum['base']>;
     oldPaths: string[];
     rawLineTotals: number[];
     totalPaid: number;
@@ -139,18 +141,17 @@ export function planLegacyMigration(root: any): MigrationPlan {
         batchId,
         base: {
           receiptId: batchId,
-          clientName: node.clientName || 'Unknown Client',
-          contact: node.contact || '',
-          createdAt: node.createdAt || new Date().toISOString(),
+          clientName: 'Unknown Client',
+          contact: '',
+          createdAt: new Date().toISOString(),
           totalAmount: 0,
           deliveryCost: 0,
           totalPaid: 0,
-          paymentMethod: node.paymentMethod || 'Transfer',
+          paymentMethod: 'Transfer',
           productionStage: 'Queued',
-          ...(node.notes ? { notes: node.notes } : {}),
-          ...(node.dueDate ? { dueDate: node.dueDate } : {}),
           items: {},
         },
+        lifted: new Set(),
         oldPaths: [],
         rawLineTotals: [],
         totalPaid: 0,
@@ -160,9 +161,32 @@ export function planLegacyMigration(root: any): MigrationPlan {
     const group = groups[batchId];
     const index = Object.keys(group.base.items).length;
 
+    // Batch-level fields: take the first non-empty value seen across the WHOLE
+    // group, not just whatever the first record happened to carry. In this data
+    // `productionStage` is set on one record of a pair and absent on the other,
+    // so reading only the first would depend on key iteration order.
+    const lift = (key: keyof Accum['base'], value: any) => {
+      if (value === undefined || value === null || value === '') return;
+      if (group.lifted.has(key)) return;
+      (group.base as any)[key] = value;
+      group.lifted.add(key);
+    };
+    lift('clientName', node.clientName);
+    lift('contact', node.contact);
+    lift('createdAt', node.createdAt);
+    lift('paymentMethod', node.paymentMethod);
+    lift('notes', node.notes);
+    lift('dueDate', node.dueDate);
+    // PRODUCTION STAGE IS BATCH-LEVEL. Without this it fell through into the
+    // item spread below and the batch kept its 'Queued' default — which would
+    // have put already-delivered jobs back on the board as not started.
+    // `adaptLegacyRecords` reads it today, so dropping it here would be a
+    // regression against what the app currently shows.
+    lift('productionStage', node.productionStage);
+
     // Strip the batch-level fields off the item; they live on the batch node.
     const { batchId: _b, amountPaid, clientName, contact, createdAt, paymentMethod,
-            notes, dueDate, ...itemFields } = node;
+            notes, dueDate, productionStage, ...itemFields } = node;
 
     const rawTotal = Number(node.total) || 0;
     group.rawLineTotals.push(rawTotal);

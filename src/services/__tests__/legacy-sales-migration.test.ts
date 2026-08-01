@@ -174,6 +174,73 @@ describe('planLegacyMigration', () => {
     }
   });
 
+  /* ---------------------------------------------------------------- *
+   * BATCH-LEVEL FIELDS MUST NOT FALL THROUGH ONTO THE ITEM.
+   *
+   * `productionStage` is batch-level in the canonical model. An earlier version
+   * of this planner hardcoded 'Queued' on the batch and let the raw value land
+   * in the item spread, where nothing reads it — which would have put already-
+   * delivered jobs back on the board as not started. `adaptLegacyRecords` reads
+   * it correctly today, so losing it here would regress against what the app
+   * currently shows.
+   * ---------------------------------------------------------------- */
+  describe('batch-level fields', () => {
+    it('carries productionStage onto the batch, not the item', () => {
+      const plan = planLegacyMigration({
+        rec_1: legacyRecord({ productionStage: 'Delivered' }),
+      });
+      expect(plan.batches[0].node.productionStage).toBe('Delivered');
+      expect((plan.batches[0].node.items!.item_0 as any).productionStage).toBeUndefined();
+    });
+
+    it('defaults to Queued only when no record carries a stage', () => {
+      const plan = planLegacyMigration({ rec_1: legacyRecord({ productionStage: undefined }) });
+      expect(plan.batches[0].node.productionStage).toBe('Queued');
+    });
+
+    // The real shape of this data: one record of a pair has the stage, the
+    // other does not. Reading only the first record would make the result
+    // depend on key iteration order.
+    it('finds the stage on ANY record of a group, not just the first', () => {
+      const stageOnSecond = planLegacyMigration({
+        a: legacyRecord({ batchId: 'INV-1', productionStage: undefined }),
+        b: legacyRecord({ batchId: 'INV-1', productionStage: 'Delivered' }),
+      });
+      expect(stageOnSecond.batches[0].node.productionStage).toBe('Delivered');
+
+      const stageOnFirst = planLegacyMigration({
+        a: legacyRecord({ batchId: 'INV-1', productionStage: 'Delivered' }),
+        b: legacyRecord({ batchId: 'INV-1', productionStage: undefined }),
+      });
+      expect(stageOnFirst.batches[0].node.productionStage).toBe('Delivered');
+    });
+
+    it('lifts notes and dueDate from whichever record carries them', () => {
+      const plan = planLegacyMigration({
+        a: legacyRecord({ batchId: 'INV-1' }),
+        b: legacyRecord({ batchId: 'INV-1', notes: 'Thank you', dueDate: 'August 1 2026' }),
+      });
+      expect(plan.batches[0].node.notes).toBe('Thank you');
+      expect(plan.batches[0].node.dueDate).toBe('August 1 2026');
+    });
+
+    it('keeps the first non-empty value when records disagree', () => {
+      const plan = planLegacyMigration({
+        a: legacyRecord({ batchId: 'INV-1', clientName: 'Acme Signs' }),
+        b: legacyRecord({ batchId: 'INV-1', clientName: 'Someone Else' }),
+      });
+      expect(plan.batches[0].node.clientName).toBe('Acme Signs');
+    });
+
+    it('writes no bookkeeping keys onto the node', () => {
+      const plan = planLegacyMigration({ rec_1: legacyRecord() });
+      for (const key of Object.keys(plan.batches[0].node)) {
+        expect(key.startsWith('__')).toBe(false);
+        expect(key).not.toBe('lifted');
+      }
+    });
+  });
+
   it('leaves already-migrated batches alone and counts them', () => {
     const plan = planLegacyMigration({
       '2026': { '07': { '15': { 'INV-1': { clientName: 'Acme', items: { item_0: {} } } } } },
