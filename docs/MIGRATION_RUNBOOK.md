@@ -236,9 +236,35 @@ judgement about a real customer, and the data does not settle it.
 > value works, the migration groups on it. If it is test data, delete all three
 > and the question disappears.
 
-The round-number signal proved weak across this dataset: ₦46,080, ₦62,500,
-₦44,800 and ₦20,160 are all irregular. Only the developer-email and
-placeholder-name signals discriminated.
+### Which signals actually discriminated — read this before reusing them
+
+Recorded so the same reasoning is not misapplied to future data.
+
+**The irregular-amounts signal was a FALSE NEGATIVE.** ₦46,080, ₦62,500 and
+₦20,160 look like considered prices, and that was read as evidence against
+fabrication. It is not evidence of anything. Line totals are *computed* —
+`quantity × unitPrice × area` — so they come out irregular no matter what is
+typed into the form. A test entry and a real sale produce equally irregular
+numbers. **Never treat the shape of a computed total as a signal about the
+intent behind it.**
+
+**Missing `contact` does not discriminate either.** It is absent on 7 of 8
+records, including both genuine orders. What discriminated was the *presence*
+of a specific value — the developer's own email — on exactly one record.
+
+| Signal | Discriminating? | Why |
+|---|---|---|
+| `clientName` free text | **yes** | typed by a human, so it carries intent |
+| `contact` = developer's own email | **yes** | 1/8, and unambiguous |
+| `contact` absent | no | 7/8, including both genuine orders |
+| `quantity` implausible (10000) | **yes** | typed, and physically absurd |
+| Total is a round figure | no | computed |
+| Total is an irregular figure | **no — false negative** | computed |
+| Burst timestamps | no | a multi-item submit looks identical |
+
+The rule that survives: **only free-text fields a human typed carry intent.**
+Computed and generated values — totals, timestamps, push IDs — describe how the
+record was written, not why.
 
 ---
 
@@ -281,45 +307,48 @@ between two dry runs.
 4. **`amountPaid` exceeded `total` by a round ₦100,000**, so the batch derived
    to **Overpaid** — a status no genuine fully-settled sale should show.
 
-#### Outcome
+#### Outcome — DELETED AS TEST DATA, all four
 
-> Fill in after the console edit, then re-run the dry run and paste the new
-> grand total. Record ONE of the two outcomes below and delete the other.
+Decided by Elijah, 2026-08-01. Not corrected: no plausible quantity was invented
+for a sale that never happened, because a corrected figure implies a real job
+and a future reader could not tell the difference.
 
-**Outcome A — deleted as test data.** Use this if `clientName` was a
-placeholder. Say *deleted as test data*; do not invent a plausible quantity for
-a sale that never happened, because a corrected figure implies a real job and a
-future reader has no way to tell the difference.
+| Push key | Client | Total | Deleted |
+|---|---|---:|---|
+| `-OxdknkSYS_9ADlSCqug` | `new` | ₦10,800,000 | ✓ |
+| `-Oxdnea1Gezarkdnmn4_` | `nw andn` | ₦1,500 | ✓ |
+| `-Oxdnea42Yebjqc1oCj4` | `nw andn` | ₦30,000 | ✓ |
+| `-Oxdnea5YYawve4O3W9Y` | `nw andn` | ₦46,080 | ✓ |
 
-| | |
-|---|---|
-| Action | node removed entirely |
-| Reason | placeholder client name `new` / developer's own contact / `quantity: 10000` — test entry |
-| Records after | 7 legacy → 5 batches |
-| Ledger after | ₦265,040 |
+**Reason.** `new` carried a placeholder name, the developer's own email and
+`quantity: 10000`. `nw andn` is `new` and-something typed fast in the same
+session twelve minutes later (07:10:30 → 07:22:59) — a mistyped continuation of
+the same test, not a customer name. The three were written 3ms apart under that
+one name, so they were a single submit.
 
-If the three `nw andn` records are deleted as well, it is **4 legacy records →
-2 batches, ₦187,460**.
+The `-OxdknkSYS_9ADlSCqug` values above are the pre-correction record required
+by step 3's pre-correction export: `quantity 10000`, `total 10800000`,
+`amountPaid 10900000`, overpaid by ₦100,000.
 
-**Outcome B — corrected as a genuine sale.**
+#### Expected after deletion — check the re-run dry run against this
 
-| Field | Before | After |
-|---|---|---|
-| `quantity` | `10000` | |
-| `total` | `10800000` | |
-| `amountPaid` | `10900000` | |
+| | Before | After |
+|---|---:|---:|
+| Legacy records | 8 | **4** |
+| Batches | 6 | **2** |
+| Ledger | ₦11,065,040 | **₦187,460** |
 
-At ₦180/sqft across 6 sqft each unit is ₦1,080, so `total` must equal
-`1080 × quantity`. Nothing recomputes it for legacy records — edit all three
-fields together or the node is left internally inconsistent, and the migration
-will preserve that inconsistency faithfully.
+Both survivors are fully paid:
 
-**The same choice applies to the three sequential records** if they turn out to
-be from the same burst. Record them here the same way, by ID, with the same
-*deleted as test data* wording.
+| Batch | Client | Total | Paid |
+|---|---|---:|---:|
+| `1784205859988` | `old school` | ₦107,300 | ₦107,300 |
+| `1784301143681` | `New ade` | ₦80,160 | ₦80,160 |
 
-**Ledger before:** ₦11,065,040 across 8 legacy records → 6 batches.
-**Ledger after:** _record here, from the re-run dry run._
+Delta must still be **₦0** — every surviving total is already whole naira.
+
+> If the re-run reports anything other than 4 records → 2 batches at ₦187,460,
+> stop. Either a deletion did not take, or one removed more than intended.
 
 **Ledger before:** ₦11,065,040 across 8 legacy records → 6 batches.
 **Ledger after:** _record here._
