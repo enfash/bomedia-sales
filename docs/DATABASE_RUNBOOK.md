@@ -180,16 +180,26 @@ Enter one deliberate small job priced **below the ₦1,000 MOV** — e.g. 2ft ×
 
 ## Stage 2 gate — deploy the rules, then six real-payment checks
 
-### 1. Deploy the payment rules — NOT YET DONE
+### 1. Deploy the payment rules — ✅ DONE 2026-08-01
 
-`database.rules.json` contains the `payments` node but it is **not live**. Until
-it is deployed, the app writes ledger entries that nothing is enforcing: they
-can be edited, deleted, or written into another user's bucket.
+Released to `bomedia-official-default-rtdb`. The ledger is now enforced: entries
+are create-only for everyone including admin, `byUid` must match both `auth.uid`
+and the path segment, a negative amount is rejected unless it carries
+`reversalOf` and a non-empty `reversalReason`, and reversals are admin-only.
+
+The stored CLI token had expired and needed `firebase login --reauth` (a browser
+flow) before `firebase deploy --only database` would run. Expect that again next
+time — the token expires on its own schedule, and the 401 it produces reads like
+a project-permissions error rather than an expiry.
 
 ```bash
 firebase login --reauth      # the stored token expires; this opens a browser
 firebase deploy --only database
 ```
+
+`firebase-tools` prints a `url.parse()` DeprecationWarning mid-deploy. It comes
+from the CLI's own `getDatabaseUrl`, not from this project's config, and the
+deploy succeeds regardless.
 
 The change is **purely additive** — verified by parsing both versions and
 diffing: `payments` added, no existing node semantically changed (the rest of
