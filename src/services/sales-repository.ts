@@ -24,7 +24,8 @@ import type {
   TurnaroundTime,
 } from '@/components/records/types';
 import { dbService } from '@/services/db';
-import { isPastDue } from '@/utils/date';
+import { buildPaymentWrite, recordPayment, type PaymentActor } from '@/services/payment-repository';
+import { isPastDue, localDayKey } from '@/utils/date';
 import { roundNaira } from '@/utils/money';
 import { computePaymentStatus, STATUS_META } from '@/utils/payment-status';
 
@@ -205,6 +206,8 @@ export interface NewBatchInput {
   items: StoredItem[];
   notes?: string;
   dueDate?: string;
+  /** Who is taking the sale — needed to attribute any advance payment. */
+  actor: PaymentActor;
 }
 
 /** Persist a new sale under today's date bucket. Returns its dbPath. */
@@ -242,7 +245,31 @@ export async function createBatch(input: NewBatchInput): Promise<string> {
     items,
   };
 
-  await dbService.setRecord(dbPath, node);
+  // An advance taken at the counter IS a payment. Without a ledger entry it
+  // would sit in `totalPaid` untraceable, and the day's drawer would be short
+  // by every deposit taken — deposits being the most common cash of all.
+  //
+  // The batch and the opening entry go in ONE atomic update: a sale that
+  // recorded an advance which never reached the ledger is exactly the
+  // inconsistency this stage exists to remove.
+  const opening = roundNaira(input.totalPaid);
+  if (opening > 0) {
+    const dayKey = localDayKey(now);
+    const key = dbService.newKey(`payments/${dayKey}/${input.actor.uid}`);
+    const write = buildPaymentWrite({
+      batch: { dbPath, id: input.receiptId, receiptId: input.receiptId },
+      amount: opening,
+      method: input.paymentMethod,
+      actor: input.actor,
+      key,
+      note: 'Advance taken at sale',
+      now,
+    });
+    await dbService.updateAtomic({ [dbPath]: node, [write.paymentPath]: write.entry });
+  } else {
+    await dbService.setRecord(dbPath, node);
+  }
+
   return dbPath;
 }
 
@@ -254,19 +281,34 @@ export async function updateProductionStage(
   await dbService.updateRecord(batch.dbPath, { productionStage: stage });
 }
 
-/** Add a payment to a batch (batch-level totalPaid). */
-export async function recordPayment(batch: SalesBatch, amount: number): Promise<void> {
-  const next = (batch.totalPaid || 0) + amount;
-  await dbService.updateRecord(batch.dbPath, { totalPaid: next });
-}
-
-/** Mark one or more batches fully paid. */
-export async function markBatchesPaid(batches: SalesBatch[]): Promise<void> {
-  const updates: Record<string, number> = {};
+/**
+ * Mark one or more batches fully paid, by RECORDING A PAYMENT for the
+ * outstanding balance on each — never by overwriting `totalPaid`.
+ *
+ * The old version set `totalPaid = totalAmount` directly, which created money
+ * with no ledger entry: the drawer would be short by the whole amount and
+ * nothing would say who marked it or how it was taken. Every naira in
+ * `totalPaid` must be traceable to an entry.
+ *
+ * `method` is required rather than defaulted — bulk-marking ten invoices paid
+ * by unspecified means puts ten untraceable entries in the day's reconciliation.
+ */
+export async function markBatchesPaid(
+  batches: SalesBatch[],
+  method: PaymentMethod,
+  actor: PaymentActor,
+): Promise<void> {
   for (const batch of batches) {
-    updates[`${batch.dbPath}/totalPaid`] = batch.totalAmount;
+    const outstanding = roundNaira(batch.totalBalance ?? batch.totalAmount - batch.totalPaid);
+    if (outstanding <= 0) continue; // already settled — do not write a zero entry
+    await recordPayment({
+      batch,
+      amount: outstanding,
+      method,
+      actor,
+      note: 'Marked paid in bulk from Records',
+    });
   }
-  await dbService.updateRecord('/', updates);
 }
 
 /** Update editable batch details (notes / due date), across one or more batches. */

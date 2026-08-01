@@ -2,7 +2,6 @@
   "rules": {
     ".read": false,
     ".write": false,
-
     "users": {
       ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
       "$uid": {
@@ -13,43 +12,70 @@
         }
       }
     },
-
     "sales": {
       ".read": "auth != null",
-      "$y": { "$m": { "$d": { "$id": {
-        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'staff' && !data.exists() && newData.exists()))",
-        "totalPaid": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'staff')"
-        },
-        "productionStage": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'staff')"
+      "$y": {
+        "$m": {
+          "$d": {
+            "$id": {
+              ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'staff' && !data.exists() && newData.exists()))",
+              "totalPaid": {
+                ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'staff')"
+              },
+              "productionStage": {
+                ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'staff')"
+              }
+            }
+          }
         }
-      } } } }
+      }
     },
-
     "quotes": {
       ".read": "auth != null",
-      "$y": { "$m": { "$d": { "$id": {
-        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'staff' && newData.exists()))"
-      } } } }
+      "$y": {
+        "$m": {
+          "$d": {
+            "$id": {
+              ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'staff' && newData.exists()))"
+            }
+          }
+        }
+      }
     },
-
     "expenses": {
       ".read": "auth != null",
-      "$month": { "$id": {
-        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'staff' && newData.exists() && !data.exists() && newData.child('uid').val() === auth.uid))"
-      } }
+      "$month": {
+        "$id": {
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'staff' && newData.exists() && !data.exists() && newData.child('uid').val() === auth.uid))"
+        }
+      }
     },
-
     "settings": {
       ".read": "auth != null",
       ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
     },
-
     "activity": {
       ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
       "$id": {
         ".write": "auth != null && !data.exists() && newData.exists()"
+      }
+    },
+    "payments": {
+      "$day": {
+        ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+        "$uid": {
+          ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || auth.uid === $uid)",
+          "$paymentId": {
+            ".write": "auth != null && !data.exists() && newData.exists() && auth.uid === $uid && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'staff') && (!newData.hasChild('reversalOf') || root.child('users').child(auth.uid).child('role').val() === 'admin')",
+            ".validate": "newData.hasChildren(['amount','method','at','atMs','byUid','receiptId','batchPath']) && newData.child('amount').isNumber() && newData.child('byUid').val() === auth.uid && newData.child('byUid').val() === $uid && newData.child('method').isString() && newData.child('atMs').isNumber() && (newData.child('amount').val() > 0 || (newData.hasChild('reversalOf') && newData.hasChild('reversalReason') && newData.child('reversalReason').isString() && newData.child('reversalReason').val().length > 0))",
+            "amount": {
+              ".validate": "newData.isNumber()"
+            },
+            "byUid": {
+              ".validate": "newData.val() === auth.uid"
+            }
+          }
+        }
       }
     }
   }

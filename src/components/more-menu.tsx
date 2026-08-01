@@ -47,7 +47,10 @@ export function MoreMenu({ visible, onClose, counts = {} }: MoreMenuProps) {
   const items = [
     ...MORE_ITEMS.filter((i) => i.href !== '/settings' || isAdmin),
     ...(isAdmin
-      ? [{ href: '/activity', label: 'Activity', icon: 'bell', desc: "Your team's recent actions", badgeColor: theme.error } as const]
+      ? [
+          { href: '/cash', label: 'Daily Cash', icon: 'dollar-sign', desc: 'Count the drawer against the ledger', badgeColor: STATUS_META.Paid.color } as const,
+          { href: '/activity', label: 'Activity', icon: 'bell', desc: "Your team's recent actions", badgeColor: theme.error } as const,
+        ]
       : []),
   ];
 

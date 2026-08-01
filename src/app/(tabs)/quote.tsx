@@ -16,7 +16,9 @@ import {
   subscribeToQuotes,
   updateQuoteDetails,
 } from '@/services/quote-repository';
+import { useAuth } from '@/context/auth-context';
 import { useSettings } from '@/context/settings-context';
+import { actorFrom } from '@/services/activity';
 import { formatCurrency } from '@/utils/currency';
 import { computeBatchTotals } from '@/utils/money';
 import { formatDate } from '@/utils/date';
@@ -37,6 +39,7 @@ export default function QuoteScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { settings } = useSettings();
+  const { user } = useAuth();
   const clientInfoRef = useRef<ClientInfoRef>(null);
 
   // 'list' = saved quotes; 'new' = the entry form.
@@ -128,7 +131,7 @@ Estimated total: ${formatCurrency(quote.totalAmount)}`;
 
   const handleConvert = async (quote: QuoteRecord) => {
     try {
-      await convertQuoteToSale(quote);
+      await convertQuoteToSale(quote, actorFrom(user));
       showConverted();
     } catch (e) {
       if (e instanceof MissingQuoteInfoError) {
@@ -152,7 +155,10 @@ Estimated total: ${formatCurrency(quote.totalAmount)}`;
     setPendingQuote(null);
     try {
       await updateQuoteDetails(quote, { clientName: modalName.trim(), contact: modalContact.trim() });
-      await convertQuoteToSale({ ...quote, clientName: modalName.trim(), contact: modalContact.trim() });
+      await convertQuoteToSale(
+        { ...quote, clientName: modalName.trim(), contact: modalContact.trim() },
+        actorFrom(user),
+      );
       showConverted();
     } catch (e: any) {
       Alert.alert('Could not convert', e.message);

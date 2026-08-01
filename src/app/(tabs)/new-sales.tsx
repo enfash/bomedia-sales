@@ -84,6 +84,8 @@ export default function NewSalesScreen() {
         totalPaid: parseFloat(advancePayment) || 0,
         paymentMethod,
         items: batchItems,
+        // Attributes the advance to whoever is at the counter.
+        actor: actorFrom(user),
       });
 
       logActivity({

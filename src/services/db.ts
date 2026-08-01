@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase';
-import { get, onValue, orderByChild, push, query, ref, remove, set, update } from 'firebase/database';
+import { get, increment, onValue, orderByChild, push, query, ref, remove, set, update } from 'firebase/database';
 
 /**
  * Firebase Realtime Database Service Wrapper
@@ -12,6 +12,9 @@ import { get, onValue, orderByChild, push, query, ref, remove, set, update } fro
  * undefined keys before every write so this class of error can't happen.
  */
 function stripUndefined<T>(value: T): T {
+  // Server-value sentinels (increment) are opaque objects the SDK resolves
+  // server-side. Recursing into them would strip their internals.
+  if (value && typeof value === 'object' && '.sv' in (value as any)) return value;
   if (Array.isArray(value)) {
     return value.map((v) => stripUndefined(v)) as unknown as T;
   }
@@ -57,6 +60,45 @@ export const dbService = {
     const newRef = push(ref(db, path));
     await set(newRef, stripUndefined(data));
     return newRef.key;
+  },
+
+  /**
+   * Generate a push key WITHOUT writing, so the caller can include the key in a
+   * multi-path update. Keys are produced client-side, so this needs no round
+   * trip and works offline.
+   */
+  newKey(path: string): string {
+    const key = push(ref(db, path)).key;
+    if (!key) throw new Error(`Could not generate a key under ${path}`);
+    return key;
+  },
+
+  /**
+   * Atomic multi-path update from the database root.
+   *
+   * Every path in `updates` is applied or none of them are. This is the only
+   * safe way to write a value alongside a counter it must agree with — two
+   * sequential writes can leave the pair inconsistent forever if the second
+   * fails.
+   *
+   * Paths are absolute and slash-separated, e.g.
+   *   { 'payments/2026-08-01/uid/-Nx…': entry,
+   *     'sales/2026/08/01/INV-…/totalPaid': dbService.increment(5000) }
+   */
+  async updateAtomic(updates: Record<string, any>): Promise<void> {
+    await update(ref(db), stripUndefined(updates));
+  },
+
+  /**
+   * Server-side atomic increment.
+   *
+   * Applied by the server, so two devices incrementing the same counter both
+   * land — unlike a client-side read-modify-write, where the second write
+   * silently overwrites the first. Offline, the SDK resolves it locally as an
+   * estimate and re-applies it atomically on reconnect.
+   */
+  increment(delta: number) {
+    return increment(delta);
   },
 
   /**

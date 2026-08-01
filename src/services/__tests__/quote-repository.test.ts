@@ -13,6 +13,8 @@ import { makeRecord } from '@/test-support/factories';
 /** Captures whatever createBatch persists so we can assert on the written node. */
 const written: { path: string; node: StoredBatch }[] = [];
 
+const ACTOR = { uid: 'uid-test', name: 'Tester' };
+
 jest.mock('@/services/db', () => ({
   dbService: {
     setRecord: jest.fn(async (path: string, node: any) => {
@@ -50,7 +52,7 @@ function makeQuote(over: Partial<QuoteRecord> = {}): QuoteRecord {
 describe('convertQuoteToSale', () => {
   it('writes a sale whose total is identical to the quote total', async () => {
     const quote = makeQuote();
-    await convertQuoteToSale(quote);
+    await convertQuoteToSale(quote, ACTOR);
 
     expect(written).toHaveLength(1);
     expect(written[0].node.totalAmount).toBe(quote.totalAmount);
@@ -59,7 +61,7 @@ describe('convertQuoteToSale', () => {
 
   it('carries the subtotal and every adjustment across unchanged', async () => {
     const quote = makeQuote();
-    await convertQuoteToSale(quote);
+    await convertQuoteToSale(quote, ACTOR);
 
     const node = written[0].node;
     expect(node.subtotal).toBe(quote.subtotal);
@@ -67,7 +69,7 @@ describe('convertQuoteToSale', () => {
   });
 
   it('keeps the sale internally consistent: subtotal + adjustments === total', async () => {
-    await convertQuoteToSale(makeQuote());
+    await convertQuoteToSale(makeQuote(), ACTOR);
 
     const node = written[0].node;
     const summed = (node.adjustments ?? []).reduce((sum, a) => sum + a.amount, node.subtotal ?? 0);
@@ -82,7 +84,7 @@ describe('convertQuoteToSale', () => {
    */
   it('does not re-price against a MOV that changed after the quote was given', async () => {
     const quote = makeQuote();
-    await convertQuoteToSale(quote);
+    await convertQuoteToSale(quote, ACTOR);
     expect(written[0].node.totalAmount).toBe(3000);
     expect(written[0].node.adjustments).toEqual(quote.adjustments);
   });
@@ -95,25 +97,25 @@ describe('convertQuoteToSale', () => {
       totalAmount: 12_000,
       deliveryCost: 0,
     });
-    await convertQuoteToSale(quote);
+    await convertQuoteToSale(quote, ACTOR);
     expect(written[0].node.totalAmount).toBe(12_000);
     expect(written[0].node.subtotal).toBe(12_000);
   });
 
   it('starts the sale unpaid regardless of the quote', async () => {
-    await convertQuoteToSale(makeQuote());
+    await convertQuoteToSale(makeQuote(), ACTOR);
     expect(written[0].node.totalPaid).toBe(0);
   });
 
   it('refuses to convert a quote with no client name', async () => {
-    await expect(convertQuoteToSale(makeQuote({ clientName: '' }))).rejects.toThrow(
+    await expect(convertQuoteToSale(makeQuote({ clientName: '' }), ACTOR)).rejects.toThrow(
       /client name/i,
     );
     expect(written).toHaveLength(0);
   });
 
   it('refuses to convert a quote with no items', async () => {
-    await expect(convertQuoteToSale(makeQuote({ records: [] }))).rejects.toThrow(
+    await expect(convertQuoteToSale(makeQuote({ records: [] }), ACTOR)).rejects.toThrow(
       /at least one item/i,
     );
     expect(written).toHaveLength(0);

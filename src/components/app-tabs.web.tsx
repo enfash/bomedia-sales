@@ -88,6 +88,9 @@ export default function AppTabs() {
               {/* Activity is a root-stack route (not a tab), so it's a plain
                   navigation button rather than a TabTrigger. Non-trigger children
                   are fine here — the divider above is one too. */}
+              {/* Daily Cash is a root-stack route, not a tab, so it navigates
+                  directly rather than through a TabTrigger. */}
+              <SidebarCashButton />
               <SidebarActivityButton />
             </>
           ) : null}
@@ -108,6 +111,36 @@ export default function AppTabs() {
  * Sidebar nav button for the admin Activity feed. Unlike the tab destinations
  * it pushes a root-stack route and carries an unread badge.
  */
+/**
+ * Daily Cash reconciliation — a full sidebar destination on web, where the
+ * owner actually counts a drawer, rather than a bottom-tab slot on mobile.
+ */
+function SidebarCashButton() {
+  const theme = useTheme();
+  const { width } = useWindowDimensions();
+  const isCompact = width < 768;
+
+  const go = () => {
+    if (typeof window !== "undefined") window.location.assign("/cash");
+  };
+
+  return (
+    <Pressable onPress={go} style={({ pressed }) => pressed && styles.pressed}>
+      <ThemedView
+        type="surface"
+        style={[styles.tabButtonView, isCompact && { justifyContent: "center", paddingHorizontal: 0 }]}
+      >
+        <Feather name="dollar-sign" size={isCompact ? 20 : 18} color={theme.onSurfaceVariant} />
+        {!isCompact && (
+          <ThemedText type="default" themeColor="onSurfaceVariant" style={{ flex: 1 }}>
+            Daily Cash
+          </ThemedText>
+        )}
+      </ThemedView>
+    </Pressable>
+  );
+}
+
 function SidebarActivityButton() {
   const theme = useTheme();
   const { width } = useWindowDimensions();

@@ -8,14 +8,18 @@ import { useAuth } from '@/context/auth-context';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
 import { actorFrom, logActivity } from '@/services/activity';
-import { deleteBatch, recordPayment } from '@/services/sales-repository';
+import { deleteBatch } from '@/services/sales-repository';
+import { recordPayment, subscribeToPayments } from '@/services/payment-repository';
+import { attachPayments, describeMismatch } from '@/services/payment-reconciliation';
+import { PaymentHistory } from '@/components/records/payment-history';
+import type { PaymentEntry, PaymentMethod } from '@/components/records/types';
 import { withAlpha } from '@/utils/color';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
 import { STATUS_META } from '@/utils/payment-status';
 import { SymbolView } from 'expo-symbols';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, Share, StyleSheet, View } from 'react-native';
 import { Portal, Surface } from 'react-native-paper';
 
@@ -37,30 +41,51 @@ export default function TransactionDetails() {
   const router = useRouter();
   const theme = useTheme();
 
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { sortedBatches, loading } = useRecords(theme);
   const transaction = sortedBatches.find(b => b.id === id);
 
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Cash');
+  const [paymentNote, setPaymentNote] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [payments, setPayments] = useState<PaymentEntry[]>([]);
+
+  // Payments live at their own root, so they need their own subscription.
+  // Staff only receive their own entries — the rules enforce that, not the UI.
+  useEffect(() => subscribeToPayments(setPayments), []);
 
   const handleAddPayment = async () => {
     if (!transaction || !paymentAmount) return;
+    // Guard the double-tap: offline the write does not resolve until reconnect,
+    // and under an append-only ledger a second tap queues a SECOND entry.
+    if (isRecording) return;
     const amount = parseFloat(paymentAmount);
     if (isNaN(amount) || amount <= 0) return;
 
+    setIsRecording(true);
     try {
-      await recordPayment(transaction, amount);
+      await recordPayment({
+        batch: transaction,
+        amount,
+        method: paymentMethod,
+        note: paymentNote,
+        actor: actorFrom(user),
+      });
       logActivity({
         type: 'payment_recorded',
         actor: actorFrom(user),
-        message: `${actorFrom(user).name} recorded a ${formatCurrency(amount)} payment for ${transaction.clientName || 'a client'}`,
+        message: `${actorFrom(user).name} recorded a ${formatCurrency(amount)} ${paymentMethod} payment for ${transaction.clientName || 'a client'}`,
         meta: { batchId: transaction.id, amount },
       });
       setPaymentModalVisible(false);
       setPaymentAmount('');
+      setPaymentNote('');
     } catch (e: any) {
-      Alert.alert('Could not update payment', e.message);
+      Alert.alert('Could not record payment', e.message);
+    } finally {
+      setIsRecording(false);
     }
   };
 
@@ -152,6 +177,10 @@ ${itemsString}`;
   const grandTotal = transaction.totalAmount;
   const subtotal = transaction.subtotal;
   const adjustments = transaction.adjustments;
+
+  // Join the ledger to this sale. Staff see only their own entries, so their
+  // view is partial by design and mismatches must not be flagged to them.
+  const [withPayments] = attachPayments([transaction], payments, { trustMismatch: isAdmin });
   const initials = (transaction.clientName || 'U').substring(0, 2).toUpperCase();
 
   return (
@@ -166,6 +195,15 @@ ${itemsString}`;
             totalBalance={transaction.totalBalance}
             status={transaction.status}
             paymentMethod={transaction.paymentMethod}
+          />
+
+          <PaymentHistory
+            payments={withPayments.payments}
+            theme={theme}
+            isPartialView={!isAdmin}
+            mismatchMessage={
+              withPayments.hasMismatch ? describeMismatch(withPayments, formatCurrency) : undefined
+            }
           />
 
           {/* Client */}
@@ -261,6 +299,11 @@ ${itemsString}`;
 
       <Portal>
         <PaymentModal
+          paymentMethod={paymentMethod}
+          setPaymentMethod={setPaymentMethod}
+          paymentNote={paymentNote}
+          setPaymentNote={setPaymentNote}
+          isSubmitting={isRecording}
           paymentModalVisible={paymentModalVisible}
           setPaymentModalVisible={setPaymentModalVisible}
           selectedPaymentRecord={transaction}

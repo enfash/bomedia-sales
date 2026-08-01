@@ -11,18 +11,30 @@
 import type { StoredBatch } from '@/components/records/types';
 import { createBatch } from '@/services/sales-repository';
 
-const written: { path: string; node: StoredBatch }[] = [];
+const mockWritten: { path: string; node: StoredBatch }[] = [];
+const mockOpeningEntries: { path: string; node: any }[] = [];
 
 jest.mock('@/services/db', () => ({
   dbService: {
     setRecord: jest.fn(async (path: string, node: any) => {
-      written.push({ path, node });
+      mockWritten.push({ path, node });
     }),
+    // An advance is written as an opening ledger entry in the SAME atomic
+    // update as the batch, so createBatch takes this path when totalPaid > 0.
+    updateAtomic: jest.fn(async (updates: Record<string, any>) => {
+      for (const [path, node] of Object.entries(updates)) {
+        if (path.startsWith('sales/')) mockWritten.push({ path, node });
+        else mockOpeningEntries.push({ path, node });
+      }
+    }),
+    newKey: jest.fn(() => '-OPENING'),
+    increment: jest.fn((d: number) => ({ __increment: d })),
   },
 }));
 
 beforeEach(() => {
-  written.length = 0;
+  mockWritten.length = 0;
+  mockOpeningEntries.length = 0;
 });
 
 const input = (over: Partial<Parameters<typeof createBatch>[0]> = {}) => ({
@@ -34,6 +46,7 @@ const input = (over: Partial<Parameters<typeof createBatch>[0]> = {}) => ({
   deliveryCost: 0,
   totalPaid: 0,
   paymentMethod: 'Transfer' as const,
+  actor: { uid: 'uid-test', name: 'Tester' },
   items: [{ material: 'Vinyl', total: 600 }],
   ...over,
 });
@@ -41,7 +54,7 @@ const input = (over: Partial<Parameters<typeof createBatch>[0]> = {}) => ({
 describe('createBatch always writes the money fields', () => {
   it('writes subtotal and adjustments on a normal sale', async () => {
     await createBatch(input());
-    const node = written[0].node;
+    const node = mockWritten[0].node;
     expect(node.subtotal).toBe(600);
     expect(node.adjustments).toEqual([
       { kind: 'mov', label: 'Minimum order adjustment', amount: 400 },
@@ -51,7 +64,7 @@ describe('createBatch always writes the money fields', () => {
 
   it('writes an explicit empty array when there are no adjustments', async () => {
     await createBatch(input({ subtotal: 1200, adjustments: [], totalAmount: 1200 }));
-    const node = written[0].node;
+    const node = mockWritten[0].node;
     expect(node.adjustments).toEqual([]);
     expect(node.adjustments).not.toBeUndefined();
   });
@@ -65,9 +78,9 @@ describe('createBatch always writes the money fields', () => {
       input({ notes: 'x', dueDate: '2026-09-01' }),
     ];
     for (const c of cases) {
-      written.length = 0;
+      mockWritten.length = 0;
       await createBatch(c);
-      const node = written[0].node;
+      const node = mockWritten[0].node;
       expect(Object.prototype.hasOwnProperty.call(node, 'subtotal')).toBe(true);
       expect(Object.prototype.hasOwnProperty.call(node, 'adjustments')).toBe(true);
       expect(node.subtotal).not.toBeUndefined();
@@ -84,7 +97,7 @@ describe('createBatch always writes the money fields', () => {
       deliveryCost: 99.6,
       items: [{ material: 'Vinyl', total: 562.5 }],
     }));
-    const node = written[0].node;
+    const node = mockWritten[0].node;
     expect(node.subtotal).toBe(563);
     expect(node.totalAmount).toBe(563);
     expect(node.totalPaid).toBe(100);
@@ -94,6 +107,49 @@ describe('createBatch always writes the money fields', () => {
 
   it('writes the batch under a local-day bucket matching its receiptId', async () => {
     await createBatch(input());
-    expect(written[0].path).toMatch(/^sales\/\d{4}\/\d{2}\/\d{2}\/INV-260801-TEST$/);
+    expect(mockWritten[0].path).toMatch(/^sales\/\d{4}\/\d{2}\/\d{2}\/INV-260801-TEST$/);
+  });
+
+  /* ---------------------------------------------------------------- *
+   * An advance taken at the counter IS a payment.
+   *
+   * Before this, `totalPaid` was written straight onto the batch with no
+   * ledger entry — so every deposit was invisible to reconciliation and the
+   * day's drawer was short by all of them.
+   * ---------------------------------------------------------------- */
+  it('writes an opening ledger entry when an advance is taken', async () => {
+    await createBatch(input({ totalPaid: 5000 }));
+
+    expect(mockOpeningEntries).toHaveLength(1);
+    const [{ path, node }] = mockOpeningEntries;
+    expect(path).toMatch(/^payments\/\d{4}-\d{2}-\d{2}\/uid-test\/-OPENING$/);
+    expect(node.amount).toBe(5000);
+    expect(node.byUid).toBe('uid-test');
+    expect(node.note).toBe('Advance taken at sale');
+  });
+
+  it('writes the batch and the opening entry in ONE atomic update', async () => {
+    await createBatch(input({ totalPaid: 5000 }));
+    // Both landed; a sale whose advance never reached the ledger is exactly
+    // the inconsistency this avoids.
+    expect(mockWritten).toHaveLength(1);
+    expect(mockOpeningEntries).toHaveLength(1);
+  });
+
+  it('writes no ledger entry when nothing was paid up front', async () => {
+    await createBatch(input({ totalPaid: 0 }));
+    expect(mockOpeningEntries).toEqual([]);
+    expect(mockWritten).toHaveLength(1);
+  });
+
+  it('rounds the advance before it reaches the ledger', async () => {
+    await createBatch(input({ totalPaid: 562.5 }));
+    expect(mockOpeningEntries[0].node.amount).toBe(563);
+    expect(mockWritten[0].node.totalPaid).toBe(563);
+  });
+
+  it('carries the sale’s payment method onto the opening entry', async () => {
+    await createBatch(input({ totalPaid: 1000, paymentMethod: 'Cash' }));
+    expect(mockOpeningEntries[0].node.method).toBe('Cash');
   });
 });

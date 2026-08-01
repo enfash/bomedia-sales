@@ -81,6 +81,74 @@ export interface BatchAdjustment {
   amount: number;
 }
 
+/* ------------------------------------------------------------------ *
+ * PAYMENTS — an append-only ledger.
+ *
+ * Stored at `payments/{YYYY-MM-DD}/{uid}/{pushKey}`, NOT under the batch node.
+ * Two reasons, both load-bearing:
+ *
+ *   1. In RTDB a write permitted at an ancestor grants the whole subtree, and
+ *      admins may write the batch node. Nested payments could therefore be
+ *      erased by a batch write, and no create-only rule on the children could
+ *      prevent it.
+ *   2. The day bucket is keyed by PAYMENT date, not sale date — a payment taken
+ *      today against last month's invoice belongs in today's drawer. The uid
+ *      level makes "read only your own entries" expressible as a rule rather
+ *      than a UI convention, and makes the by-staff split structural.
+ *
+ * Entries are never edited or deleted. A mistake is corrected by a REVERSAL:
+ * a new entry with a negative amount, `reversalOf` naming the original and a
+ * mandatory `reversalReason`.
+ * ------------------------------------------------------------------ */
+
+export type PaymentMethodTaken = PaymentMethod;
+
+/** The raw payment node as persisted at payments/{day}/{uid}/{pushKey}. */
+export interface StoredPayment {
+  /** Whole naira. Negative only on a reversal. */
+  amount?: number;
+  method?: PaymentMethodTaken;
+  /** ISO timestamp of when the payment was taken. */
+  at?: string;
+  /** Epoch ms, for ordering and rules. */
+  atMs?: number;
+  /** Firebase auth uid of whoever took it. Must equal the {uid} path segment. */
+  byUid?: string;
+  /** Denormalised for display, so history does not need a users join. */
+  byName?: string;
+  /** Which sale this pays. */
+  receiptId?: string;
+  /** Full path to the batch node, so the join needs no search. */
+  batchPath?: string;
+  note?: string;
+  /** Present only on reversals — the pushKey of the entry being reversed. */
+  reversalOf?: string;
+  /** Mandatory when `reversalOf` is set. */
+  reversalReason?: string;
+}
+
+/** A normalized payment, ready for the UI. */
+export interface PaymentEntry {
+  id: string;
+  /** `payments/{day}/{uid}/{id}` — where it actually lives. */
+  dbPath: string;
+  /** The YYYY-MM-DD bucket it was filed under. */
+  dayKey: string;
+  amount: number;
+  method: PaymentMethodTaken;
+  at: string;
+  atMs: number;
+  byUid: string;
+  byName: string;
+  receiptId: string;
+  batchPath: string;
+  note?: string;
+  reversalOf?: string;
+  reversalReason?: string;
+  /** True when this entry reverses another. Cheaper than checking the sign. */
+  isReversal: boolean;
+}
+
 /** A normalized sale (batch of one or more items), ready for the UI. */
 export interface SalesBatch {
   /** The receiptId — also the Firebase key for the batch node. */

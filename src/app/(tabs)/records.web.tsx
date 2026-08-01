@@ -11,6 +11,7 @@ import { useAuth } from '@/context/auth-context';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
 import { actorFrom, logActivity } from '@/services/activity';
+import type { PaymentMethod } from '@/components/records/types';
 import { markBatchesPaid } from '@/services/sales-repository';
 import { formatCurrency, formatCurrencyCompact } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
@@ -92,11 +93,34 @@ export default function RecordsWeb() {
     setSelected([]);
   };
 
-  const markPaid = async () => {
+  /**
+   * Bulk "mark paid" now writes a real payment entry per sale, so the method
+   * has to be captured. Defaulting it would put untraceable entries in the
+   * day's reconciliation — the drawer would not match and nothing would say why.
+   */
+  const askMethodThenMarkPaid = (batches: SalesBatch[]) => {
+    const total = batches.reduce((s, b) => s + (b.totalBalance || 0), 0);
+    Alert.alert(
+      'How was it paid?',
+      `Recording ${formatCurrency(total)} across ${batches.length} sale${batches.length !== 1 ? 's' : ''}. This adds a payment entry to each.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        ...(['Cash', 'POS', 'Transfer'] as const).map((method) => ({
+          text: method,
+          onPress: () => void doMarkPaid(batches, method),
+        })),
+      ],
+    );
+  };
+
+  const markPaid = () => {
     if (selected.length === 0) return;
-    const batches = sortedBatches.filter((b) => selected.includes(b.id));
+    askMethodThenMarkPaid(sortedBatches.filter((b) => selected.includes(b.id)));
+  };
+
+  const doMarkPaid = async (batches: SalesBatch[], method: PaymentMethod) => {
     try {
-      await markBatchesPaid(batches);
+      await markBatchesPaid(batches, method, actorFrom(user));
       const paidTotal = batches.reduce((s, b) => s + (b.totalBalance || 0), 0);
       logActivity({
         type: 'payment_recorded',

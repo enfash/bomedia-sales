@@ -4,6 +4,7 @@ import { usePageContainerStyles } from '@/components/ui/page-container';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { actorFrom, logActivity } from '@/services/activity';
+import type { PaymentMethod, SalesBatch } from '@/components/records/types';
 import { markBatchesPaid } from '@/services/sales-repository';
 import { formatCurrency } from '@/utils/currency';
 import { useState } from 'react';
@@ -77,12 +78,29 @@ export default function RecordsScreen() {
     }
   };
 
-  const markSelectedAsPaid = async () => {
-    if (selectedBatches.length === 0) return;
+  /**
+   * Bulk "mark paid" now writes a real payment entry per sale, so the method
+   * has to be captured. Defaulting it would put untraceable entries in the
+   * day's reconciliation — the drawer would not match and nothing would say why.
+   */
+  const askMethodThenMarkPaid = (batches: SalesBatch[]) => {
+    const total = batches.reduce((s, b) => s + (b.totalBalance || 0), 0);
+    Alert.alert(
+      'How was it paid?',
+      `Recording ${formatCurrency(total)} across ${batches.length} sale${batches.length !== 1 ? 's' : ''}. This adds a payment entry to each.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        ...(['Cash', 'POS', 'Transfer'] as const).map((method) => ({
+          text: method,
+          onPress: () => void doMarkPaid(batches, method),
+        })),
+      ],
+    );
+  };
 
-    const batches = sortedBatches.filter(b => selectedBatches.includes(b.id));
+  const doMarkPaid = async (batches: SalesBatch[], method: PaymentMethod) => {
     try {
-      await markBatchesPaid(batches);
+      await markBatchesPaid(batches, method, actorFrom(user));
       const paidTotal = batches.reduce((s, b) => s + (b.totalBalance || 0), 0);
       logActivity({
         type: 'payment_recorded',
@@ -94,6 +112,11 @@ export default function RecordsScreen() {
     } catch (e: any) {
       Alert.alert('Could not mark as paid', e.message);
     }
+  };
+
+  const markSelectedAsPaid = () => {
+    if (selectedBatches.length === 0) return;
+    askMethodThenMarkPaid(sortedBatches.filter((b) => selectedBatches.includes(b.id)));
   };
 
   const { contentStyle } = usePageContainerStyles(false, 80);

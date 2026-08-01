@@ -22,6 +22,7 @@ import type {
 import { dbService } from '@/services/db';
 import { roundNaira } from '@/utils/money';
 import { createBatch, generateReceiptId } from '@/services/sales-repository';
+import type { PaymentActor } from '@/services/payment-repository';
 
 const QUOTES_ROOT = 'quotes';
 
@@ -193,7 +194,10 @@ export class MissingQuoteInfoError extends Error {
  * throws {@link MissingQuoteInfoError} so the UI can prompt for it. Returns the
  * new sale's dbPath.
  */
-export async function convertQuoteToSale(quote: QuoteRecord): Promise<string> {
+export async function convertQuoteToSale(
+  quote: QuoteRecord,
+  actor: PaymentActor,
+): Promise<string> {
   const missing: string[] = [];
   if (!quote.clientName?.trim()) missing.push('client name');
   if (quote.records.length === 0) missing.push('at least one item');
@@ -229,6 +233,9 @@ export async function convertQuoteToSale(quote: QuoteRecord): Promise<string> {
     paymentMethod: 'Transfer',
     items,
     notes: quote.notes,
+    // A converted quote starts unpaid, so no opening entry is written — but
+    // createBatch needs the actor in case that ever changes.
+    actor,
   });
 
   // Keep the quote for history, marked as converted.
