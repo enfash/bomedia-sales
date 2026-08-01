@@ -91,8 +91,8 @@ export function resolveDueDate(
 /**
  * True when a sale is past its due date.
  *
- * This is the single overdue rule — `normalizeBatch` and the legacy
- * `adaptLegacyRecords` shim both call it, so the terms logic exists once.
+ * This is the single overdue rule. `normalizeBatch` is its only caller now that
+ * the legacy read path is gone; keep it that way so the terms logic exists once.
  */
 export function isPastDue(
   createdAt: any,
