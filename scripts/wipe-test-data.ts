@@ -11,7 +11,7 @@
  *
  * WHY THE ADMIN SDK: root is `.write: false` and no rule grants write at
  * `sales` / `quotes` / `activity` root depth, so no signed-in user — admin
- * included — can remove these nodes. See docs/MIGRATION_RUNBOOK.md.
+ * included — can remove these nodes. See docs/DATABASE_RUNBOOK.md.
  *
  * TAKE A FULL DATABASE EXPORT FIRST. This is not reversible.
  */
