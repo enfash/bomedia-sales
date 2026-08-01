@@ -1,6 +1,21 @@
 # Migration runbook — legacy flat sales records
 
-Do these in order. Do not skip step 3.
+## Run order
+
+| # | Step | Section |
+|---|---|---|
+| 0 | Download the service account key | [1](#1-download-the-service-account-key) |
+| 1 | **Export (pre-correction)** | [3](#3-database-exports--required-twice) |
+| 2 | Inspect `-OxdknkSYS_9ADlSCqug` and the three sequential records | [5b](#5b-records-to-inspect-before-correcting) |
+| 3 | Correct or delete — all three fields together if correcting | [5c](#5c-documented-correction--oxdknksys_9adlscqug-2026-08-01) |
+| 4 | Re-run the dry run | [2](#2-dry-run) |
+| 5 | **Export (pre-migration)** | [3](#3-database-exports--required-twice) |
+| 6 | `--commit` | [4](#4-commit) |
+| 7 | Delete `adaptLegacyRecords` | [6](#6-delete-the-legacy-shim) |
+| 8 | Stage 2 | [5a](#5a-stage-2-gate--a-concrete-check-not-a-general-assertion) |
+
+Two exports, not one, and the first goes **before** any correction. Do not skip
+either.
 
 ---
 
@@ -76,9 +91,37 @@ and delete the shim.
 
 ---
 
-## 3. Take a full database export — REQUIRED
+## 3. Database exports — REQUIRED, twice
 
-Do not run `--commit` without this. Console route:
+**Export before the correction, and again before the migration.** Two files,
+named distinctly:
+
+| When | Filename |
+|---|---|
+| Before touching any record | `bomedia-rtdb-2026-08-01-pre-correction.json` |
+| After correcting, before `--commit` | `bomedia-rtdb-2026-08-01-pre-migration.json` |
+
+### Why two
+
+A backup's job is not to represent the state you intend to keep — it is to let
+you reach **any** earlier state. Exporting only after the correction means that
+if you later find you corrected the wrong record, or wrote the wrong quantity,
+the original value is gone from the database *and* from your machine. There is
+no route back to it.
+
+The pre-migration export is the rollback point for `--commit`. The
+pre-correction export is the rollback point for your own edits. They protect
+different mistakes and neither substitutes for the other.
+
+> **This rule binds harder on Stage 2.** Its migration rewrites payment history
+> — every `totalPaid` is folded into a synthetic opening entry and the original
+> figure stops being the source of truth. A pre-change export is the *only*
+> route back from that. Take one immediately before Stage 2's `--commit`, named
+> `bomedia-rtdb-YYYY-MM-DD-pre-stage2.json`, and keep it after the migration
+> looks fine — the failure mode there is a wrong figure that looks plausible,
+> which you may not notice for weeks.
+
+Console route:
 
 1. Firebase console → **Realtime Database**.
 2. Select the **bomedia-official** database (the one at
@@ -92,17 +135,24 @@ CLI equivalent, if you have the Firebase CLI installed and authenticated:
 ```bash
 npm install -g firebase-tools     # if needed
 firebase login
-firebase database:get / \
-  --project bomedia-official \
-  --output ~/backups/bomedia-rtdb-$(date +%F).json
+# 1. before any correction
+firebase database:get / --project bomedia-official \
+  --output ~/backups/bomedia-rtdb-$(date +%F)-pre-correction.json
+
+# 2. after correcting, before --commit
+firebase database:get / --project bomedia-official \
+  --output ~/backups/bomedia-rtdb-$(date +%F)-pre-migration.json
 ```
 
 Confirm it is real before continuing:
 
 ```bash
-ls -lh ~/backups/bomedia-rtdb-$(date +%F).json   # not 0 bytes
-head -c 200 ~/backups/bomedia-rtdb-$(date +%F).json
+ls -lh ~/backups/bomedia-rtdb-*.json    # neither is 0 bytes
+head -c 200 ~/backups/bomedia-rtdb-2026-08-01-pre-correction.json
 ```
+
+Keep both. Do not overwrite the pre-correction file with the pre-migration one —
+that is the whole point of the distinct names.
 
 ---
 
@@ -151,7 +201,32 @@ fall through onto the item, which would have put already-delivered jobs back on
 the board as not started. If any of those four shows Queued after migrating,
 the fix regressed.
 
-### Documented correction — `-OxdknkSYS_9ADlSCqug`, 2026-08-01
+## 5b. Records to inspect before correcting
+
+Do this **after** the pre-correction export, before changing anything. The
+correct-vs-delete decision turns on what these show.
+
+### `-OxdknkSYS_9ADlSCqug` — the ₦10.8m record
+
+Check `clientName`. It currently reads `"new"` and `contact` is the developer's
+own email. If that is a placeholder, this is test data, not a sale.
+
+### The three sequential records
+
+`-Oxdnea1Gezarkdnmn4_`, `-Oxdnea42Yebjqc1oCj4`, `-Oxdnea5YYawve4O3W9Y`
+
+Their Firebase push IDs are near-identical and their timestamps sit within
+seconds of each other, which normally means they were created in one burst
+rather than entered across a working day. Their client names have **not** been
+inspected. If they carry placeholder names too, they are from the same test
+burst as the record above and should be treated the same way.
+
+Together they are ₦77,580 — small next to ₦10.8m, but if they are fake they are
+29% of what remains after the big record goes.
+
+---
+
+## 5c. Documented correction — `-OxdknkSYS_9ADlSCqug`, 2026-08-01
 
 Recorded so the ledger's history shows this figure was changed **deliberately**,
 by a named person, for a stated reason — rather than a number that quietly moved
@@ -190,17 +265,42 @@ between two dry runs.
 4. **`amountPaid` exceeded `total` by a round ₦100,000**, so the batch derived
    to **Overpaid** — a status no genuine fully-settled sale should show.
 
-#### Values after correction
+#### Outcome
 
-> Fill in once the console edit is made, then re-run the dry run and paste the
-> new grand total here. If the node was deleted rather than corrected, say so
-> and record the resulting record/batch counts.
+> Fill in after the console edit, then re-run the dry run and paste the new
+> grand total. Record ONE of the two outcomes below and delete the other.
 
-| Field | Value |
+**Outcome A — deleted as test data.** Use this if `clientName` was a
+placeholder. Say *deleted as test data*; do not invent a plausible quantity for
+a sale that never happened, because a corrected figure implies a real job and a
+future reader has no way to tell the difference.
+
+| | |
 |---|---|
-| `quantity` | |
-| `total` | |
-| `amountPaid` | |
+| Action | node removed entirely |
+| Reason | placeholder client name / developer contact — test entry |
+| Records after | 7 legacy → 5 batches |
+| Ledger after | ₦265,040 |
+
+**Outcome B — corrected as a genuine sale.**
+
+| Field | Before | After |
+|---|---|---|
+| `quantity` | `10000` | |
+| `total` | `10800000` | |
+| `amountPaid` | `10900000` | |
+
+At ₦180/sqft across 6 sqft each unit is ₦1,080, so `total` must equal
+`1080 × quantity`. Nothing recomputes it for legacy records — edit all three
+fields together or the node is left internally inconsistent, and the migration
+will preserve that inconsistency faithfully.
+
+**The same choice applies to the three sequential records** if they turn out to
+be from the same burst. Record them here the same way, by ID, with the same
+*deleted as test data* wording.
+
+**Ledger before:** ₦11,065,040 across 8 legacy records → 6 batches.
+**Ledger after:** _record here, from the re-run dry run._
 
 **Ledger before:** ₦11,065,040 across 8 legacy records → 6 batches.
 **Ledger after:** _record here._
