@@ -211,18 +211,34 @@ correct-vs-delete decision turns on what these show.
 Check `clientName`. It currently reads `"new"` and `contact` is the developer's
 own email. If that is a placeholder, this is test data, not a sale.
 
-### The three sequential records
+### Inspection result — 2026-08-01, read-only
 
-`-Oxdnea1Gezarkdnmn4_`, `-Oxdnea42Yebjqc1oCj4`, `-Oxdnea5YYawve4O3W9Y`
+| Client | Records | Total | `batchId` | Contact | Verdict |
+|---|---:|---:|---|---|---|
+| `new` | 1 | ₦10,800,000 | no | developer's own email | **test data** |
+| `nw andn` | 3 | ₦77,580 | **no** | none | ambiguous — see below |
+| `old school` | 2 | ₦107,300 | yes | none | looks genuine |
+| `New ade` | 2 | ₦80,160 | yes | none | looks genuine |
 
-Their Firebase push IDs are near-identical and their timestamps sit within
-seconds of each other, which normally means they were created in one burst
-rather than entered across a working day. Their client names have **not** been
-inspected. If they carry placeholder names too, they are from the same test
-burst as the record above and should be treated the same way.
+**`new`** — placeholder name, developer's own email, `quantity: 10000`. All
+three test signals agree.
 
-Together they are ₦77,580 — small next to ₦10.8m, but if they are fake they are
-29% of what remains after the big record goes.
+**`nw andn`** — the three records were written **3 milliseconds apart**
+(`07:22:59.115`, `.118`, `.118`) under one client name. That is a single
+multi-item submit, not three sales. The amounts (₦1,500 / ₦30,000 / ₦46,080)
+are irregular rather than round, which argues *against* fabrication. This is a
+judgement about a real customer, and the data does not settle it.
+
+> ⚠️ **Separate from the test-data question: these three carry no `batchId`, so
+> the migration will split one order into THREE invoices.** The two genuine
+> pairs group correctly because they do have one. If `nw andn` is a real order,
+> give all three the same `batchId` in the console before migrating — any shared
+> value works, the migration groups on it. If it is test data, delete all three
+> and the question disappears.
+
+The round-number signal proved weak across this dataset: ₦46,080, ₦62,500,
+₦44,800 and ₦20,160 are all irregular. Only the developer-email and
+placeholder-name signals discriminated.
 
 ---
 
@@ -278,9 +294,12 @@ future reader has no way to tell the difference.
 | | |
 |---|---|
 | Action | node removed entirely |
-| Reason | placeholder client name / developer contact — test entry |
+| Reason | placeholder client name `new` / developer's own contact / `quantity: 10000` — test entry |
 | Records after | 7 legacy → 5 batches |
 | Ledger after | ₦265,040 |
+
+If the three `nw andn` records are deleted as well, it is **4 legacy records →
+2 batches, ₦187,460**.
 
 **Outcome B — corrected as a genuine sale.**
 
