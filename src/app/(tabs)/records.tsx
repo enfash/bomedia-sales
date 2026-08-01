@@ -7,7 +7,7 @@ import { actorFrom, logActivity } from '@/services/activity';
 import { markBatchesPaid } from '@/services/sales-repository';
 import { formatCurrency } from '@/utils/currency';
 import { useState } from 'react';
-import { Platform, RefreshControl, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Alert, Platform, RefreshControl, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Surface } from 'react-native-paper';
 
 import { QuotaCard } from '@/components/records/quota-card';
@@ -73,7 +73,7 @@ export default function RecordsScreen() {
       link.click();
       document.body.removeChild(link);
     } else {
-      alert("CSV Export is currently supported on Web");
+      Alert.alert('Web only', 'CSV export is currently supported on web.');
     }
   };
 
@@ -92,7 +92,7 @@ export default function RecordsScreen() {
       });
       setSelectedBatches([]);
     } catch (e: any) {
-      alert("Failed to mark as paid: " + e.message);
+      Alert.alert('Could not mark as paid', e.message);
     }
   };
 

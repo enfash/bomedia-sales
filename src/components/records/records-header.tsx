@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { Menu, Button } from 'react-native-paper';
 import { useRouter } from 'expo-router';
@@ -106,7 +106,7 @@ export function RecordsHeader({
               }>
               <Menu.Item onPress={exportCSV} title={`Export Selected to CSV`} />
               <Menu.Item onPress={markSelectedAsPaid} title="Mark as Paid" />
-              <Menu.Item onPress={() => alert("Payment reminders coming soon!")} title="Send Payment Reminders" />
+              <Menu.Item onPress={() => Alert.alert('Coming soon', 'Payment reminders are not available yet.')} title="Send Payment Reminders" />
             </Menu>
           </View>
         )}

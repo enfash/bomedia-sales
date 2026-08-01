@@ -8,7 +8,7 @@
  * I/O and belong to a later stage.
  */
 
-import type { SalesBatch, StoredBatch } from '@/components/records/types';
+import type { StoredBatch } from '@/components/records/types';
 import {
   adaptLegacyRecords,
   normalizeBatch,

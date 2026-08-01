@@ -19,7 +19,7 @@ import { STATUS_META } from '@/utils/payment-status';
 import { SymbolView } from 'expo-symbols';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { Menu, Searchbar } from 'react-native-paper';
 
 const STATUS_FILTERS = ['All', 'Paid', 'Partial', 'Unpaid'];
@@ -106,7 +106,7 @@ export default function RecordsWeb() {
       });
       setSelected([]);
     } catch (e: any) {
-      alert('Failed to mark as paid: ' + (e?.message ?? e));
+      Alert.alert('Could not mark as paid', String(e?.message ?? e));
     }
   };
 

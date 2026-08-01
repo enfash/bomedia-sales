@@ -1,4 +1,3 @@
-import type { BatchAdjustment, SalesBatch } from '@/components/records/types';
 import { PageContainer } from '@/components/ui/page-container';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { SecondaryButton } from '@/components/ui/secondary-button';
@@ -11,10 +10,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, StyleSheet, Text, View } from 'react-native';
 import { Surface } from 'react-native-paper';
 
-import type { SalesRecord } from '@/components/records/types';
+import type { BatchAdjustment, SalesBatch, SalesRecord } from '@/components/records/types';
 import { MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useSettings } from '@/context/settings-context';
@@ -173,9 +172,9 @@ export default function InvoiceScreen() {
         message: `${actorFrom(user).name} edited invoice details for ${clientName}`,
         meta: { receiptIds: batchIds, clientName },
       });
-      alert('Details saved successfully!');
+      Alert.alert('Saved', 'Details saved successfully.');
     } catch (e: any) {
-      alert("Failed to save: " + e.message);
+      Alert.alert('Could not save', e.message);
     } finally {
       setIsSavingDetails(false);
     }
@@ -291,10 +290,10 @@ export default function InvoiceScreen() {
             printWindow.close();
           }, 500);
         } else {
-          alert('Please allow popups to print the invoice on Web.');
+          Alert.alert('Popup blocked', 'Please allow popups to print the invoice on web.');
         }
       } catch (error: any) {
-        alert('Error generating PDF on web: ' + error.message);
+        Alert.alert('Could not generate PDF', error.message);
       }
     } else {
       // On mobile, generate the PDF file and present the share/save sheet.
@@ -311,10 +310,10 @@ export default function InvoiceScreen() {
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(newUri, { UTI: '.pdf', mimeType: 'application/pdf', dialogTitle: 'Save or Share Invoice' });
         } else {
-          alert('Sharing is not available on your device');
+          Alert.alert('Sharing unavailable', 'Sharing is not available on this device.');
         }
       } catch (error: any) {
-        alert('Error exporting PDF: ' + error.message);
+        Alert.alert('Could not export PDF', error.message);
       }
     }
   };

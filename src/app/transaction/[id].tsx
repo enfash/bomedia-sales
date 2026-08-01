@@ -60,7 +60,7 @@ export default function TransactionDetails() {
       setPaymentModalVisible(false);
       setPaymentAmount('');
     } catch (e: any) {
-      alert('Failed to update payment: ' + e.message);
+      Alert.alert('Could not update payment', e.message);
     }
   };
 
