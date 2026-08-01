@@ -24,11 +24,18 @@ import type {
   TurnaroundTime,
 } from '@/components/records/types';
 import { dbService } from '@/services/db';
-import { isOverdue } from '@/utils/date';
+import { isPastDue } from '@/utils/date';
 import { deriveLegacyMoneyFields, roundNaira } from '@/utils/money';
 import { computePaymentStatus, STATUS_META } from '@/utils/payment-status';
 
 const SALES_ROOT = 'sales';
+
+/**
+ * Fallback payment terms, used only when no caller supplies the Settings value.
+ * Matches the pre-item-3 hardcoded window, so behaviour is unchanged for any
+ * call site that has not been threaded through yet.
+ */
+const DEFAULT_TERMS_DAYS = 7;
 
 /* ------------------------------------------------------------------ *
  * Normalization
@@ -62,7 +69,11 @@ export function normalizeItem(raw: StoredItem, id: string, batchDbPath: string, 
  * Turn a raw batch node at a known path into a normalized SalesBatch.
  * @internal Exported for unit tests; not part of the repository's public API.
  */
-export function normalizeBatch(node: StoredBatch, batchDbPath: string): SalesBatch {
+export function normalizeBatch(
+  node: StoredBatch,
+  batchDbPath: string,
+  defaultTermsDays = DEFAULT_TERMS_DAYS,
+): SalesBatch {
   const batchId = batchDbPath.split('/').pop() || 'unknown';
   const records: SalesRecord[] = node.items
     ? Object.keys(node.items).map((k) => normalizeItem(node.items![k], k, batchDbPath, batchId))
@@ -81,7 +92,14 @@ export function normalizeBatch(node: StoredBatch, batchDbPath: string): SalesBat
 
   const { subtotal, adjustments, totalAmount } = money;
   const totalPaid = node.totalPaid ?? 0;
-  const status = computePaymentStatus(totalAmount, totalPaid, isOverdue(node.createdAt));
+  // Overdue is driven by dueDate, falling back to createdAt + terms. The
+  // threshold is passed in rather than read from Settings, so this stays a
+  // pure function of its arguments.
+  const status = computePaymentStatus(
+    totalAmount,
+    totalPaid,
+    isPastDue(node.createdAt, node.dueDate, defaultTermsDays),
+  );
 
   return {
     id: batchId,
@@ -120,7 +138,7 @@ function isBatchNode(node: any): node is StoredBatch {
  * hierarchy to find batch nodes at any depth (2026/07/22/INV-...), then folds in
  * any legacy flat records via the isolated adapter.
  */
-export function parseSalesTree(root: any): SalesBatch[] {
+export function parseSalesTree(root: any, defaultTermsDays = DEFAULT_TERMS_DAYS): SalesBatch[] {
   if (!root || typeof root !== 'object') return [];
 
   const batches: SalesBatch[] = [];
@@ -129,7 +147,7 @@ export function parseSalesTree(root: any): SalesBatch[] {
   const walk = (node: any, path: string[]) => {
     if (!node || typeof node !== 'object') return;
     if (isBatchNode(node)) {
-      batches.push(normalizeBatch(node, `${SALES_ROOT}/${path.join('/')}`));
+      batches.push(normalizeBatch(node, `${SALES_ROOT}/${path.join('/')}`, defaultTermsDays));
       return;
     }
     if (isLegacyRecordNode(node)) {
@@ -142,7 +160,7 @@ export function parseSalesTree(root: any): SalesBatch[] {
   };
 
   walk(root, []);
-  return [...batches, ...adaptLegacyRecords(legacyLeaves)];
+  return [...batches, ...adaptLegacyRecords(legacyLeaves, defaultTermsDays)];
 }
 
 /* ------------------------------------------------------------------ *
@@ -159,7 +177,10 @@ function isLegacyRecordNode(node: any): boolean {
 }
 
 /** @internal Exported for unit tests; not part of the repository's public API. */
-export function adaptLegacyRecords(leaves: { node: any; path: string[] }[]): SalesBatch[] {
+export function adaptLegacyRecords(
+  leaves: { node: any; path: string[] }[],
+  defaultTermsDays = DEFAULT_TERMS_DAYS,
+): SalesBatch[] {
   const groups: Record<string, SalesBatch> = {};
 
   for (const { node, path } of leaves) {
@@ -182,7 +203,7 @@ export function adaptLegacyRecords(leaves: { node: any; path: string[] }[]): Sal
     };
 
     if (!groups[batchId]) {
-      const status = computePaymentStatus(0, 0, isOverdue(node.createdAt));
+      const status = computePaymentStatus(0, 0, isPastDue(node.createdAt, node.dueDate, defaultTermsDays));
       groups[batchId] = {
         id: batchId,
         dbPath,
@@ -209,7 +230,7 @@ export function adaptLegacyRecords(leaves: { node: any; path: string[] }[]): Sal
   }
 
   return Object.values(groups).map((b) => {
-    const status = computePaymentStatus(b.totalAmount, b.totalPaid, isOverdue(b.createdAt));
+    const status = computePaymentStatus(b.totalAmount, b.totalPaid, isPastDue(b.createdAt, b.dueDate, defaultTermsDays));
     // Flat legacy records carry no delivery or adjustment of any kind — the
     // batch total is purely the sum of its lines, so the subtotal is the total.
     const money = deriveLegacyMoneyFields({
@@ -234,8 +255,11 @@ export function adaptLegacyRecords(leaves: { node: any; path: string[] }[]): Sal
  * ------------------------------------------------------------------ */
 
 /** Subscribe to all sales as normalized batches. Returns an unsubscribe fn. */
-export function subscribeToBatches(callback: (batches: SalesBatch[]) => void): () => void {
-  return dbService.subscribe(SALES_ROOT, (root) => callback(parseSalesTree(root)));
+export function subscribeToBatches(
+  callback: (batches: SalesBatch[]) => void,
+  defaultTermsDays = DEFAULT_TERMS_DAYS,
+): () => void {
+  return dbService.subscribe(SALES_ROOT, (root) => callback(parseSalesTree(root, defaultTermsDays)));
 }
 
 /** One-shot fetch of specific batches by receiptId (used by the invoice screen). */

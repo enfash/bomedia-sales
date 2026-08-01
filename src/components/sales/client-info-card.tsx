@@ -4,6 +4,7 @@ import { Surface } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { ThemedTextInput } from '@/components/ui/themed-text-input';
 import { ThemedText } from '@/components/themed-text';
+import { localDayKey } from '@/utils/date';
 import { useTheme } from '@/hooks/use-theme';
 import { Spacing } from '@/constants/theme';
 
@@ -84,7 +85,7 @@ export const ClientInfoCard = React.memo(
                 ]}
               >
                 <ThemedText style={{ color: theme.onSurface }}>
-                  {date.toISOString().split('T')[0]}
+                  {localDayKey(date)}
                 </ThemedText>
               </Pressable>
               {showDatePicker && Platform.OS !== 'web' && (

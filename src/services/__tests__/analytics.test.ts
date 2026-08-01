@@ -148,7 +148,7 @@ describe('computeDashboardMetrics', () => {
 
     // A — the behaviour we want. Currently throws, so `it.failing` passes.
     // STAGE 1: flip `it.failing` -> `it`. No other edit.
-    it.failing('counts a sale logged at 00:30 WAT toward today', () => {
+    it('counts a sale logged at 00:30 WAT toward today', () => {
       const metrics = computeDashboardMetrics([earlyBatch()], []);
       expect(metrics.todaySales).toBe(1);
       expect(metrics.todayJobs).toBe(2);
@@ -157,13 +157,6 @@ describe('computeDashboardMetrics', () => {
 
     // B — the behaviour we have. Currently passes.
     // STAGE 1: delete this test.
-    it('current behaviour: a 00:30 WAT sale is dropped from today entirely', () => {
-      const metrics = computeDashboardMetrics([earlyBatch()], []);
-      expect(metrics.todaySales).toBe(0);
-      expect(metrics.todayJobs).toBe(0);
-      expect(metrics.todayRevenue).toBe(0);
-    });
-
     // Survives Stage 1. This is the heart of §1.3: `utils/date.ts:isToday`
     // uses local components and gets the SAME batch right, so the app holds two
     // contradictory definitions of "today" at once.

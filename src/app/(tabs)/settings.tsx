@@ -25,6 +25,7 @@ export default function SettingsScreen() {
   const [logoUrl, setLogoUrl] = useState(settings.logoUrl || '');
   const [bankDetails, setBankDetails] = useState(settings.bankDetails || '');
   const [mov, setMov] = useState(settings.mov.toString());
+  const [defaultTermsDays, setDefaultTermsDays] = useState(String(settings.defaultTermsDays ?? 7));
   const [eyeletCost, setEyeletCost] = useState(settings.eyeletCost.toString());
   const [laminationCost, setLaminationCost] = useState(settings.laminationCost?.toString() || '0');
   const [laborCost, setLaborCost] = useState(settings.laborCost?.toString() || '0');
@@ -60,6 +61,7 @@ export default function SettingsScreen() {
       logoUrl,
       bankDetails,
       mov: parseFloat(mov) || 0,
+      defaultTermsDays: parseInt(defaultTermsDays, 10) || 7,
       eyeletCost: parseFloat(eyeletCost) || 0,
       materials: validMaterials,
       laminationCost: parseFloat(laminationCost) || 0,
@@ -242,6 +244,22 @@ export default function SettingsScreen() {
                     onChangeText={setMov}
                     keyboardType="numeric"
                   />
+                  <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>
+                    Applied once per order, to printing only — delivery does not count toward it.
+                  </ThemedText>
+                </View>
+
+                <View style={styles.formGroup}>
+                  <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>Default Payment Terms (days)</ThemedText>
+                  <ThemedTextInput
+                    dense
+                    value={defaultTermsDays}
+                    onChangeText={setDefaultTermsDays}
+                    keyboardType="numeric"
+                  />
+                  <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.label}>
+                    Used to decide Overdue when a sale has no explicit due date.
+                  </ThemedText>
                 </View>
 
                 <View style={styles.row}>

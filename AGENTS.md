@@ -145,41 +145,31 @@ Error Container:
 
 ## Status Colours
 
-Status colours should communicate meaning only.
+Status colours communicate meaning only. Never use them for branding.
 
-Never use them for branding.
+**`STATUS_META` in `src/utils/payment-status.ts` is the source of truth.** The
+table below documents it; it does not define it. If the two ever disagree, the
+code is right and this file is stale — fix this file.
 
-Paid
+There are five payment statuses, and they are the only ones. An earlier version
+of this document listed "Part Paid", "Outstanding" and "Cancelled", none of
+which exist in the code, and omitted Overdue and Overpaid, which do.
 
-Background:
-#E8F5E9
+| Status | Label | Text | Background | Chip |
+|---|---|---|---|---|
+| `Paid` | Paid | `#1c7d4d` | `#d9f2e4` | outlined |
+| `Partial` | Partially paid | `#b26a00` | `#ffeccc` | outlined |
+| `Unpaid` | Unpaid | `#ba1a1a` | `#ffdad6` | outlined |
+| `Overdue` | Overdue | `#ffffff` | `#8c0009` | **filled** |
+| `Overpaid` | Overpaid | `#2e388d` | `#e5eeff` | outlined |
 
-Text:
-#2E7D32
+Overdue is the only filled chip. It was previously byte-identical to Unpaid —
+same text colour, same background — which made the one status needing action
+today indistinguishable from the one that does not. It now differs by fill as
+well as hue, so the distinction survives a red-green colour deficiency.
 
-Part Paid
-
-Background:
-#FFF4E5
-
-Text:
-#EF6C00
-
-Outstanding
-
-Background:
-#FDECEC
-
-Text:
-#C62828
-
-Cancelled
-
-Background:
-#ECEFF1
-
-Text:
-#546E7A
+Status is always *derived* from amounts and the due date by
+`computePaymentStatus`. A stored `status` string is never trusted on read.
 
 ---
 

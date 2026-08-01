@@ -21,6 +21,7 @@ export interface AppSettings {
   invoicePrefix: string;
   taxPercentage: number;
   mov: number; // Minimum Order Value
+  defaultTermsDays: number; // Payment terms when a sale has no explicit dueDate
   materials: MaterialItem[];
   eyeletCost: number; // Free by default
   wasteFactor: number; // % waste factor
@@ -44,6 +45,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   invoicePrefix: 'INV-',
   taxPercentage: 0,
   mov: 1000,
+  defaultTermsDays: 7,
   materials: [
     { id: 'm1', name: 'FLEX-3FT', price: 150 },
     { id: 'm2', name: 'SAV-4FT', price: 200 },
@@ -101,6 +103,7 @@ const nestSettings = (flatSettings: AppSettings) => {
     metrics: {
       taxPercentage: flatSettings.taxPercentage,
       mov: flatSettings.mov,
+      defaultTermsDays: flatSettings.defaultTermsDays,
       eyeletCost: flatSettings.eyeletCost,
       wasteFactor: flatSettings.wasteFactor,
       laminationCost: flatSettings.laminationCost,

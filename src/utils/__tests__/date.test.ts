@@ -8,7 +8,7 @@
  * The whole file assumes Africa/Lagos (UTC+1); jest.setup.ts enforces that.
  */
 
-import { formatDate, isOverdue, isToday, parseDate } from '@/utils/date';
+import { formatDate, isOverdue, isSameLocalDay, isToday, localDayKey, parseDate } from '@/utils/date';
 
 /** 2026-07-15 10:00 WAT === 09:00 UTC. Same calendar day in both zones. */
 const NOW = new Date('2026-07-15T10:00:00+01:00');
@@ -146,5 +146,60 @@ describe('isOverdue', () => {
 
   it('is false for a future date', () => {
     expect(isOverdue(new Date(NOW.getTime() + 24 * 60 * 60 * 1000).toISOString())).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * ONE DEFINITION OF "TODAY" (Stage 1 item 2).
+ *
+ * Before this, the app had four: analytics.ts compared UTC date strings,
+ * isToday read local components, createBatch bucketed on local components,
+ * and index.web.tsx carried its own inline copy. The UTC one was the bug —
+ * Lagos is UTC+1, so 00:30 WAT is the previous day in UTC.
+ * ------------------------------------------------------------------ */
+describe('isSameLocalDay', () => {
+  it('matches two times on the same local day', () => {
+    expect(isSameLocalDay('2026-07-15T00:30:00+01:00', '2026-07-15T23:00:00+01:00')).toBe(true);
+  });
+
+  it('separates adjacent local days', () => {
+    expect(isSameLocalDay('2026-07-15T23:30:00+01:00', '2026-07-16T00:30:00+01:00')).toBe(false);
+  });
+
+  // The bug, stated directly: 00:30 WAT is 23:30 the previous day in UTC.
+  it('counts 00:30 WAT as the same local day as 10:00 WAT, though UTC disagrees', () => {
+    const earlyWat = '2026-07-15T00:30:00+01:00';
+    const laterWat = '2026-07-15T10:00:00+01:00';
+    expect(isSameLocalDay(earlyWat, laterWat)).toBe(true);
+    // Proof the fixture is genuinely across the UTC date line.
+    expect(new Date(earlyWat).toISOString().split('T')[0]).toBe('2026-07-14');
+    expect(new Date(laterWat).toISOString().split('T')[0]).toBe('2026-07-15');
+  });
+
+  it('returns false when either side is missing', () => {
+    expect(isSameLocalDay(null, '2026-07-15T10:00:00+01:00')).toBe(false);
+    expect(isSameLocalDay('2026-07-15T10:00:00+01:00', undefined)).toBe(false);
+  });
+});
+
+describe('localDayKey', () => {
+  it('formats the local calendar day as YYYY-MM-DD', () => {
+    expect(localDayKey('2026-07-15T10:00:00+01:00')).toBe('2026-07-15');
+  });
+
+  it('zero-pads month and day', () => {
+    expect(localDayKey('2026-01-05T10:00:00+01:00')).toBe('2026-01-05');
+  });
+
+  // Matches the components createBatch uses to build sales/YYYY/MM/DD/...
+  it('keeps a 00:30 WAT sale on its local day, not the previous UTC one', () => {
+    expect(localDayKey('2026-07-15T00:30:00+01:00')).toBe('2026-07-15');
+  });
+
+  it('agrees with isSameLocalDay', () => {
+    const a = '2026-07-15T00:30:00+01:00';
+    const b = '2026-07-15T23:00:00+01:00';
+    expect(localDayKey(a)).toBe(localDayKey(b));
+    expect(isSameLocalDay(a, b)).toBe(true);
   });
 });

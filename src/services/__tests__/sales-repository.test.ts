@@ -203,23 +203,33 @@ describe('normalizeBatch', () => {
 
     // A — the behaviour we want. Currently throws, so `it.failing` passes.
     // STAGE 1: flip `it.failing` -> `it`. No other edit.
-    it.failing('does not flag a batch whose dueDate is still 20 days out', () => {
+    it('does not flag a batch whose dueDate is still 20 days out', () => {
       expect(normalizeBatch(longTerms(), BATCH_PATH).status).toBe('Unpaid');
     });
 
     // A — as above, the mirror case.
     // STAGE 1: flip `it.failing` -> `it`. No other edit.
-    it.failing('flags a batch whose dueDate lapsed yesterday', () => {
+    it('flags a batch whose dueDate lapsed yesterday', () => {
       expect(normalizeBatch(lapsedTerms(), BATCH_PATH).status).toBe('Overdue');
     });
 
     // B — the behaviour we have. Currently passes.
     // STAGE 1: delete this test.
-    it('current behaviour: status tracks the 7-day createdAt window, not dueDate', () => {
-      // 10 days old and comfortably within terms -> wrongly Overdue.
-      expect(normalizeBatch(longTerms(), BATCH_PATH).status).toBe('Overdue');
-      // 3 days old but already past its due date -> wrongly Unpaid.
-      expect(normalizeBatch(lapsedTerms(), BATCH_PATH).status).toBe('Unpaid');
+    // The fallback path: no explicit dueDate, so terms come from the passed-in
+    // threshold rather than a hardcoded 7 days.
+    it('falls back to createdAt + defaultTermsDays when no dueDate is set', () => {
+      const noDueDate = (): StoredBatch =>
+        makeStoredBatch({ createdAt: daysBefore(10), dueDate: undefined, totalAmount: 50_000, totalPaid: 0 });
+
+      // 10 days old, 30-day terms -> not yet due.
+      expect(normalizeBatch(noDueDate(), BATCH_PATH, 30).status).toBe('Unpaid');
+      // Same batch, 7-day terms -> overdue.
+      expect(normalizeBatch(noDueDate(), BATCH_PATH, 7).status).toBe('Overdue');
+    });
+
+    it('lets an explicit dueDate win over the terms fallback', () => {
+      // Long terms would say "not due", but the stored dueDate has lapsed.
+      expect(normalizeBatch(lapsedTerms(), BATCH_PATH, 365).status).toBe('Overdue');
     });
 
     // Survives Stage 1: proves dueDate reaches the normalizer intact, so the
@@ -478,27 +488,44 @@ describe('normalizeBatch', () => {
     // PERMANENT — the property itself, asserted behaviourally: the same stored
     // node must normalize identically under different live MOV settings.
     //
-    // REVIEW WHEN ITEM 3 LANDS: item 3 makes the overdue threshold a parameter
-    // of normalizeBatch. The claim below is "same stored node -> same result";
-    // once there is another input it must become "same node AND same threshold
-    // -> same result", with both calls passing the same threshold. Left alone
-    // this would still pass, but for the wrong reason.
+    // AMENDED FOR ITEM 3: the overdue threshold is now an input to
+    // normalizeBatch, so the claim is "same node AND SAME THRESHOLD -> same
+    // result". Both calls below pass TERMS explicitly. Without that this would
+    // still pass, but only because both calls happened to take the same
+    // default — it would stop testing the MOV property it exists for.
     it('returns the same result for one node under two different MOV settings', () => {
       const node = historicBatch();
+      const TERMS = 7;
 
       mockMov = 500;
-      const underOldMov = normalizeBatch(node, BATCH_PATH);
+      const underOldMov = normalizeBatch(node, BATCH_PATH, TERMS);
 
       mockMov = 1_000;
-      const underNewMov = normalizeBatch(node, BATCH_PATH);
+      const underNewMov = normalizeBatch(node, BATCH_PATH, TERMS);
 
       // Whole-batch equality, so this covers adjustments[], subtotal and
-      // totalAmount together — including once those fields exist.
+      // totalAmount together.
       expect(underNewMov).toEqual(underOldMov);
       expect(underNewMov.adjustments).toEqual(
         underOldMov.adjustments,
       );
       expect(underNewMov.totalAmount).toBe(underOldMov.totalAmount);
+    });
+
+    // PERMANENT — proves the "same threshold" qualifier above is load-bearing.
+    // The threshold DOES change the result, so holding it constant in the
+    // tripwire is what isolates the MOV property. If this ever passes, the
+    // tripwire has stopped testing anything.
+    it('the threshold genuinely changes the result, so holding it fixed matters', () => {
+      const node = makeStoredBatch({
+        createdAt: daysBefore(10),
+        dueDate: undefined,
+        totalAmount: 50_000,
+        totalPaid: 0,
+      });
+      expect(normalizeBatch(node, BATCH_PATH, 7).status).not.toBe(
+        normalizeBatch(node, BATCH_PATH, 30).status,
+      );
     });
   });
 });

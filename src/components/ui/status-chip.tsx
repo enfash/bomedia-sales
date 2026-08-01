@@ -15,19 +15,34 @@ interface StatusChipProps {
  * @description Visual indicator for a payment/record status. Colours and labels
  * come from the shared STATUS_META so every screen stays consistent.
  * @example <StatusChip status="Partial" />
- * @variants Paid (green), Partial (amber), Unpaid/Overdue (red), Overpaid (brand).
+ * @variants Paid (green), Partial (amber), Unpaid (red outline), Overdue (deep
+ * red, filled), Overpaid (brand).
  * @accessibility Ensure surrounding context conveys status to screen readers;
- * the chip is a visual supplement. Contrast pairs meet WCAG AA.
+ * the chip is a visual supplement. Contrast pairs meet WCAG AA. Overdue and
+ * Unpaid differ by fill as well as hue, so they stay distinguishable with a
+ * red-green colour deficiency.
  */
 export function StatusChip({ status, style }: StatusChipProps) {
   const meta = (status in STATUS_META) ? STATUS_META[status as PaymentStatus] : null;
   const colors = meta ? { text: meta.color, bg: meta.bg } : getStatusColors(String(status));
   const label = meta ? meta.label : String(status);
+  const filled = meta?.variant === 'filled';
 
   return (
     <Chip
-      style={[{ backgroundColor: colors.bg }, styles.chip, style]}
-      textStyle={{ color: colors.text, fontWeight: '600', fontSize: 12 }}
+      style={[
+        { backgroundColor: colors.bg },
+        styles.chip,
+        // A filled chip carries a matching border so its silhouette reads as
+        // solid rather than just darker.
+        filled ? { borderColor: colors.bg, borderWidth: 1 } : styles.outlined,
+        style,
+      ]}
+      textStyle={{
+        color: colors.text,
+        fontWeight: filled ? '800' : '600',
+        fontSize: 12,
+      }}
       compact
     >
       {label}
@@ -39,5 +54,8 @@ const styles = StyleSheet.create({
   chip: {
     borderRadius: 8,
     alignSelf: 'flex-start',
+  },
+  outlined: {
+    borderWidth: 0,
   },
 });

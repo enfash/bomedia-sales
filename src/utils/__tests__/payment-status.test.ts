@@ -169,16 +169,28 @@ describe('STATUS_META', () => {
   describe('§1.3 bug #4 — Overdue vs Unpaid', () => {
     // A — the behaviour we want. Currently throws, so `it.failing` passes.
     // STAGE 1: flip `it.failing` -> `it`. No other edit.
-    it.failing('gives Overdue a different foreground colour from Unpaid', () => {
+    it('gives Overdue a different foreground colour from Unpaid', () => {
       expect(STATUS_META.Overdue.color).not.toBe(STATUS_META.Unpaid.color);
     });
 
     // B — the behaviour we have. Currently passes.
     // STAGE 1: delete this test.
-    it('current behaviour: Overdue and Unpaid render identical colours', () => {
-      expect(STATUS_META.Overdue.color).toBe('#ba1a1a');
-      expect(STATUS_META.Unpaid.color).toBe('#ba1a1a');
-      expect(STATUS_META.Overdue.bg).toBe(STATUS_META.Unpaid.bg);
+    it('separates Overdue from Unpaid by background as well as foreground', () => {
+      expect(STATUS_META.Overdue.bg).not.toBe(STATUS_META.Unpaid.bg);
+    });
+
+    // Colour alone is not a sufficient signal — the two must also differ in
+    // shape, so the distinction survives a red-green colour deficiency.
+    it('separates them by chip treatment, not only by hue', () => {
+      expect(STATUS_META.Overdue.variant).toBe('filled');
+      expect(STATUS_META.Unpaid.variant).toBe('outlined');
+      expect(STATUS_META.Overdue.variant).not.toBe(STATUS_META.Unpaid.variant);
+    });
+
+    it('gives every status a variant', () => {
+      for (const meta of Object.values(STATUS_META)) {
+        expect(['filled', 'outlined']).toContain(meta.variant);
+      }
     });
 
     // Survives Stage 1: the labels already differ, so only colour is at issue.

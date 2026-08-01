@@ -6,7 +6,7 @@
 
 import { PRODUCTION_STAGES, type ProductionStage, type SalesBatch } from '@/components/records/types';
 import type { ExpenseRecord } from '@/hooks/use-expenses';
-import { parseDate } from '@/utils/date';
+import { isSameLocalDay, parseDate } from '@/utils/date';
 
 export interface DashboardMetrics {
   todaySales: number;
@@ -30,7 +30,6 @@ export function computeDashboardMetrics(
   expenses: ExpenseRecord[],
 ): DashboardMetrics {
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
   const thisMonth = monthKey(now);
 
   let todaySales = 0;
@@ -47,7 +46,8 @@ export function computeDashboardMetrics(
     collectedAllTime += b.totalPaid || 0;
     outstanding += b.totalBalance || 0;
 
-    if (d.toISOString().split('T')[0] === todayStr) {
+    // Local calendar day, not UTC. A sale at 00:30 WAT is still today.
+    if (isSameLocalDay(d, now)) {
       todaySales += 1;
       todayJobs += b.records.length;
       todayRevenue += b.totalAmount || 0;

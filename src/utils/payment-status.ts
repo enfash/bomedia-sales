@@ -16,15 +16,25 @@ export interface StatusMeta {
   color: string;
   /** Container / chip background colour. */
   bg: string;
+  /**
+   * Chip treatment. `filled` reads as more urgent than `outlined` and is
+   * reserved for states needing action now — colour alone is not enough to
+   * separate them for anyone with a red-green deficiency.
+   */
+  variant: 'filled' | 'outlined';
 }
 
 /** The one place status colours are defined. Semantic palette, brand-aligned. */
 export const STATUS_META: Record<PaymentStatus, StatusMeta> = {
-  Paid:     { label: 'Paid',     color: '#1c7d4d', bg: '#d9f2e4' },
-  Partial:  { label: 'Partially paid', color: '#b26a00', bg: '#ffeccc' },
-  Unpaid:   { label: 'Unpaid',   color: '#ba1a1a', bg: '#ffdad6' },
-  Overdue:  { label: 'Overdue',  color: '#ba1a1a', bg: '#ffdad6' },
-  Overpaid: { label: 'Overpaid', color: '#2e388d', bg: '#e5eeff' },
+  Paid:     { label: 'Paid',           color: '#1c7d4d', bg: '#d9f2e4', variant: 'outlined' },
+  Partial:  { label: 'Partially paid', color: '#b26a00', bg: '#ffeccc', variant: 'outlined' },
+  Unpaid:   { label: 'Unpaid',         color: '#ba1a1a', bg: '#ffdad6', variant: 'outlined' },
+  // Overdue was byte-identical to Unpaid — same colour, same background — so
+  // the one status needing action today was indistinguishable from the one
+  // that does not. Deeper red plus a filled chip, so it separates by shape as
+  // well as by hue.
+  Overdue:  { label: 'Overdue',        color: '#ffffff', bg: '#8c0009', variant: 'filled' },
+  Overpaid: { label: 'Overpaid',       color: '#2e388d', bg: '#e5eeff', variant: 'outlined' },
 };
 
 export interface PaymentStatusData {

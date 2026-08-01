@@ -1,4 +1,5 @@
 import { SalesBatch, SalesRecord } from '@/components/records/types';
+import { useSettings } from '@/context/settings-context';
 import { subscribeToBatches } from '@/services/sales-repository';
 import { isToday } from '@/utils/date';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -41,6 +42,8 @@ function loadPersistedFilters(key?: string): PersistedFilters | null {
 
 export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
   const { persistKey, staffTodayOnly } = options;
+  const { settings } = useSettings();
+  const defaultTermsDays = settings?.defaultTermsDays ?? 7;
   const [persisted] = useState(() => loadPersistedFilters(persistKey));
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -68,13 +71,15 @@ export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
     }
   }, [persistKey, statusFilter, dateFilter, sortColumn, sortDirection]);
 
+  // The single place Settings meets the repository. `normalizeBatch` stays a
+  // pure function of its arguments; the live terms value is injected here.
   useEffect(() => {
     const unsubscribe = subscribeToBatches((batches) => {
       setRawBatches(batches);
       setLoading(false);
-    });
+    }, defaultTermsDays);
     return () => unsubscribe();
-  }, [refreshNonce]);
+  }, [refreshNonce, defaultTermsDays]);
 
   const refresh = useCallback(() => setRefreshNonce((n) => n + 1), []);
 

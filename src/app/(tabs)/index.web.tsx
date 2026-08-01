@@ -23,7 +23,7 @@ import {
   type RangePreset,
 } from '@/services/analytics';
 import { formatCurrency, formatCurrencyCompact } from '@/utils/currency';
-import { formatDate, parseDate } from '@/utils/date';
+import { formatDate, isSameLocalDay, parseDate } from '@/utils/date';
 import { STATUS_META } from '@/utils/payment-status';
 import { useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
@@ -73,14 +73,13 @@ export default function DashboardWeb() {
   // Live daily snapshot — always shown, independent of the range toggle.
   const today = useMemo(() => {
     const t = new Date();
-    const isToday = (d: Date) =>
-      d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate();
     let revenue = 0;
     let sales = 0;
     let jobs = 0;
     let collected = 0;
     for (const b of sortedBatches) {
-      if (isToday(parseDate(b.createdAt))) {
+      // Shared local-day rule — this screen used to carry its own copy.
+      if (isSameLocalDay(parseDate(b.createdAt), t)) {
         revenue += b.totalAmount || 0;
         sales += 1;
         jobs += b.records.length;
