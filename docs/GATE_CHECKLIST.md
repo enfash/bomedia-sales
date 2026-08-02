@@ -421,6 +421,51 @@ all-clear, which is worse than no answer.
 
 ---
 
+## Appendix — read-only measurements
+
+Not part of the gate. These answer questions the audit's Stage 4 re-examination
+(`AUDIT_2026-07.md`) leaves open, and they only read.
+
+**Is the activity `limitToLast` fix preventive or corrective?**
+
+```bash
+# How many entries exist. --shallow returns KEYS ONLY, so this does not
+# download the feed to count it.
+firebase database:get /activity --shallow $FBP | jq 'keys | length'
+
+# What the app downloads for that feed today, in bytes: the whole node, which
+# is exactly what subscribeToActivity fetches before discarding all but 100.
+firebase database:get /activity $FBP | wc -c
+```
+
+Entries run ~200–300 bytes each. Under ~50 KB the fix is **preventive** — worth
+doing at this cost, but nothing is hurting yet. Hundreds of KB, or entry counts
+in the thousands, and it is **corrective**: that payload is being pulled on every
+admin app start.
+
+**Is the whole-tree sales read the 20 KB the re-examination claims?**
+
+```bash
+firebase database:get /sales $FBP | wc -c
+firebase database:get /sales $FBP | jq '[.. | objects | select(has("receiptId"))] | length'
+```
+
+The second is the batch count. If the byte figure is over a megabyte, the
+deferred read-scoping items move back up the list.
+
+**Where bandwidth actually goes.** Run this, then use the app for a minute —
+the report attributes downloaded bytes per path, which is the figure the Stage 4
+premise assumed rather than measured. It opens a read stream and writes nothing:
+
+```bash
+firebase database:profile --duration 60 $FBP
+```
+
+The same figure over a longer window is in the Firebase console under Realtime
+Database → Usage → Downloads.
+
+---
+
 ## Reporting back
 
 For each failure: the step number, what you saw, and the exact error text if
