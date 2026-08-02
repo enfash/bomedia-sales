@@ -19,6 +19,7 @@ import { useAuth } from '@/context/auth-context';
 import { useExpenses } from '@/hooks/use-expenses';
 import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useRecords } from '@/hooks/use-records';
+import { LedgerIntegrityBanner } from '@/components/records/ledger-integrity-banner';
 import { useTheme } from '@/hooks/use-theme';
 import {
   clientsOwing,
@@ -136,6 +137,9 @@ export default function DashboardScreen() {
   return (
     <PageContainer refreshing={refreshing} onRefresh={onRefresh}>
       <View style={styles.screen}>
+        {/* Renders nothing when the books agree. See the component for why it
+            lives here rather than only on the cash page. */}
+        <LedgerIntegrityBanner batches={sortedBatches} theme={theme} />
         {/* Header — personal greeting + a live nudge at what needs you next. */}
         <Animated.View entering={enter(0)} style={styles.headerRow}>
           <View style={styles.header}>

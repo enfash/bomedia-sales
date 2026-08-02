@@ -10,6 +10,7 @@ import { Spacing } from '@/constants/theme';
 import { useSettings } from '@/context/settings-context';
 import { useAllExpenses } from '@/hooks/use-all-expenses';
 import { useRecords } from '@/hooks/use-records';
+import { LedgerIntegrityBanner } from '@/components/records/ledger-integrity-banner';
 import { useTheme } from '@/hooks/use-theme';
 import {
   clientsOwing,
@@ -125,6 +126,8 @@ export default function DashboardWeb() {
       subtitle={`Live overview of ${settings?.businessName || 'your business'} operations`}
       right={rightSlot}
     >
+      {/* Renders nothing when the books agree. */}
+      <LedgerIntegrityBanner batches={sortedBatches} theme={theme} />
       {loading ? (
         <View style={{ gap: Spacing.four }}>
           <View style={styles.row}>

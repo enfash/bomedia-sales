@@ -100,13 +100,19 @@ export default function RecordsScreen() {
 
   const doMarkPaid = async (batches: SalesBatch[], method: PaymentMethod) => {
     try {
-      await markBatchesPaid(batches, method, actorFrom(user));
-      const paidTotal = batches.reduce((s, b) => s + (b.totalBalance || 0), 0);
+      // markBatchesPaid returns only the batches it actually wrote for —
+      // anything already settled is skipped rather than given a zero entry.
+      const settled = await markBatchesPaid(batches, method, actorFrom(user));
+      if (settled.length === 0) {
+        Alert.alert('Nothing to record', 'Those sales are already fully paid.');
+        return;
+      }
+      const paidTotal = settled.reduce((s, b) => s + (b.totalBalance || 0), 0);
       logActivity({
         type: 'payment_recorded',
         actor: actorFrom(user),
-        message: `${actorFrom(user).name} marked ${batches.length} sale${batches.length !== 1 ? 's' : ''} paid (${formatCurrency(paidTotal)})`,
-        meta: { batchIds: batches.map((b) => b.id), amount: paidTotal },
+        message: `${actorFrom(user).name} marked ${settled.length} sale${settled.length !== 1 ? 's' : ''} paid by ${method} (${formatCurrency(paidTotal)})`,
+        meta: { batchIds: settled.map((b) => b.id), amount: paidTotal },
       });
       setSelectedBatches([]);
     } catch (e: any) {

@@ -24,7 +24,7 @@ import type {
   TurnaroundTime,
 } from '@/components/records/types';
 import { dbService } from '@/services/db';
-import { buildPaymentWrite, recordPayment, type PaymentActor } from '@/services/payment-repository';
+import { buildPaymentWrite, type PaymentActor } from '@/services/payment-repository';
 import { isPastDue, localDayKey } from '@/utils/date';
 import { roundNaira } from '@/utils/money';
 import { computePaymentStatus, STATUS_META } from '@/utils/payment-status';
@@ -320,23 +320,50 @@ export async function updateProductionStage(
  *
  * `method` is required rather than defaulted — bulk-marking ten invoices paid
  * by unspecified means puts ten untraceable entries in the day's reconciliation.
+ *
+ * ATOMIC ACROSS EVERY BATCH, not a loop of awaits.
+ *
+ * A sequential version failing on the sixth of ten invoices leaves five paid
+ * and five not, with no rollback and nothing saying which. One multi-path
+ * update either applies in full or not at all, so a failed bulk mark-paid
+ * leaves the ledger exactly as it was and can simply be retried.
+ *
+ * Returns the batches it actually wrote for, so the caller can report
+ * accurately rather than assuming everything selected was settled — anything
+ * already paid is skipped rather than given a zero-value entry.
  */
 export async function markBatchesPaid(
   batches: SalesBatch[],
   method: PaymentMethod,
   actor: PaymentActor,
-): Promise<void> {
+): Promise<SalesBatch[]> {
+  const now = new Date();
+  const updates: Record<string, unknown> = {};
+  const settled: SalesBatch[] = [];
+
   for (const batch of batches) {
     const outstanding = roundNaira(batch.totalBalance ?? batch.totalAmount - batch.totalPaid);
     if (outstanding <= 0) continue; // already settled — do not write a zero entry
-    await recordPayment({
+
+    const write = buildPaymentWrite({
       batch,
       amount: outstanding,
       method,
       actor,
       note: 'Marked paid in bulk from Records',
+      key: dbService.newKey(`payments/${localDayKey(now)}/${actor.uid}`),
+      now,
     });
+
+    updates[write.paymentPath] = write.entry;
+    updates[write.totalPaidPath] = dbService.increment(write.delta);
+    settled.push(batch);
   }
+
+  if (settled.length === 0) return [];
+
+  await dbService.updateAtomic(updates);
+  return settled;
 }
 
 /** Update editable batch details (notes / due date), across one or more batches. */
