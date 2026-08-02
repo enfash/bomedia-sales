@@ -10,6 +10,12 @@
  */
 process.env.TZ = 'Africa/Lagos';
 
+// Jest REPLACES preset keys rather than merging them. Declaring
+// `moduleNameMapper` below without this would drop the preset's own mappings —
+// notably `^react-native($|/.*)`, without which react-native resolves to source
+// that Jest cannot render and @testing-library's `render` silently no-ops.
+const expoPreset = require('jest-expo/jest-preset');
+
 /** @type {import('jest').Config} */
 module.exports = {
   preset: 'jest-expo',
@@ -18,8 +24,16 @@ module.exports = {
   // jest-expo already derives these from tsconfig's `paths`; stated explicitly
   // so the aliases keep working if that preset behaviour ever changes.
   moduleNameMapper: {
+    // Must precede the '@/' catch-all: theme.ts imports '@/global.css' for
+    // Nativewind, and Jest has no CSS transformer.
+    '\\.(css)$': '<rootDir>/src/test-support/style-mock.js',
+    // Assets before the catch-all, or '@/assets/x.png' resolves to src/assets.
     '^@/assets/(.*)$': '<rootDir>/assets/$1',
     '^@/(.*)$': '<rootDir>/src/$1',
+    // Everything else the preset maps, kept because this key overrides it.
+    ...Object.fromEntries(
+      Object.entries(expoPreset.moduleNameMapper ?? {}).filter(([k]) => !k.startsWith('^@/')),
+    ),
   },
   collectCoverageFrom: [
     'src/services/analytics.ts',

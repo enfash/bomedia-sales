@@ -10,7 +10,11 @@ import { Spacing } from '@/constants/theme';
 import { useSettings } from '@/context/settings-context';
 import { useAllExpenses } from '@/hooks/use-all-expenses';
 import { useRecords } from '@/hooks/use-records';
-import { LedgerIntegrityBanner } from '@/components/records/ledger-integrity-banner';
+import {
+  LedgerIntegrityBanner,
+  LedgerIntegrityNote,
+  useLedgerIntegrity,
+} from '@/components/records/ledger-integrity-banner';
 import { useTheme } from '@/hooks/use-theme';
 import {
   clientsOwing,
@@ -41,6 +45,10 @@ export default function DashboardWeb() {
 
   const now = new Date();
   const { sortedBatches, loading: recordsLoading } = useRecords(theme);
+  const integrity = useLedgerIntegrity({
+    batches: sortedBatches,
+    batchesReceived: !recordsLoading,
+  });
   const { expenses, loading: expensesLoading } = useAllExpenses();
   const loading = recordsLoading || expensesLoading;
 
@@ -126,8 +134,8 @@ export default function DashboardWeb() {
       subtitle={`Live overview of ${settings?.businessName || 'your business'} operations`}
       right={rightSlot}
     >
-      {/* Renders nothing when the books agree. */}
-      <LedgerIntegrityBanner batches={sortedBatches} theme={theme} />
+      {/* Only when something is wrong; nothing at all while loading. */}
+      <LedgerIntegrityBanner integrity={integrity} theme={theme} />
       {loading ? (
         <View style={{ gap: Spacing.four }}>
           <View style={styles.row}>
@@ -315,6 +323,8 @@ export default function DashboardWeb() {
           </Panel>
         </>
       )}
+      {/* Clean confirmation at the bottom — present, and states its window. */}
+      <LedgerIntegrityNote integrity={integrity} theme={theme} />
     </DashboardLayout>
   );
 }

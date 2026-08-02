@@ -19,7 +19,11 @@ import { useAuth } from '@/context/auth-context';
 import { useExpenses } from '@/hooks/use-expenses';
 import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useRecords } from '@/hooks/use-records';
-import { LedgerIntegrityBanner } from '@/components/records/ledger-integrity-banner';
+import {
+  LedgerIntegrityBanner,
+  LedgerIntegrityNote,
+  useLedgerIntegrity,
+} from '@/components/records/ledger-integrity-banner';
 import { useTheme } from '@/hooks/use-theme';
 import {
   clientsOwing,
@@ -64,6 +68,12 @@ export default function DashboardScreen() {
   const { refreshing, onRefresh } = usePullRefresh([refreshRecords, refreshExpenses]);
 
   const metrics = useMemo(() => computeDashboardMetrics(sortedBatches, expenses), [sortedBatches, expenses]);
+  // One subscription feeding both surfaces: the banner at the top when
+  // something is wrong, the quiet note at the bottom when nothing is.
+  const integrity = useLedgerIntegrity({
+    batches: sortedBatches,
+    batchesReceived: !recordsLoading,
+  });
   const stages = useMemo(() => productionThroughput(sortedBatches), [sortedBatches]);
   const ready = useMemo(() => readyJobs(sortedBatches), [sortedBatches]);
   const owing = useMemo(() => clientsOwing(sortedBatches), [sortedBatches]);
@@ -137,9 +147,6 @@ export default function DashboardScreen() {
   return (
     <PageContainer refreshing={refreshing} onRefresh={onRefresh}>
       <View style={styles.screen}>
-        {/* Renders nothing when the books agree. See the component for why it
-            lives here rather than only on the cash page. */}
-        <LedgerIntegrityBanner batches={sortedBatches} theme={theme} />
         {/* Header — personal greeting + a live nudge at what needs you next. */}
         <Animated.View entering={enter(0)} style={styles.headerRow}>
           <View style={styles.header}>
@@ -158,6 +165,10 @@ export default function DashboardScreen() {
             <UserAvatar name={user?.displayName} email={user?.email} size={40} />
           </Pressable>
         </Animated.View>
+
+        {/* Only when something is actually wrong. Renders nothing while the
+            snapshots are still arriving, so it cannot shift the layout. */}
+        <LedgerIntegrityBanner integrity={integrity} theme={theme} reduceMotion={reduceMotion} />
 
         {/* Money hero — today's revenue with a 7-day sparkline + vs-yesterday delta,
             and a weekly collected/owed pulse. Filled brand card anchors the screen. */}
@@ -313,6 +324,11 @@ export default function DashboardScreen() {
           )}
           </Surface>
         </Animated.View>
+
+        {/* The clean confirmation lives here rather than at the top: it must be
+            present and must state its window, but it should not own the top of
+            a phone screen to say nothing is wrong. */}
+        <LedgerIntegrityNote integrity={integrity} theme={theme} />
       </View>
     </PageContainer>
   );
