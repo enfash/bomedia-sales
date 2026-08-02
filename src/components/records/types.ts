@@ -249,6 +249,14 @@ export interface StoredBatch {
   voidedBy?: string;
   voidedByName?: string;
   voidReason?: string;
+  /**
+   * Pointer index into the payment ledger: `{pushKey}` -> `"{dayKey}/{uid}"`.
+   *
+   * Written in the same atomic update as the entry it points at. See
+   * `PaymentWrite.refPath` — it is an index, not a record, and is rebuildable
+   * from the ledger by `planPaymentRefBackfill`.
+   */
+  paymentRefs?: Record<string, string>;
   items?: Record<string, StoredItem>;
 }
 

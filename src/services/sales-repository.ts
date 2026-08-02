@@ -293,12 +293,16 @@ export async function createBatch(input: NewBatchInput): Promise<string> {
       note: 'Advance taken at sale',
       now,
     });
-    // The batch, its opening ledger entry and the ref that finds it — one
-    // update. `totalPaid` is already on the node, so no increment is needed.
+    // The ref is nested INSIDE the node rather than sent as its own path.
+    // RTDB rejects a multi-path update where one path is an ancestor of
+    // another, and `dbPath` is an ancestor of `dbPath/paymentRefs/{key}`:
+    //   "values argument contains a path … that is ancestor of another path"
+    // Nesting keeps the batch, its opening entry and the ref in one atomic
+    // update, which is the property that matters. `totalPaid` is already on
+    // the node, so no increment is needed either.
     await dbService.updateAtomic({
-      [dbPath]: node,
+      [dbPath]: { ...node, paymentRefs: { [key]: write.refValue } },
       [write.paymentPath]: write.entry,
-      [write.refPath]: write.refValue,
     });
   } else {
     await dbService.setRecord(dbPath, node);

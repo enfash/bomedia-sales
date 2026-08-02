@@ -137,20 +137,23 @@ describe('createBatch always writes the money fields', () => {
     // entry no ref can find, are both inconsistencies this avoids.
     expect(mockWritten).toHaveLength(1);
     expect(mockOpeningEntries).toHaveLength(1);
-    expect(mockRefs).toHaveLength(1);
+    // The ref is NESTED in the node, not sent as its own path — RTDB rejects
+    // an update containing both a path and a descendant of it.
+    expect(Object.keys(mockWritten[0].node.paymentRefs ?? {})).toHaveLength(1);
+    expect(mockRefs).toEqual([]);
   });
 
   it('the opening entry ref points at the entry that was written', async () => {
     await createBatch(input({ totalPaid: 5000 }));
     const [{ path: entryPath }] = mockOpeningEntries;
-    const [{ path: refPath, node: location }] = mockRefs;
+    const [[key, location]] = Object.entries(mockWritten[0].node.paymentRefs ?? {});
     // ref key === entry key, and its value locates the entry.
-    const key = refPath.split('/').pop();
     expect(entryPath).toBe(`payments/${location}/${key}`);
   });
 
   it('writes no ref when there was no advance', async () => {
     await createBatch(input({ totalPaid: 0 }));
+    expect(mockWritten[0].node.paymentRefs).toBeUndefined();
     expect(mockRefs).toEqual([]);
   });
 
