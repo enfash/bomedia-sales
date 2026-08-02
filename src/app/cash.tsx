@@ -13,9 +13,10 @@ import type { PaymentEntry } from '@/components/records/types';
 import { WebDetailShell } from '@/components/web-detail-shell';
 import { ThemedText } from '@/components/themed-text';
 import { EmptyState } from '@/components/ui/empty-state';
+import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { PageContainer } from '@/components/ui/page-container';
 import { Spacing } from '@/constants/theme';
-import { useAuth } from '@/context/auth-context';
+import { useAdminGate } from '@/hooks/use-admin-gate';
 import { useTheme } from '@/hooks/use-theme';
 import { summariseDay, todayKey } from '@/services/payment-reconciliation';
 import { subscribeToPaymentsForDay } from '@/services/payment-repository';
@@ -34,7 +35,7 @@ const shiftDay = (dayKey: string, days: number) => {
 
 export default function CashReconciliationScreen() {
   const theme = useTheme();
-  const { isAdmin } = useAuth();
+  const gate = useAdminGate();
 
   const [dayKey, setDayKey] = useState(todayKey());
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
@@ -47,21 +48,34 @@ export default function CashReconciliationScreen() {
   const day = useMemo(() => summariseDay(dayKey, payments), [dayKey, payments]);
   const isToday = dayKey === todayKey();
 
-  if (!isAdmin) {
+  // The role arrives a beat after sign-in, and "not known yet" must not be
+  // shown as a refusal — an admin would watch the page reject them and then
+  // let them in. Both non-admin states keep the shell so the chrome holds still.
+  if (gate !== 'allowed') {
     return (
-      <View style={{ flex: 1, backgroundColor: theme.background, justifyContent: 'center' }}>
-        <Stack.Screen options={{ title: 'Cash' }} />
-        <EmptyState
-          iconName="lock"
-          title="Admins only"
-          message="Daily cash reconciliation shows every staff member's takings, so it is limited to admin accounts."
-        />
-      </View>
+      <WebDetailShell title="Daily Cash">
+        <View style={{ flex: 1, backgroundColor: theme.background, justifyContent: 'center' }}>
+          <Stack.Screen options={{ title: 'Daily Cash' }} />
+          {gate === 'pending' ? (
+            <View style={styles.gatePending}>
+              <LoadingSkeleton width={220} height={28} borderRadius={8} />
+              <LoadingSkeleton width="100%" height={140} borderRadius={16} />
+              <LoadingSkeleton width="100%" height={180} borderRadius={16} />
+            </View>
+          ) : (
+            <EmptyState
+              iconName="lock"
+              title="Admins only"
+              message="Daily cash reconciliation shows every staff member's takings, so it is limited to admin accounts."
+            />
+          )}
+        </View>
+      </WebDetailShell>
     );
   }
 
   return (
-    <WebDetailShell>
+    <WebDetailShell title="Daily Cash">
       <View style={{ flex: 1, backgroundColor: theme.background }}>
       <Stack.Screen options={{ title: 'Daily Cash', headerBackVisible: true }} />
       <PageContainer contentContainerStyle={styles.content}>
@@ -212,6 +226,8 @@ const styles = StyleSheet.create({
   // override its paddingLeft/Right and knock this page out of line with the
   // rest of the app.
   content: { gap: Spacing.four, paddingVertical: Spacing.four },
+  /** Stand-in for the page while the role read is still in flight. */
+  gatePending: { flex: 1, gap: Spacing.four, padding: Spacing.four, justifyContent: 'flex-start' },
   dayBar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   arrow: { paddingHorizontal: Spacing.four, paddingVertical: Spacing.two },
   hero: { padding: Spacing.four, borderRadius: 22, gap: Spacing.two },

@@ -10,7 +10,7 @@ import { ThemedText } from '@/components/themed-text';
 import type { ProductionStage } from '@/components/records/types';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { Spacing } from '@/constants/theme';
-import { useAuth } from '@/context/auth-context';
+import { useAdminGate } from '@/hooks/use-admin-gate';
 import { useAllExpenses } from '@/hooks/use-all-expenses';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
@@ -42,7 +42,7 @@ const STAGE_ACCENT: Record<ProductionStage, string> = {
 
 export default function AnalyticsWeb() {
   const theme = useTheme();
-  const { isAdmin } = useAuth();
+  const gate = useAdminGate();
   const { sortedBatches: batches, loading: recordsLoading } = useRecords(theme);
   const { expenses, loading: expensesLoading } = useAllExpenses();
   const loading = recordsLoading || expensesLoading;
@@ -102,14 +102,21 @@ export default function AnalyticsWeb() {
     caption: c.balance > 0 ? `${formatCurrency(c.balance)} owing` : undefined,
   }));
 
-  if (!isAdmin) {
+  // `pending` is the role read still in flight, not a refusal — see useAdminGate.
+  if (gate !== 'allowed') {
     return (
       <DashboardLayout eyebrow="Insights" title="Analytics" subtitle="Business performance and reports.">
-        <Panel title="Admins only">
-          <ThemedText type="small" themeColor="onSurfaceVariant">
-            Analytics — revenue, margins and reports — is available to admins only.
-          </ThemedText>
-        </Panel>
+        {gate === 'pending' ? (
+          <Panel title="Loading">
+            <LoadingSkeleton width="100%" height={120} borderRadius={16} />
+          </Panel>
+        ) : (
+          <Panel title="Admins only">
+            <ThemedText type="small" themeColor="onSurfaceVariant">
+              Analytics — revenue, margins and reports — is available to admins only.
+            </ThemedText>
+          </Panel>
+        )}
       </DashboardLayout>
     );
   }

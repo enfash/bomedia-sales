@@ -149,7 +149,7 @@ ${itemsString}`;
 
   if (loading) {
     return (
-      <WebDetailShell>
+      <WebDetailShell title="Transaction Details">
       <View style={{ flex: 1, padding: Spacing.four, backgroundColor: theme.background, gap: Spacing.four }}>
         <LoadingSkeleton width="100%" height={100} borderRadius={16} />
         <LoadingSkeleton width="100%" height={200} borderRadius={16} />
@@ -160,7 +160,7 @@ ${itemsString}`;
 
   if (!transaction) {
     return (
-      <WebDetailShell>
+      <WebDetailShell title="Not Found">
       <View style={{ flex: 1, backgroundColor: theme.background, justifyContent: 'center' }}>
         <Stack.Screen options={{ title: 'Not Found', headerBackVisible: true }} />
         <EmptyState
@@ -191,7 +191,7 @@ ${itemsString}`;
   const initials = (transaction.clientName || 'U').substring(0, 2).toUpperCase();
 
   return (
-    <WebDetailShell>
+    <WebDetailShell title="Transaction Details">
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <Stack.Screen options={{ title: 'Transaction Details', headerBackVisible: true }} />
 

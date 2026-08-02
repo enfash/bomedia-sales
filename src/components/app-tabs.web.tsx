@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import {
     TabList,
     TabListProps,
@@ -8,39 +8,48 @@ import {
     TabTriggerSlotProps,
 } from "expo-router/ui";
 import {
-    Image,
     Pressable,
     ScrollView,
     StyleSheet,
-    useWindowDimensions,
     View,
 } from "react-native";
 
-import { ThemedText } from "./themed-text";
 import { ThemedView } from "./themed-view";
 
-import { ActivityDrawer, OPEN_ACTIVITY_DRAWER_EVENT } from "@/components/dashboard/activity-drawer";
-import { CommandPalette, OPEN_COMMAND_PALETTE_EVENT } from "@/components/dashboard/command-palette";
+import { ActivityDrawer } from "@/components/dashboard/activity-drawer";
+import {
+    SidebarDivider,
+    SidebarNavItem,
+    SidebarNavItemSkeleton,
+    useSidebarCompact,
+} from "@/components/sidebar-nav-item";
+import { CommandPalette } from "@/components/dashboard/command-palette";
 import { AccountSection } from "@/components/user/account-section";
 import { UserAvatar } from "@/components/user/user-avatar";
+import { WebTopBar } from "@/components/web-top-bar";
 import { Spacing } from "@/constants/theme";
+import { WEB_NAV_ADMIN_COUNT, webNavItem } from "@/constants/web-nav";
 import { useAuth } from "@/context/auth-context";
-import { useActivity } from "@/hooks/use-activity";
+import { useAdminGate } from "@/hooks/use-admin-gate";
 import { useTheme } from "@/hooks/use-theme";
-import { withAlpha } from "@/utils/color";
 
 /**
  * Web/desktop navigation. Desktop has room for every destination, so the
  * sidebar lists all eight — the four daily-use tabs on top, then the secondary
  * destinations (the ones behind "More" on mobile) below a divider.
+ *
+ * The whole thing sits under the full-width `WebTopBar`, which owns the brand
+ * mark, the quick search and the activity bell — hence their absence here.
  */
 export default function AppTabs() {
   const theme = useTheme();
-  const { isAdmin } = useAuth();
+  const gate = useAdminGate();
 
   return (
     <>
-    <Tabs style={[styles.dashboardContainer, { backgroundColor: theme.background }]}>
+    <View style={styles.shell}>
+      <WebTopBar />
+      <Tabs style={[styles.dashboardContainer, { backgroundColor: theme.background }]}>
       {/*
        * TabTriggers must be *direct* children of the TabList (CustomSidebar).
        * expo-router's trigger parser only recurses into Fragments and nested
@@ -50,174 +59,116 @@ export default function AppTabs() {
        */}
       <TabList asChild>
         <CustomSidebar>
+          {/* Every label and icon comes from WEB_NAV — the detail-screen
+              sidebar reads the same list, so the two cannot drift. */}
           <TabTrigger name="index" href="/" asChild>
-            <TabButton icon="home">Home</TabButton>
+            <TabButton href="/" />
           </TabTrigger>
           <TabTrigger name="quote" href="/quote" asChild>
-            <TabButton icon="file-text">Quotes</TabButton>
+            <TabButton href="/quote" />
           </TabTrigger>
           <TabTrigger name="new-sales" href="/new-sales" asChild>
-            <TabButton icon="plus-circle">New Sale</TabButton>
+            <TabButton href="/new-sales" />
           </TabTrigger>
           <TabTrigger name="records" href="/records" asChild>
-            <TabButton icon="archive">Records</TabButton>
+            <TabButton href="/records" />
           </TabTrigger>
 
-          <View style={[styles.divider, { backgroundColor: theme.surfaceVariant }]} />
+          {/* Position declared by WEB_NAV's `dividerAfter: true` on /records. */}
+          <SidebarDivider />
 
           <TabTrigger name="board" href="/board" asChild>
-            <TabButton icon="layout">Production Board</TabButton>
+            <TabButton href="/board" />
           </TabTrigger>
           <TabTrigger name="clients" href="/clients" asChild>
-            <TabButton icon="users">Clients</TabButton>
+            <TabButton href="/clients" />
           </TabTrigger>
           <TabTrigger name="expenses" href="/expenses" asChild>
-            <TabButton icon="dollar-sign">Expenses</TabButton>
+            <TabButton href="/expenses" />
           </TabTrigger>
 
           {/* Admin-only destinations. The parser recurses into Fragments, so a
-              gated <>…</> keeps these as valid direct TabList children. */}
-          {isAdmin ? (
+              gated <>…</> keeps these as valid direct TabList children.
+              While the role read is still in flight the block is held open with
+              placeholders — otherwise the sidebar grows a second after paint. */}
+          {gate === 'pending' ? (
+            <>
+              {Array.from({ length: WEB_NAV_ADMIN_COUNT }).map((_, i) => (
+                <SidebarNavItemSkeleton key={`admin-pending-${i}`} />
+              ))}
+            </>
+          ) : null}
+          {gate === 'allowed' ? (
             <>
               <TabTrigger name="analytics" href="/analytics" asChild>
-                <TabButton icon="bar-chart-2">Analytics</TabButton>
+                <TabButton href="/analytics" />
               </TabTrigger>
               <TabTrigger name="settings" href="/settings" asChild>
-                <TabButton icon="settings">Settings</TabButton>
+                <TabButton href="/settings" />
               </TabTrigger>
-              {/* Activity is a root-stack route (not a tab), so it's a plain
-                  navigation button rather than a TabTrigger. Non-trigger children
-                  are fine here — the divider above is one too. */}
               {/* Daily Cash is a root-stack route, not a tab, so it navigates
                   directly rather than through a TabTrigger. */}
               <SidebarCashButton />
-              <SidebarActivityButton />
             </>
           ) : null}
         </CustomSidebar>
       </TabList>
 
       <TabSlot style={styles.mainContent} />
-    </Tabs>
+      </Tabs>
+    </View>
     {/* Global ⌘K command palette overlay (web power-user polish). */}
     <CommandPalette />
-    {/* Activity feed as a right-side drawer (admin), opened from the sidebar bell. */}
+    {/* Activity feed as a right-side drawer (admin), opened from the top bar bell. */}
     <ActivityDrawer />
     </>
   );
 }
 
 /**
- * Sidebar nav button for the admin Activity feed. Unlike the tab destinations
- * it pushes a root-stack route and carries an unread badge.
- */
-/**
  * Daily Cash reconciliation — a full sidebar destination on web, where the
  * owner actually counts a drawer, rather than a bottom-tab slot on mobile.
+ *
+ * `/cash` is a ROOT-STACK route, so it cannot be a `TabTrigger` — it is not in
+ * the `(tabs)` group, and wiring it as one silently breaks it (guarded by
+ * web-nav.test.ts). It can still be pushed by the router though: this used to
+ * call `window.location.assign`, which is a document navigation and rebooted
+ * the entire app — bundle re-parsed, Firebase re-authenticated, the role read
+ * replayed — on every click.
  */
 function SidebarCashButton() {
-  const theme = useTheme();
-  const { width } = useWindowDimensions();
-  const isCompact = width < 768;
+  const router = useRouter();
+  const item = webNavItem("/cash");
 
-  const go = () => {
-    if (typeof window !== "undefined") window.location.assign("/cash");
-  };
+  if (!item) return null;
 
   return (
-    <Pressable onPress={go} style={({ pressed }) => pressed && styles.pressed}>
-      <ThemedView
-        type="surface"
-        style={[styles.tabButtonView, isCompact && { justifyContent: "center", paddingHorizontal: 0 }]}
-      >
-        <Feather name="dollar-sign" size={isCompact ? 20 : 18} color={theme.onSurfaceVariant} />
-        {!isCompact && (
-          <ThemedText type="default" themeColor="onSurfaceVariant" style={{ flex: 1 }}>
-            Daily Cash
-          </ThemedText>
-        )}
-      </ThemedView>
+    <Pressable onPress={() => router.push("/cash")} style={({ pressed }) => pressed && styles.pressed}>
+      <SidebarNavItem icon={item.icon} label={item.label} />
     </Pressable>
   );
 }
 
-function SidebarActivityButton() {
-  const theme = useTheme();
-  const { width } = useWindowDimensions();
-  const isCompact = width < 768;
-  const { unreadCount } = useActivity();
-  const badge = unreadCount > 99 ? "99+" : String(unreadCount);
-
-  const openDrawer = () => {
-    if (typeof window !== "undefined") window.dispatchEvent(new Event(OPEN_ACTIVITY_DRAWER_EVENT));
-  };
-
-  return (
-    <Pressable onPress={openDrawer} style={({ pressed }) => pressed && styles.pressed}>
-      <ThemedView
-        type="surface"
-        style={[styles.tabButtonView, isCompact && { justifyContent: "center", paddingHorizontal: 0 }]}
-      >
-        <View>
-          <Feather name="bell" size={isCompact ? 20 : 18} color={theme.onSurfaceVariant} />
-          {unreadCount > 0 && isCompact && (
-            <View style={[styles.dot, { backgroundColor: theme.error, borderColor: theme.surface }]} />
-          )}
-        </View>
-        {!isCompact && (
-          <>
-            <ThemedText type="default" themeColor="onSurfaceVariant" style={{ flex: 1 }}>
-              Activity
-            </ThemedText>
-            {unreadCount > 0 && (
-              <View style={[styles.badge, { backgroundColor: theme.error }]}>
-                <ThemedText style={{ color: theme.onError, fontSize: 11, fontWeight: "700" }}>{badge}</ThemedText>
-              </View>
-            )}
-          </>
-        )}
-      </ThemedView>
-    </Pressable>
-  );
-}
-
+/**
+ * A sidebar destination inside a `TabTrigger`. It takes the same `href` as the
+ * trigger and reads its label and icon from WEB_NAV, so the tabs shell states
+ * each destination's identity exactly once — in the list every other sidebar
+ * reads too.
+ */
 export function TabButton({
-  children,
+  href,
   isFocused,
-  icon,
   ...props
-}: TabTriggerSlotProps & { icon?: any }) {
-  const theme = useTheme();
-  const { width } = useWindowDimensions();
-  const isCompact = width < 768;
+}: TabTriggerSlotProps & { href: string }) {
+  const item = webNavItem(href);
+
+  // Unreachable in practice: web-nav.test.ts fails if a trigger's href is not
+  // declared in WEB_NAV.
+  if (!item) return null;
 
   return (
     <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
-      <ThemedView
-        type="surface"
-        style={[
-          styles.tabButtonView,
-          isCompact && { justifyContent: "center", paddingHorizontal: 0 },
-          isFocused && { backgroundColor: withAlpha(theme.onSurface, 0.1) },
-        ]}
-      >
-        {icon && (
-          <Feather
-            name={icon}
-            size={isCompact ? 20 : 18}
-            color={isFocused ? theme.onSurface : theme.onSurfaceVariant}
-          />
-        )}
-        {!isCompact && (
-          <ThemedText
-            type="default"
-            style={{ fontWeight: isFocused ? "600" : "normal" }}
-            themeColor={isFocused ? "onSurface" : "onSurfaceVariant"}
-          >
-            {children}
-          </ThemedText>
-        )}
-      </ThemedView>
+      <SidebarNavItem icon={item.icon} label={item.label} active={!!isFocused} />
     </Pressable>
   );
 }
@@ -226,8 +177,7 @@ export function CustomSidebar(props: TabListProps) {
   const { children, ...rest } = props;
   const theme = useTheme();
   const { user } = useAuth();
-  const { width } = useWindowDimensions();
-  const isCompact = width < 768;
+  const isCompact = useSidebarCompact();
 
   return (
     <ThemedView
@@ -238,49 +188,6 @@ export function CustomSidebar(props: TabListProps) {
         { borderRightColor: theme.surfaceVariant },
       ]}
     >
-      <View
-        style={[
-          styles.brandContainer,
-          isCompact && { justifyContent: "center", paddingHorizontal: 0 },
-        ]}
-      >
-        {isCompact ? (
-          <Image
-            source={require("@/assets/images/bomedia-icon.png")}
-            style={{ width: 32, height: 32 }}
-            resizeMode="contain"
-          />
-        ) : (
-          <Image
-            source={require("@/assets/images/bomedia-logo.png")}
-            style={{ width: 140, height: 40 }}
-            resizeMode="contain"
-          />
-        )}
-      </View>
-
-      <Pressable
-        onPress={() => {
-          if (typeof window !== "undefined") window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT));
-        }}
-        style={({ pressed }) => [
-          styles.searchBtn,
-          { borderColor: theme.outlineVariant, backgroundColor: withAlpha(theme.surfaceVariant, 0.35) },
-          isCompact && { justifyContent: "center", paddingHorizontal: 0 },
-          pressed && styles.pressed,
-        ]}
-      >
-        <Feather name="search" size={16} color={theme.onSurfaceVariant} />
-        {!isCompact && (
-          <>
-            <ThemedText type="small" themeColor="onSurfaceVariant" style={{ flex: 1 }}>Search…</ThemedText>
-            <View style={[styles.kbd, { borderColor: theme.outlineVariant }]}>
-              <ThemedText type="small" themeColor="onSurfaceVariant" style={{ fontSize: 11 }}>⌘K</ThemedText>
-            </View>
-          </>
-        )}
-      </Pressable>
-
       <ScrollView
         {...rest}
         style={styles.navArea}
@@ -302,10 +209,17 @@ export function CustomSidebar(props: TabListProps) {
 }
 
 const styles = StyleSheet.create({
+  /** Column wrapper: the top bar, then the sidebar + content row below it. */
+  shell: {
+    flex: 1,
+    flexDirection: "column",
+    height: "100%",
+    overflow: "hidden",
+  },
   dashboardContainer: {
     flex: 1,
     flexDirection: "row",
-    height: "100%",
+    minHeight: 0,
     overflow: "hidden",
   },
   sidebarContainer: {
@@ -320,30 +234,6 @@ const styles = StyleSheet.create({
     width: 76,
     paddingHorizontal: Spacing.two,
   },
-  brandContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.three,
-    marginBottom: Spacing.four,
-    paddingHorizontal: Spacing.two,
-    height: 40,
-  },
-  searchBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.two,
-    height: 38,
-    paddingHorizontal: Spacing.three,
-    borderWidth: 1,
-    borderRadius: Spacing.two,
-    marginBottom: Spacing.three,
-  },
-  kbd: {
-    borderWidth: 1,
-    borderRadius: 5,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-  },
   navArea: {
     flex: 1,
     minHeight: 0,
@@ -357,41 +247,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: Spacing.three,
   },
-  divider: {
-    height: 1,
-    marginVertical: Spacing.two,
-  },
   mainContent: {
     flex: 1,
-    height: "100%",
+    minHeight: 0,
     overflow: "hidden",
   },
   pressed: {
     opacity: 0.7,
-  },
-  badge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dot: {
-    position: "absolute",
-    top: -3,
-    right: -3,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 1.5,
-  },
-  tabButtonView: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.three,
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.two,
   },
 });

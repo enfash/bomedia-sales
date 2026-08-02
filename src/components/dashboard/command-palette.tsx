@@ -10,8 +10,20 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-/** Window event any UI can dispatch to open the palette (e.g. a sidebar button). */
+/** Window event any UI can dispatch to open the palette (e.g. the top bar). */
 export const OPEN_COMMAND_PALETTE_EVENT = 'bomedia:command-palette';
+
+/**
+ * Open the palette, optionally seeded with a query.
+ *
+ * The seed exists for the top bar's quick search: it is a real input, so a fast
+ * typist can land a keystroke or two in it before the palette mounts and takes
+ * focus. Those characters are forwarded here instead of being swallowed.
+ */
+export function openCommandPalette(query?: string) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT, { detail: { query } }));
+}
 
 interface CommandItem {
   id: string;
@@ -30,6 +42,9 @@ interface CommandItem {
  */
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
+  // The query lives here rather than in the modal so an open event can seed it
+  // from a handler — the modal stays mounted and no effect has to sync it.
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
@@ -37,10 +52,14 @@ export function CommandPalette() {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
+        setQuery('');
         setOpen((v) => !v);
       }
     };
-    const onOpen = () => setOpen(true);
+    const onOpen = (e: Event) => {
+      setQuery((e as CustomEvent<{ query?: string }>).detail?.query ?? '');
+      setOpen(true);
+    };
 
     document.addEventListener('keydown', onKeyDown);
     window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, onOpen);
@@ -51,15 +70,22 @@ export function CommandPalette() {
   }, []);
 
   if (!open) return null;
-  return <PaletteModal onClose={() => setOpen(false)} />;
+  return <PaletteModal query={query} onQueryChange={setQuery} onClose={() => setOpen(false)} />;
 }
 
-function PaletteModal({ onClose }: { onClose: () => void }) {
+function PaletteModal({
+  query,
+  onQueryChange,
+  onClose,
+}: {
+  query: string;
+  onQueryChange: (q: string) => void;
+  onClose: () => void;
+}) {
   const theme = useTheme();
   const router = useRouter();
   const { sortedBatches: batches } = useRecords(theme);
 
-  const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
   const inputRef = useRef<TextInput>(null);
 
@@ -171,7 +197,7 @@ function PaletteModal({ onClose }: { onClose: () => void }) {
             ref={inputRef}
             value={query}
             onChangeText={(t) => {
-              setQuery(t);
+              onQueryChange(t);
               setIndex(0);
             }}
             placeholder="Search pages, actions, transactions…"

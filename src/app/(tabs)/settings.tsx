@@ -4,8 +4,9 @@ import { PageContainer } from '@/components/ui/page-container';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { SecondaryButton } from '@/components/ui/secondary-button';
 import { ThemedTextInput } from '@/components/ui/themed-text-input';
-import { useAuth } from '@/context/auth-context';
+import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { MaterialItem, PrinterItem, useSettings } from '@/context/settings-context';
+import { useAdminGate } from '@/hooks/use-admin-gate';
 import { useTheme } from '@/hooks/use-theme';
 import { STATUS_META } from '@/utils/payment-status';
 import { SymbolView } from 'expo-symbols';
@@ -14,7 +15,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 export default function SettingsScreen() {
   const theme = useTheme();
-  const { isAdmin } = useAuth();
+  const gate = useAdminGate();
   const { settings, updateSettings } = useSettings();
 
   // Local state for edits
@@ -102,14 +103,22 @@ export default function SettingsScreen() {
     setPrinters(printers.filter(p => p.id !== id));
   };
 
-  if (!isAdmin) {
+  // `pending` is the role read still in flight, not a refusal — see useAdminGate.
+  if (gate !== 'allowed') {
     return (
       <PageContainer padHorizontalMobile>
         <ThemedView style={{ padding: 24, gap: 8 }}>
           <ThemedText type="subtitle" style={{ fontWeight: '700' }}>Settings</ThemedText>
-          <ThemedText type="small" themeColor="onSurfaceVariant">
-            Business settings — materials, pricing and printers — can only be changed by an admin.
-          </ThemedText>
+          {gate === 'pending' ? (
+            <>
+              <LoadingSkeleton width={280} height={18} borderRadius={6} />
+              <LoadingSkeleton width="100%" height={120} borderRadius={16} />
+            </>
+          ) : (
+            <ThemedText type="small" themeColor="onSurfaceVariant">
+              Business settings — materials, pricing and printers — can only be changed by an admin.
+            </ThemedText>
+          )}
         </ThemedView>
       </PageContainer>
     );

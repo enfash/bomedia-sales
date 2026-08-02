@@ -24,7 +24,7 @@ export default function ActivityScreen() {
   }, [markAllSeen]);
 
   return (
-    <WebDetailShell>
+    <WebDetailShell title="Activity">
     <PageContainer>
       <Stack.Screen options={{ title: 'Activity' }} />
       <ThemedView style={styles.container}>

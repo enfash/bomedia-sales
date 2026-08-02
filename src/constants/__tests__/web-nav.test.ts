@@ -26,7 +26,7 @@
  * than silently passing on an empty set.
  */
 
-import { WEB_NAV } from '@/constants/web-nav';
+import { WEB_NAV, WEB_NAV_ADMIN_COUNT } from '@/constants/web-nav';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -97,5 +97,44 @@ describe('web sidebar destinations match WEB_NAV', () => {
       expect(item.label.trim().length).toBeGreaterThan(0);
       expect(String(item.icon).trim().length).toBeGreaterThan(0);
     }
+  });
+});
+
+/**
+ * The sidebars used to disagree on more than their destinations: the tabs shell
+ * hand-wrote "Home" where the detail shell said "Dashboard", and only one of
+ * them drew the group divider. Labels and icons are now read from WEB_NAV by
+ * both, so the checks below guard what is left — that the tabs shell states no
+ * label of its own, and that its divider sits where WEB_NAV says it does.
+ */
+describe('the two web sidebars stay identical', () => {
+  it('the tabs shell writes no labels of its own', () => {
+    // A label would show up as text between the tags of a sidebar row.
+    const inlineLabels = [...source.matchAll(/<TabButton[^>]*>([^<]+)<\/TabButton>/g)].map((m) =>
+      m[1].trim(),
+    );
+    expect(inlineLabels).toEqual([]);
+  });
+
+  it('the divider sits where WEB_NAV declares it', () => {
+    const dividerAfter = WEB_NAV.filter((i) => i.dividerAfter);
+    expect(dividerAfter).toHaveLength(1);
+
+    const at = WEB_NAV.findIndex((i) => i.dividerAfter);
+    const before = WEB_NAV[at].href;
+    const after = WEB_NAV[at + 1].href;
+
+    const beforeAt = source.indexOf(`href="${before}"`);
+    const dividerAt = source.indexOf('<SidebarDivider />');
+    const afterAt = source.indexOf(`href="${after}"`);
+
+    expect(beforeAt).toBeGreaterThan(-1);
+    expect(dividerAt).toBeGreaterThan(beforeAt);
+    expect(afterAt).toBeGreaterThan(dividerAt);
+  });
+
+  it('reserves a placeholder row for every admin destination', () => {
+    expect(WEB_NAV_ADMIN_COUNT).toBe(WEB_NAV.filter((i) => i.adminOnly).length);
+    expect(source).toContain('WEB_NAV_ADMIN_COUNT');
   });
 });

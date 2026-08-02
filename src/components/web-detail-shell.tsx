@@ -7,6 +7,7 @@ import React from 'react';
  * which is what you want on a phone. The sidebar shell is a web-only concern —
  * see web-detail-shell.web.tsx.
  */
-export function WebDetailShell({ children }: { children: React.ReactNode }) {
+export function WebDetailShell({ children }: { children: React.ReactNode; title?: string }) {
+  // `title` is web-only chrome: on native the stack header already shows it.
   return <>{children}</>;
 }
