@@ -171,6 +171,25 @@ export function subscribeToPayments(
   return dbService.subscribe(PAYMENTS_ROOT, (root) => callback(parsePaymentsTree(root)));
 }
 
+/**
+ * Subscribe to a WINDOW of days, inclusive.
+ *
+ * Scoping an integrity check necessarily weakens it: a discrepancy outside the
+ * window is not seen. That is inherent to scoping, not a flaw in it — so
+ * anything built on this must SAY what period it covers rather than implying
+ * the whole ledger agrees. Silence outside the window is the failure mode the
+ * check exists to prevent, only quieter.
+ */
+export function subscribeToPaymentsInRange(
+  startDayKey: string,
+  endDayKey: string,
+  callback: (payments: PaymentEntry[]) => void,
+): () => void {
+  return dbService.subscribeToKeyRange(PAYMENTS_ROOT, startDayKey, endDayKey, (root) =>
+    callback(parsePaymentsTree(root)),
+  );
+}
+
 /** Subscribe to a single day — what the reconciliation view needs. */
 export function subscribeToPaymentsForDay(
   dayKey: string,

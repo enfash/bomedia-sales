@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase';
-import { get, increment, onValue, orderByChild, push, query, ref, remove, set, update } from 'firebase/database';
+import { endAt, get, increment, onValue, orderByChild, orderByKey, push, query, ref, remove, set, startAt, update } from 'firebase/database';
 
 /**
  * Firebase Realtime Database Service Wrapper
@@ -99,6 +99,24 @@ export const dbService = {
    */
   increment(delta: number) {
     return increment(delta);
+  },
+
+  /**
+   * Subscribe to a KEY RANGE under a path, inclusive.
+   *
+   * For date-bucketed nodes whose keys are `YYYY-MM-DD`, lexicographic key
+   * order is chronological order, so this scopes a read to a window without
+   * any `.indexOn` — `orderByKey` is always indexed. That is a deliberate
+   * property of the bucket naming, not a coincidence.
+   */
+  subscribeToKeyRange<T>(
+    path: string,
+    startKey: string,
+    endKey: string,
+    callback: (data: T | null) => void,
+  ) {
+    const q = query(ref(db, path), orderByKey(), startAt(startKey), endAt(endKey));
+    return onValue(q, (snapshot) => callback(snapshot.exists() ? (snapshot.val() as T) : null));
   },
 
   /**
