@@ -23,7 +23,8 @@ import { useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { Menu, Searchbar } from 'react-native-paper';
 
-const STATUS_FILTERS = ['All', 'Paid', 'Partial', 'Unpaid'];
+// 'Voided' is how a voided sale stays findable — every other filter hides them.
+const STATUS_FILTERS = ['All', 'Paid', 'Partial', 'Unpaid', 'Voided'];
 const DATE_FILTERS = ['All Time', 'This Month', 'Last Quarter'];
 
 function jobSummary(batch: SalesBatch): string {
@@ -55,7 +56,7 @@ export default function RecordsWeb() {
     sortDirection,
     handleSort,
     sortedBatches,
-  } = useRecords(theme, { persistKey: 'bomedia:records-filters', staffTodayOnly: !isAdmin });
+  } = useRecords(theme, { persistKey: 'bomedia:records-filters', staffTodayOnly: !isAdmin, includeVoided: true });
 
   const [selected, setSelected] = useState<string[]>([]);
   const [dateMenu, setDateMenu] = useState(false);

@@ -8,6 +8,16 @@ type SortColumn = 'Date' | 'Amount' | 'Balance' | 'Client' | 'Status' | 'LoggedB
 
 interface UseRecordsOptions {
   /**
+   * Include voided sales. Default false.
+   *
+   * This hook is the single subscription point for eleven consumers, so
+   * filtering here fixes all of them at once — auditing each one individually
+   * is how one gets missed. Only three callers opt in: both Records twins (for
+   * the Voided filter) and the transaction detail screen, so a voided sale can
+   * still be opened and its reason read.
+   */
+  includeVoided?: boolean;
+  /**
    * When set (web only), the status/date/sort selection is auto-remembered in
    * localStorage under this key and restored next time. Opt-in per call so the
    * Records page persists while other `useRecords` consumers (Clients, Board,
@@ -41,7 +51,7 @@ function loadPersistedFilters(key?: string): PersistedFilters | null {
 }
 
 export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
-  const { persistKey, staffTodayOnly } = options;
+  const { persistKey, staffTodayOnly, includeVoided = false } = options;
   const { settings } = useSettings();
   const defaultTermsDays = settings?.defaultTermsDays ?? 7;
   const [persisted] = useState(() => loadPersistedFilters(persistKey));
@@ -77,9 +87,9 @@ export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
     const unsubscribe = subscribeToBatches((batches) => {
       setRawBatches(batches);
       setLoading(false);
-    }, defaultTermsDays);
+    }, defaultTermsDays, includeVoided);
     return () => unsubscribe();
-  }, [refreshNonce, defaultTermsDays]);
+  }, [refreshNonce, defaultTermsDays, includeVoided]);
 
   const refresh = useCallback(() => setRefreshNonce((n) => n + 1), []);
 
@@ -125,7 +135,17 @@ export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
     });
 
     const fullyFilteredBatches = searchedBatches.filter((batch) => {
-      if (statusFilter !== 'All') {
+      // Voided sales are hidden from every list unless explicitly asked for.
+      // The subscription already excludes them for consumers that did not opt
+      // in, so this is a no-op there — it is what makes the Records "Voided"
+      // filter work without a second subscription.
+      if (statusFilter === 'Voided') {
+        if (!batch.isVoided) return false;
+      } else if (batch.isVoided) {
+        return false;
+      }
+
+      if (statusFilter !== 'All' && statusFilter !== 'Voided') {
         if (statusFilter === 'Unpaid' && (batch.status === 'Unpaid' || batch.status === 'Overdue')) {
           // allow
         } else if (batch.status !== statusFilter) {
@@ -193,6 +213,12 @@ export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
   };
 
   return {
+    /**
+     * Every batch from the subscription, before any UI filter. The transaction
+     * detail screen needs this: `sortedBatches` hides voided sales, but opening
+     * one by id has to work so its void reason can be read.
+     */
+    allBatches: rawBatches,
     records,
     loading,
     searchQuery,

@@ -25,6 +25,23 @@ function monthKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+/**
+ * Voided sales are excluded from EVERY figure in this file.
+ *
+ * A voided sale is a cancelled job. It was never revenue, nothing is owed on
+ * it, and it should not appear on the board. Filtering here rather than only in
+ * `useRecords` is deliberate belt-and-braces: these are pure functions, so the
+ * exclusion is testable directly, and a future caller that reaches a selector
+ * without going through the hook still gets the right answer.
+ *
+ * NOTE this says nothing about money already collected against a voided sale.
+ * That cash was really taken and stays in the payment ledger — see the Daily
+ * Cash view. Voiding cancels the job, it does not refund the customer.
+ */
+export function liveBatches(batches: SalesBatch[]): SalesBatch[] {
+  return batches.filter((b) => !b.isVoided);
+}
+
 export function computeDashboardMetrics(
   batches: SalesBatch[],
   expenses: ExpenseRecord[],
@@ -40,7 +57,7 @@ export function computeDashboardMetrics(
   let collectedAllTime = 0;
   let outstanding = 0;
 
-  for (const b of batches) {
+  for (const b of liveBatches(batches)) {
     const d = parseDate(b.createdAt);
     revenueAllTime += b.totalAmount || 0;
     collectedAllTime += b.totalPaid || 0;
@@ -88,6 +105,7 @@ export interface MonthPoint {
  * month instead of always ending at "now".
  */
 export function revenueByMonth(batches: SalesBatch[], monthsBack = 6, endRef: Date = new Date()): MonthPoint[] {
+  batches = liveBatches(batches);
   const points: MonthPoint[] = [];
   const index: Record<string, number> = {};
 
@@ -124,6 +142,7 @@ function dayKey(d: Date): string {
 
 /** Revenue per calendar day for the last `days` days (incl. today), oldest → newest. */
 export function revenueByDay(batches: SalesBatch[], days = 7): DayPoint[] {
+  batches = liveBatches(batches);
   const now = new Date();
   const points: DayPoint[] = [];
   const index: Record<string, number> = {};
@@ -142,6 +161,7 @@ export function revenueByDay(batches: SalesBatch[], days = 7): DayPoint[] {
 
 /** Jobs finished on the machine, awaiting pickup/dispatch. */
 export function readyJobs(batches: SalesBatch[]): SalesBatch[] {
+  batches = liveBatches(batches);
   return batches.filter((b) => b.productionStage === 'Ready');
 }
 
@@ -152,6 +172,7 @@ export interface ClientOwing {
 
 /** Distinct clients with an outstanding balance, largest first. */
 export function clientsOwing(batches: SalesBatch[]): ClientOwing[] {
+  batches = liveBatches(batches);
   const map: Record<string, number> = {};
   for (const b of batches) {
     if ((b.totalBalance || 0) > 0) {
@@ -166,6 +187,7 @@ export function clientsOwing(batches: SalesBatch[]): ClientOwing[] {
 
 /** Most recent sales (batches arrive already sorted newest-first). */
 export function recentSales(batches: SalesBatch[], n = 8): SalesBatch[] {
+  batches = liveBatches(batches);
   return batches.slice(0, n);
 }
 
@@ -184,6 +206,7 @@ export interface MaterialRevenue {
  * beyond `topN` is folded into a single "Other" bucket so the chart stays legible.
  */
 export function revenueByMaterial(batches: SalesBatch[], topN = 6): MaterialRevenue[] {
+  batches = liveBatches(batches);
   const map: Record<string, { revenue: number; jobs: number }> = {};
   for (const b of batches) {
     for (const r of b.records) {
@@ -216,6 +239,7 @@ export interface StageThroughput {
 
 /** Job count + order value sitting in each production stage (all stages, in order). */
 export function productionThroughput(batches: SalesBatch[]): StageThroughput[] {
+  batches = liveBatches(batches);
   const base: Record<ProductionStage, { count: number; value: number }> = {
     Queued: { count: 0, value: 0 },
     Printing: { count: 0, value: 0 },
@@ -276,7 +300,61 @@ export interface TopClient {
 }
 
 /** Clients ranked by total billed revenue, largest first. */
+export interface ClientAgg {
+  clientName: string;
+  totalSpend: number;
+  totalPaid: number;
+  balance: number;
+  lastPurchaseDate: number;
+  jobsCount: number;
+}
+
+/**
+ * Per-client totals across every sale.
+ *
+ * Extracted from `clients.tsx` and `clients.web.tsx`, which each carried their
+ * own copy of this reduce. Two implementations of one money calculation is the
+ * same latent bug class the money.ts extraction removed in Stage 1 — they had
+ * already drifted on sort order, and nothing stopped them drifting on the
+ * arithmetic next.
+ *
+ * Returned sorted by spend, descending. The web table re-sorts by its own
+ * column anyway; native relies on this order.
+ */
+export function aggregateClients(batches: SalesBatch[]): ClientAgg[] {
+  const map: Record<string, ClientAgg> = {};
+
+  for (const batch of liveBatches(batches)) {
+    const name = batch.clientName?.trim() || 'Unknown Client';
+    if (!map[name]) {
+      map[name] = {
+        clientName: name,
+        totalSpend: 0,
+        totalPaid: 0,
+        balance: 0,
+        lastPurchaseDate: 0,
+        jobsCount: 0,
+      };
+    }
+    map[name].totalSpend += batch.totalAmount || 0;
+    map[name].totalPaid += batch.totalPaid || 0;
+    map[name].jobsCount += batch.records.length;
+
+    // An empty or unparseable createdAt yields NaN, which would poison the
+    // comparison and leave lastPurchaseDate at 0 forever.
+    const t = new Date(batch.createdAt).getTime();
+    if (Number.isFinite(t) && t > map[name].lastPurchaseDate) {
+      map[name].lastPurchaseDate = t;
+    }
+  }
+
+  for (const c of Object.values(map)) c.balance = c.totalSpend - c.totalPaid;
+
+  return Object.values(map).sort((a, b) => b.totalSpend - a.totalSpend);
+}
+
 export function topClients(batches: SalesBatch[], n = 6): TopClient[] {
+  batches = liveBatches(batches);
   const map: Record<string, { revenue: number; balance: number }> = {};
   for (const b of batches) {
     const name = b.clientName?.trim() || 'Unknown Client';
@@ -299,6 +377,7 @@ export interface CollectedSplit {
 
 /** How much of all billed revenue has been collected vs is still outstanding. */
 export function collectedVsOutstanding(batches: SalesBatch[]): CollectedSplit {
+  batches = liveBatches(batches);
   let collected = 0;
   let outstanding = 0;
   for (const b of batches) {
@@ -354,6 +433,7 @@ export function rangeToWindow(preset: RangePreset, customStart?: string, customE
 
 /** Filter batches to a window by their createdAt. */
 export function filterBatchesByWindow(batches: SalesBatch[], win: DateWindow): SalesBatch[] {
+  batches = liveBatches(batches);
   return batches.filter((b) => {
     const t = parseDate(b.createdAt).getTime();
     return t >= win.start && t <= win.end;

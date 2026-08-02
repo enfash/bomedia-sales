@@ -118,6 +118,10 @@ export function normalizeBatch(
     status,
     statusColor: STATUS_META[status].color,
     productionStage: (node.productionStage as ProductionStage) || 'Queued',
+    isVoided: node.voidedAtMs != null,
+    voidedAt: node.voidedAt,
+    voidedByName: node.voidedByName,
+    voidReason: node.voidReason,
     notes: node.notes,
     dueDate: node.dueDate,
   };
@@ -162,19 +166,43 @@ export function parseSalesTree(root: any, defaultTermsDays = DEFAULT_TERMS_DAYS)
  * Reads
  * ------------------------------------------------------------------ */
 
-/** Subscribe to all sales as normalized batches. Returns an unsubscribe fn. */
+/**
+ * Subscribe to all sales as normalized batches. Returns an unsubscribe fn.
+ *
+ * Voided sales are EXCLUDED by default. Pass `includeVoided` only where a
+ * voided record must remain reachable — the Records "Voided" filter and the
+ * transaction detail screen.
+ */
 export function subscribeToBatches(
   callback: (batches: SalesBatch[]) => void,
   defaultTermsDays = DEFAULT_TERMS_DAYS,
+  includeVoided = false,
 ): () => void {
-  return dbService.subscribe(SALES_ROOT, (root) => callback(parseSalesTree(root, defaultTermsDays)));
+  return dbService.subscribe(SALES_ROOT, (root) => {
+    const all = parseSalesTree(root, defaultTermsDays);
+    callback(includeVoided ? all : all.filter((b) => !b.isVoided));
+  });
 }
 
-/** One-shot fetch of specific batches by receiptId (used by the invoice screen). */
-export async function fetchBatchesByReceiptIds(receiptIds: string[]): Promise<SalesBatch[]> {
+/**
+ * One-shot fetch of specific batches by receiptId (used by the invoice screen).
+ *
+ * SAME DEFAULT AS `subscribeToBatches`, deliberately. This is a second read
+ * path that bypasses `useRecords` entirely, so chokepoint filtering never
+ * reaches it. A filter that eleven consumers get automatically and one gets by
+ * remembering is precisely the bug this stage exists to prevent.
+ *
+ * `invoice.tsx` is the one caller that opts in, so a voided sale still produces
+ * an invoice — stamped VOIDED.
+ */
+export async function fetchBatchesByReceiptIds(
+  receiptIds: string[],
+  includeVoided = false,
+): Promise<SalesBatch[]> {
   const root = await dbService.getRecord<any>(SALES_ROOT);
   const wanted = new Set(receiptIds);
-  return parseSalesTree(root).filter((b) => wanted.has(b.id));
+  const found = parseSalesTree(root).filter((b) => wanted.has(b.id));
+  return includeVoided ? found : found.filter((b) => !b.isVoided);
 }
 
 /* ------------------------------------------------------------------ *
@@ -324,7 +352,34 @@ export async function updateBatchDetails(
   await dbService.updateRecord('/', updates);
 }
 
-/** Delete an entire batch. */
-export async function deleteBatch(batch: Pick<SalesBatch, 'dbPath'>): Promise<void> {
-  await dbService.removeRecord(batch.dbPath);
+/**
+ * Void a sale. There is no delete.
+ *
+ * `deleteBatch` used to call `remove()`, permanently erasing a financial record
+ * — and after the payment ledger landed, orphaning every payment that pointed
+ * at it. The money would still show as collected against a sale that no longer
+ * existed. Cancelled jobs are normal in printing; erasing them is not.
+ *
+ * Voiding marks the record and excludes it from every total. It does NOT touch
+ * the payment ledger: cash already taken was really taken, and stays in Daily
+ * Cash. Refunding is a separate, deliberate reversal.
+ *
+ * Admin only (enforced by the database rules) and the reason is mandatory.
+ */
+export async function voidBatch(
+  batch: Pick<SalesBatch, 'dbPath'>,
+  reason: string,
+  actor: PaymentActor,
+): Promise<void> {
+  const trimmed = reason.trim();
+  if (!trimmed) throw new Error('A reason is required to void a sale.');
+
+  const now = new Date();
+  await dbService.updateRecord(batch.dbPath, {
+    voidedAt: now.toISOString(),
+    voidedAtMs: now.getTime(),
+    voidedBy: actor.uid,
+    voidedByName: actor.name,
+    voidReason: trimmed,
+  });
 }

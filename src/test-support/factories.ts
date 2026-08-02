@@ -86,6 +86,7 @@ export function makeBatch(overrides: Partial<SalesBatch> = {}): SalesBatch {
     status: 'Unpaid',
     statusColor: '#ba1a1a',
     productionStage: 'Queued',
+    isVoided: false,
     ...overrides,
   };
 }

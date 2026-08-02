@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useRecords } from '@/hooks/use-records';
+import { aggregateClients, type ClientAgg } from '@/services/analytics';
 import { useTheme } from '@/hooks/use-theme';
 import { formatCurrency, formatCurrencyCompact } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
@@ -16,15 +17,6 @@ import { SymbolView } from 'expo-symbols';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Searchbar } from 'react-native-paper';
-
-interface ClientAgg {
-  clientName: string;
-  totalSpend: number;
-  totalPaid: number;
-  balance: number;
-  lastPurchaseDate: number;
-  jobsCount: number;
-}
 
 type SortKey = 'name' | 'jobs' | 'spend' | 'balance' | 'last';
 type SortDir = 'asc' | 'desc';
@@ -50,24 +42,8 @@ export default function ClientsWeb() {
   const [sortKey, setSortKey] = useState<SortKey>('spend');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
-  const clientsList = useMemo(() => {
-    const map: Record<string, ClientAgg> = {};
-    batches.forEach((batch) => {
-      const name = batch.clientName?.trim() || 'Unknown Client';
-      if (!map[name]) {
-        map[name] = { clientName: name, totalSpend: 0, totalPaid: 0, balance: 0, lastPurchaseDate: 0, jobsCount: 0 };
-      }
-      map[name].totalSpend += batch.totalAmount || 0;
-      map[name].totalPaid += batch.totalPaid || 0;
-      map[name].jobsCount += batch.records.length;
-      const t = new Date(batch.createdAt).getTime();
-      if (t > map[name].lastPurchaseDate) map[name].lastPurchaseDate = t;
-    });
-    Object.values(map).forEach((c) => {
-      c.balance = c.totalSpend - c.totalPaid;
-    });
-    return Object.values(map);
-  }, [batches]);
+  // Shared with the native twin — see analytics.ts:aggregateClients.
+  const clientsList = useMemo(() => aggregateClients(batches), [batches]);
 
   const filtered = useMemo(() => {
     if (!search) return clientsList;

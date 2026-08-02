@@ -77,6 +77,10 @@ function normalizeQuote(node: StoredQuote, quoteDbPath: string): QuoteRecord {
     totalAmount: money.totalAmount,
     deliveryCost: node.deliveryCost,
     status: (node.status as QuoteStatus) || 'Draft',
+    isVoided: node.voidedAtMs != null,
+    voidedAt: node.voidedAt,
+    voidedByName: node.voidedByName,
+    voidReason: node.voidReason,
     notes: node.notes,
   };
 }
@@ -112,8 +116,15 @@ export function parseQuotesTree(root: any): QuoteRecord[] {
  * Reads
  * ------------------------------------------------------------------ */
 
-export function subscribeToQuotes(callback: (quotes: QuoteRecord[]) => void): () => void {
-  return dbService.subscribe(QUOTES_ROOT, (root) => callback(parseQuotesTree(root)));
+/** Voided quotes are excluded by default, matching `subscribeToBatches`. */
+export function subscribeToQuotes(
+  callback: (quotes: QuoteRecord[]) => void,
+  includeVoided = false,
+): () => void {
+  return dbService.subscribe(QUOTES_ROOT, (root) => {
+    const all = parseQuotesTree(root);
+    callback(includeVoided ? all : all.filter((q) => !q.isVoided));
+  });
 }
 
 /* ------------------------------------------------------------------ *
@@ -177,8 +188,26 @@ export async function updateQuoteDetails(
   await dbService.updateRecord('/', updates);
 }
 
-export async function deleteQuote(quote: Pick<QuoteRecord, 'dbPath'>): Promise<void> {
-  await dbService.removeRecord(quote.dbPath);
+/**
+ * Void a quote. There is no delete — see `voidBatch` for the reasoning.
+ * Admin only (enforced by the rules), reason mandatory.
+ */
+export async function voidQuote(
+  quote: Pick<QuoteRecord, 'dbPath'>,
+  reason: string,
+  actor: PaymentActor,
+): Promise<void> {
+  const trimmed = reason.trim();
+  if (!trimmed) throw new Error('A reason is required to void a quote.');
+
+  const now = new Date();
+  await dbService.updateRecord(quote.dbPath, {
+    voidedAt: now.toISOString(),
+    voidedAtMs: now.getTime(),
+    voidedBy: actor.uid,
+    voidedByName: actor.name,
+    voidReason: trimmed,
+  });
 }
 
 /** Thrown when a quote can't be converted because required info is missing. */

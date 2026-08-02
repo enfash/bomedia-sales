@@ -12,7 +12,7 @@ import {
   MissingQuoteInfoError,
   convertQuoteToSale,
   createQuote,
-  deleteQuote,
+  voidQuote,
   subscribeToQuotes,
   updateQuoteDetails,
 } from '@/services/quote-repository';
@@ -21,6 +21,7 @@ import { useSettings } from '@/context/settings-context';
 import { actorFrom } from '@/services/activity';
 import { formatCurrency } from '@/utils/currency';
 import { computeBatchTotals } from '@/utils/money';
+import { VoidModal } from '@/components/records/void-modal';
 import { formatDate } from '@/utils/date';
 import { STATUS_META } from '@/utils/payment-status';
 import { SymbolView } from 'expo-symbols';
@@ -165,11 +166,24 @@ Estimated total: ${formatCurrency(quote.totalAmount)}`;
     }
   };
 
-  const confirmDelete = (quote: QuoteRecord) => {
-    Alert.alert('Delete quote', `Delete quote ${quote.quoteId}? This cannot be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deleteQuote(quote) },
-    ]);
+  // Quotes are voided, never deleted — same reasoning as sales. The modal
+  // requires the quote id typed back and a reason.
+  const [voidTarget, setVoidTarget] = useState<QuoteRecord | null>(null);
+  const [isVoiding, setIsVoiding] = useState(false);
+
+  const confirmDelete = (quote: QuoteRecord) => setVoidTarget(quote);
+
+  const handleVoidQuote = async (reason: string) => {
+    if (!voidTarget || isVoiding) return;
+    setIsVoiding(true);
+    try {
+      await voidQuote(voidTarget, reason, actorFrom(user));
+      setVoidTarget(null);
+    } catch (e: any) {
+      Alert.alert('Could not void', e.message);
+    } finally {
+      setIsVoiding(false);
+    }
   };
 
   /* ---------------------------------- FORM ---------------------------------- */
@@ -357,6 +371,16 @@ Estimated total: ${formatCurrency(quote.totalAmount)}`;
           </Surface>
         </View>
       </Modal>
+
+      <VoidModal
+        visible={voidTarget !== null}
+        onClose={() => setVoidTarget(null)}
+        receiptId={voidTarget?.quoteId || voidTarget?.id || ''}
+        kind="quote"
+        onConfirm={handleVoidQuote}
+        isSubmitting={isVoiding}
+        theme={theme}
+      />
     </>
   );
 }

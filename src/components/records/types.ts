@@ -179,6 +179,12 @@ export interface SalesBatch {
   /** Large-format production pipeline stage (defaults to 'Queued'). */
   productionStage: ProductionStage;
 
+  /** True when this record has been voided. Excluded from every total. */
+  isVoided: boolean;
+  voidedAt?: string;
+  voidedByName?: string;
+  voidReason?: string;
+
   notes?: string;
   dueDate?: string;
 }
@@ -202,6 +208,11 @@ export interface QuoteRecord {
   deliveryCost?: number;
 
   status: QuoteStatus;
+  /** True when this record has been voided. Excluded from every total. */
+  isVoided: boolean;
+  voidedAt?: string;
+  voidedByName?: string;
+  voidReason?: string;
   notes?: string;
 }
 
@@ -228,6 +239,16 @@ export interface StoredBatch {
   productionStage?: ProductionStage;
   notes?: string;
   dueDate?: string;
+  /* -- Void (soft delete). A sale is never removed; it is marked. -------- *
+   * Cancelled jobs are normal in printing. Erasing the record is not — it
+   * takes the payment history with it and leaves the ledger pointing at a
+   * sale that no longer exists. Voiding keeps the audit trail and excludes
+   * the sale from every total. See docs/AUDIT_2026-07.md §1.4. */
+  voidedAt?: string;
+  voidedAtMs?: number;
+  voidedBy?: string;
+  voidedByName?: string;
+  voidReason?: string;
   items?: Record<string, StoredItem>;
 }
 
@@ -244,6 +265,16 @@ export interface StoredQuote {
   deliveryCost?: number;
   status?: QuoteStatus;
   notes?: string;
+  /* -- Void (soft delete). A sale is never removed; it is marked. -------- *
+   * Cancelled jobs are normal in printing. Erasing the record is not — it
+   * takes the payment history with it and leaves the ledger pointing at a
+   * sale that no longer exists. Voiding keeps the audit trail and excludes
+   * the sale from every total. See docs/AUDIT_2026-07.md §1.4. */
+  voidedAt?: string;
+  voidedAtMs?: number;
+  voidedBy?: string;
+  voidedByName?: string;
+  voidReason?: string;
   items?: Record<string, StoredItem>;
 }
 

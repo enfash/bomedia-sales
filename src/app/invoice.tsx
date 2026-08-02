@@ -69,6 +69,7 @@ export default function InvoiceScreen() {
   const [notes, setNotes] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [isSavingDetails, setIsSavingDetails] = useState(false);
+  const [isVoided, setIsVoided] = useState(false);
 
   useEffect(() => {
     if (!batchId) {
@@ -82,7 +83,9 @@ export default function InvoiceScreen() {
       try {
         const ids =
           typeof batchId === 'string' ? batchId.split(',') : Array.isArray(batchId) ? batchId : [];
-        const batches = await fetchBatchesByReceiptIds(ids);
+        // The one caller that opts in: a voided sale still produces an invoice,
+        // stamped VOIDED, because you may need to show a customer what was cancelled.
+        const batches = await fetchBatchesByReceiptIds(ids, true);
         if (!isActive) return;
 
         const items = batches.flatMap((b) =>
@@ -94,6 +97,7 @@ export default function InvoiceScreen() {
           })),
         );
 
+        setIsVoided(batches.some((b) => b.isVoided));
         setRecords(items);
         setBatchPaths(batches.map((b) => b.dbPath));
         setTotals({
@@ -215,6 +219,13 @@ export default function InvoiceScreen() {
           </style>
         </head>
         <body>
+          ${isVoided ? `
+          <div style="background:#8c0009;color:#fff;padding:14px 20px;border-radius:8px;margin-bottom:24px;text-align:center;">
+            <div style="font-size:22px;font-weight:800;letter-spacing:3px;">VOIDED</div>
+            <div style="font-size:13px;opacity:.9;margin-top:4px;">This sale was cancelled. It is not a request for payment.</div>
+          </div>
+          <div style="position:fixed;top:38%;left:0;right:0;text-align:center;font-size:120px;font-weight:800;color:rgba(140,0,9,.10);transform:rotate(-24deg);pointer-events:none;z-index:0;">VOIDED</div>
+          ` : ''}
           <div class="stamp" style="color: ${statusColor}; border-color: ${statusColor};">${status}</div>
           <div class="header">
             <div>
@@ -331,6 +342,14 @@ export default function InvoiceScreen() {
       </View>
 
       <Surface elevation={2} style={[styles.invoiceSheet, { backgroundColor: theme.surface, borderColor: theme.surfaceVariant }]}>
+        {isVoided && (
+          <View style={styles.voidBand}>
+            <Text style={styles.voidBandTitle}>VOIDED</Text>
+            <Text style={styles.voidBandBody}>
+              This sale was cancelled. It is not a request for payment.
+            </Text>
+          </View>
+        )}
         {/* Status Stamp */}
         <View style={[styles.stampContainer, { borderColor: statusColor }]}>
           <Text style={[styles.stampText, { color: statusColor }]}>{status}</Text>
@@ -544,6 +563,18 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: 'bold',
   },
+  // Both renderers stamp the same thing; the HTML export adds a rotated
+  // watermark behind the body, which has no sensible RN equivalent.
+  voidBand: {
+    backgroundColor: '#8c0009',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  voidBandTitle: { color: '#fff', fontSize: 22, fontWeight: '800', letterSpacing: 3 },
+  voidBandBody: { color: '#fff', fontSize: 13, opacity: 0.9, marginTop: 4 },
   invoiceSheet: {
     width: '100%',
     maxWidth: 800,

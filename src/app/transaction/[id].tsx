@@ -8,7 +8,8 @@ import { useAuth } from '@/context/auth-context';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
 import { actorFrom, logActivity } from '@/services/activity';
-import { deleteBatch } from '@/services/sales-repository';
+import { voidBatch } from '@/services/sales-repository';
+import { VoidModal } from '@/components/records/void-modal';
 import { recordPayment, subscribeToPayments } from '@/services/payment-repository';
 import { attachPayments, describeMismatch } from '@/services/payment-reconciliation';
 import { PaymentHistory } from '@/components/records/payment-history';
@@ -43,8 +44,10 @@ export default function TransactionDetails() {
   const theme = useTheme();
 
   const { user, isAdmin } = useAuth();
-  const { sortedBatches, loading } = useRecords(theme);
-  const transaction = sortedBatches.find(b => b.id === id);
+  // Opt in, and look up from the UNFILTERED list: every list hides voided
+  // sales, but opening one by id must still work so its reason can be read.
+  const { allBatches, loading } = useRecords(theme, { includeVoided: true });
+  const transaction = allBatches.find((b) => b.id === id);
 
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -90,35 +93,30 @@ export default function TransactionDetails() {
     }
   };
 
-  const handleDelete = () => {
-    if (!transaction) return;
+  const [voidModalVisible, setVoidModalVisible] = useState(false);
+  const [isVoiding, setIsVoiding] = useState(false);
 
-    Alert.alert(
-      'Delete Transaction',
-      'Are you sure you want to delete this transaction? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteBatch(transaction);
-              logActivity({
-                type: 'sale_deleted',
-                actor: actorFrom(user),
-                message: `${actorFrom(user).name} deleted a ${formatCurrency(transaction.totalAmount)} sale for ${transaction.clientName || 'a client'}`,
-                meta: { batchId: transaction.id },
-              });
-              router.back();
-            } catch (error: any) {
-              Alert.alert('Error', 'Failed to delete transaction: ' + error.message);
-            }
-          },
-        },
-      ],
-    );
+  const handleVoid = async (reason: string) => {
+    if (!transaction || isVoiding) return;
+    setIsVoiding(true);
+    try {
+      await voidBatch(transaction, reason, actorFrom(user));
+      logActivity({
+        type: 'sale_deleted',
+        actor: actorFrom(user),
+        message: `${actorFrom(user).name} voided a ${formatCurrency(transaction.totalAmount)} sale for ${transaction.clientName || 'a client'} — ${reason}`,
+        meta: { batchId: transaction.id, reason },
+      });
+      setVoidModalVisible(false);
+      router.back();
+    } catch (error: any) {
+      Alert.alert('Could not void', error.message);
+    } finally {
+      setIsVoiding(false);
+    }
   };
+
+  const handleDelete = () => setVoidModalVisible(true);
 
   const handleShare = async () => {
     if (!transaction) return;
@@ -202,6 +200,23 @@ ${itemsString}`;
             status={transaction.status}
             paymentMethod={transaction.paymentMethod}
           />
+
+          {transaction.isVoided && (
+            <View style={[styles.voidBanner, { backgroundColor: STATUS_META.Unpaid.bg }]}>
+              <ThemedText type="defaultSemiBold" style={{ color: STATUS_META.Unpaid.color }}>
+                This sale was voided
+              </ThemedText>
+              <ThemedText type="small" style={{ color: STATUS_META.Unpaid.color, lineHeight: 18 }}>
+                {transaction.voidedByName ? `Voided by ${transaction.voidedByName}` : 'Voided'}
+                {transaction.voidedAt ? ` on ${formatDate(transaction.voidedAt)}` : ''}
+                {transaction.voidReason ? ` — ${transaction.voidReason}` : ''}
+              </ThemedText>
+              <ThemedText type="small" style={{ color: STATUS_META.Unpaid.color, lineHeight: 18 }}>
+                It is excluded from every total, the dashboard and the board. Any
+                payments already collected stay in the ledger and in Daily Cash.
+              </ThemedText>
+            </View>
+          )}
 
           <PaymentHistory
             payments={withPayments.payments}
@@ -318,6 +333,16 @@ ${itemsString}`;
           handleAddPayment={handleAddPayment}
           theme={theme}
         />
+        <VoidModal
+          visible={voidModalVisible}
+          onClose={() => setVoidModalVisible(false)}
+          receiptId={transaction.receiptId || transaction.id}
+          kind="sale"
+          collected={transaction.totalPaid || 0}
+          onConfirm={handleVoid}
+          isSubmitting={isVoiding}
+          theme={theme}
+        />
       </Portal>
     </View>
     </WebDetailShell>
@@ -325,6 +350,7 @@ ${itemsString}`;
 }
 
 const styles = StyleSheet.create({
+  voidBanner: { padding: Spacing.four, borderRadius: 16, gap: Spacing.one },
   scrollContent: {
     paddingBottom: Spacing.six,
   },

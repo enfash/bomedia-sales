@@ -93,7 +93,8 @@ export default function CashReconciliationScreen() {
           </ThemedText>
           <ThemedText type="small" style={{ color: theme.onPrimary, opacity: 0.85 }}>
             Cash payments only. POS and transfers go to the bank, so they are not
-            counted here.
+            counted here. This is what was TAKEN — it includes payments against
+            sales that were later voided, because that money was still collected.
           </ThemedText>
         </Surface>
 

@@ -33,7 +33,8 @@ export function RecordsHeader({
   const [bulkMenuVisible, setBulkMenuVisible] = useState(false);
   const theme = useTheme();
 
-  const statuses = ['All', 'Paid', 'Partial', 'Unpaid'];
+  // 'Voided' is how a voided sale stays findable — every other filter hides them.
+  const statuses = ['All', 'Paid', 'Partial', 'Unpaid', 'Voided'];
 
   const filterOptions = statuses.map(s => ({ label: s, value: s }));
 

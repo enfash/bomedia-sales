@@ -45,6 +45,7 @@ function makeQuote(over: Partial<QuoteRecord> = {}): QuoteRecord {
     totalAmount: 3000,
     deliveryCost: 2000,
     status: 'Draft',
+    isVoided: false,
     ...over,
   };
 }

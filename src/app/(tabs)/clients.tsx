@@ -8,20 +8,12 @@ import { SearchBar } from '@/components/ui/search-bar';
 import { Spacing } from '@/constants/theme';
 import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useRecords } from '@/hooks/use-records';
+import { aggregateClients } from '@/services/analytics';
 import { useTheme } from '@/hooks/use-theme';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
 import { useMemo, useState } from 'react';
 import { FlatList, Platform, RefreshControl, StyleSheet, View } from 'react-native';
-
-interface ClientAgg {
-  clientName: string;
-  totalSpend: number;
-  totalPaid: number;
-  balance: number;
-  lastPurchaseDate: number;
-  jobsCount: number;
-}
 
 export default function ClientsScreen() {
 
@@ -31,36 +23,9 @@ export default function ClientsScreen() {
   const { refreshing, onRefresh } = usePullRefresh([refresh]);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const clientsList = useMemo(() => {
-    const map: Record<string, ClientAgg> = {};
-    batches.forEach(batch => {
-      const name = batch.clientName?.trim() || 'Unknown Client';
-      if (!map[name]) {
-        map[name] = {
-          clientName: name,
-          totalSpend: 0,
-          totalPaid: 0,
-          balance: 0,
-          lastPurchaseDate: 0,
-          jobsCount: 0,
-        };
-      }
-      map[name].totalSpend += (batch.totalAmount || 0);
-      map[name].totalPaid += (batch.totalPaid || 0);
-      map[name].jobsCount += batch.records.length;
-      
-      const recordDate = new Date(batch.createdAt).getTime();
-      if (recordDate > map[name].lastPurchaseDate) {
-        map[name].lastPurchaseDate = recordDate;
-      }
-    });
-
-    Object.values(map).forEach(c => {
-      c.balance = c.totalSpend - c.totalPaid;
-    });
-
-    return Object.values(map).sort((a, b) => b.totalSpend - a.totalSpend);
-  }, [batches]);
+  // Aggregation lives in analytics.ts so both Clients twins share one
+  // implementation — and so voided sales are excluded in one place.
+  const clientsList = useMemo(() => aggregateClients(batches), [batches]);
 
   const filteredClients = useMemo(() => {
     if (!searchQuery) return clientsList;

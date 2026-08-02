@@ -43,6 +43,16 @@ BOMedia internal operations app — Expo Router + React Native (react-native-pap
   drift apart**, so this is enforced rather than merely written down. It is a
   source-level parse of `app-tabs.web.tsx` — necessary because the triggers
   cannot be introspected, and honest about its own limits in the file header.
+- **There is no hard delete.** `deleteBatch`/`deleteQuote` are gone; `voidBatch`/
+  `voidQuote` replace them (admin-only, reason mandatory, confirmation requires
+  the receipt id typed back). The rules enforce it: `newData.exists()` on the
+  sales and quotes write rules means no client can `remove()` a financial
+  record, and payments were already create-only. Voided records are excluded by
+  `subscribeToBatches` and `fetchBatchesByReceiptIds` **by default** — the two
+  read paths share one default deliberately, since the second bypasses
+  `useRecords`. Three callers opt in: both Records twins (Voided filter),
+  `transaction/[id]` (so a void reason can be read) and `invoice.tsx` (which
+  stamps VOIDED). Voiding does NOT refund: collected cash stays in the ledger.
 - **Web sophistication pattern:** prefer `Screen.web.tsx` variants (Metro auto-swaps) and `Platform.OS==='web'` / width checks over forking routes. Example live: `src/app/(tabs)/index.web.tsx`.
 - **Quality gate:** keep `npx tsc --noEmit` and `npx expo lint` green. Watch the newer lint rules: no components created during render (`react-hooks/static-components`), no ref access during render (`react-hooks/refs`), no `Array<T>` (use `T[]`).
 

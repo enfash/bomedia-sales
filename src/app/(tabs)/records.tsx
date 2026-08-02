@@ -38,7 +38,7 @@ export default function RecordsScreen() {
     totalRevenue,
     totalPaid,
     refresh,
-  } = useRecords(theme, { staffTodayOnly: !isAdmin });
+  } = useRecords(theme, { staffTodayOnly: !isAdmin, includeVoided: true });
 
   const { refreshing, onRefresh } = usePullRefresh([refresh]);
 

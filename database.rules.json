@@ -18,12 +18,27 @@
         "$m": {
           "$d": {
             "$id": {
-              ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'staff' && !data.exists() && newData.exists()))",
+              ".write": "auth != null && newData.exists() && (root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'staff' && !data.exists()))",
               "totalPaid": {
                 ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'staff')"
               },
               "productionStage": {
                 ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'staff')"
+              },
+              "voidedAtMs": {
+                ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+              },
+              "voidedAt": {
+                ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+              },
+              "voidedBy": {
+                ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+              },
+              "voidedByName": {
+                ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+              },
+              "voidReason": {
+                ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
               }
             }
           }
@@ -36,7 +51,22 @@
         "$m": {
           "$d": {
             "$id": {
-              ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'staff' && newData.exists()))"
+              ".write": "auth != null && newData.exists() && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'staff')",
+              "voidedAtMs": {
+                ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+              },
+              "voidedAt": {
+                ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+              },
+              "voidedBy": {
+                ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+              },
+              "voidedByName": {
+                ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+              },
+              "voidReason": {
+                ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+              }
             }
           }
         }
