@@ -124,3 +124,55 @@ and reports what it will delete before doing it — the same
 dry-run/copy-verify-delete discipline the migration itself uses. The console is
 fine for one field on one node; it is the wrong tool for removing eight records
 by hand.
+
+---
+
+## The rule that came out of this
+
+**Export twice. Before the change, and again after any correction but before the
+migration. Name them distinctly and keep both.**
+
+```bash
+firebase database:get / --project bomedia-official \
+  --output ~/backups/bomedia-rtdb-$(date +%F)-pre-correction.json
+
+# …make the correction, verify it, then:
+
+firebase database:get / --project bomedia-official \
+  --output ~/backups/bomedia-rtdb-$(date +%F)-pre-migration.json
+```
+
+A backup's job is not to represent the state you intend to keep. It is to let
+you reach **any** earlier state. One export taken after a correction cannot
+recover the value you corrected away — which is precisely the loss recorded
+above. The two files protect different mistakes and neither substitutes for the
+other.
+
+This binds hardest before anything that rewrites history rather than moving it.
+
+## What changed as a result
+
+Not a list of intentions — these are in the repository:
+
+| Change | Where |
+|---|---|
+| Bulk deletions go through a reviewed script, never the console | `DATABASE_RUNBOOK.md`, "Bulk deletions go through a script" |
+| That script proved the pattern: allow-list, protected nodes guarded twice, targets hardcoded rather than taken from argv, dry run by default, read-back verification after committing | recoverable via `git show 4c74502:scripts/wipe-test-data.ts` |
+| The two-export rule above, with both filenames | `DATABASE_RUNBOOK.md` §Exports |
+| A stop condition on every destructive run: expected record counts and totals stated in advance, compared before committing | `DATABASE_RUNBOOK.md` |
+| Which signals actually identify test data — and that irregular amounts are a **false negative**, because computed totals are irregular whatever is typed | `DATABASE_RUNBOOK.md`, "Which signals actually discriminated" |
+| Hard delete removed from the application entirely: `voidBatch`/`voidQuote` replace it, and the database rules block `remove()` on sales, quotes and payments for every client including admin | Stage 3, `database.rules.json` |
+
+The last row is the one that matters most. The incident was a manual deletion,
+but the same class of loss was reachable from inside the app — `deleteBatch`
+called `remove()` on a financial record. That is now impossible to do by
+accident, by mistake, or on purpose.
+
+## What did not change
+
+The stop condition worked. The re-run dry run reported `No legacy flat records
+found` against an expected `4 legacy records → 2 batches, ₦187,460`, and the
+migration halted without committing. Had it not, the loss would have been
+compounded by a migration running against a tree it did not expect.
+
+Detection was never the failure. The backup was.
