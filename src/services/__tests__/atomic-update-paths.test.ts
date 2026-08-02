@@ -92,8 +92,12 @@ describe('no writer sends an ancestor and its descendant together', () => {
   });
 
   it('createBatch with an advance still writes the ref, nested in the node', async () => {
-    await createBatch(batchInput({ totalPaid: 5000 }));
-    const node = mockUpdates[0]['sales/2026/08/02/INV-260802-AOBH'] as any;
+    // The sale lands in TODAY's date bucket, so the path cannot be written out
+    // literally — it changes at every midnight, and a hardcoded one silently
+    // started reading `undefined` the day after this test was written. Take the
+    // path from `createBatch` itself, which returns the node it wrote.
+    const dbPath = await createBatch(batchInput({ totalPaid: 5000 }));
+    const node = mockUpdates[0][dbPath] as any;
     expect(node.paymentRefs).toBeDefined();
     expect(Object.values(node.paymentRefs)).toHaveLength(1);
     // …and the ledger entry it points at is in the same update.
