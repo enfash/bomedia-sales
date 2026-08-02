@@ -13,6 +13,7 @@ import { createBatch } from '@/services/sales-repository';
 
 const mockWritten: { path: string; node: StoredBatch }[] = [];
 const mockOpeningEntries: { path: string; node: any }[] = [];
+const mockRefs: { path: string; node: any }[] = [];
 
 jest.mock('@/services/db', () => ({
   dbService: {
@@ -23,7 +24,8 @@ jest.mock('@/services/db', () => ({
     // update as the batch, so createBatch takes this path when totalPaid > 0.
     updateAtomic: jest.fn(async (updates: Record<string, any>) => {
       for (const [path, node] of Object.entries(updates)) {
-        if (path.startsWith('sales/')) mockWritten.push({ path, node });
+        if (path.includes('/paymentRefs/')) mockRefs.push({ path, node });
+        else if (path.startsWith('sales/')) mockWritten.push({ path, node });
         else mockOpeningEntries.push({ path, node });
       }
     }),
@@ -35,6 +37,7 @@ jest.mock('@/services/db', () => ({
 beforeEach(() => {
   mockWritten.length = 0;
   mockOpeningEntries.length = 0;
+  mockRefs.length = 0;
 });
 
 const input = (over: Partial<Parameters<typeof createBatch>[0]> = {}) => ({
@@ -128,12 +131,27 @@ describe('createBatch always writes the money fields', () => {
     expect(node.note).toBe('Advance taken at sale');
   });
 
-  it('writes the batch and the opening entry in ONE atomic update', async () => {
+  it('writes the batch, the opening entry AND its ref in ONE atomic update', async () => {
     await createBatch(input({ totalPaid: 5000 }));
-    // Both landed; a sale whose advance never reached the ledger is exactly
-    // the inconsistency this avoids.
+    // All three landed. A sale whose advance never reached the ledger, or an
+    // entry no ref can find, are both inconsistencies this avoids.
     expect(mockWritten).toHaveLength(1);
     expect(mockOpeningEntries).toHaveLength(1);
+    expect(mockRefs).toHaveLength(1);
+  });
+
+  it('the opening entry ref points at the entry that was written', async () => {
+    await createBatch(input({ totalPaid: 5000 }));
+    const [{ path: entryPath }] = mockOpeningEntries;
+    const [{ path: refPath, node: location }] = mockRefs;
+    // ref key === entry key, and its value locates the entry.
+    const key = refPath.split('/').pop();
+    expect(entryPath).toBe(`payments/${location}/${key}`);
+  });
+
+  it('writes no ref when there was no advance', async () => {
+    await createBatch(input({ totalPaid: 0 }));
+    expect(mockRefs).toEqual([]);
   });
 
   it('writes no ledger entry when nothing was paid up front', async () => {

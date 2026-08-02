@@ -91,6 +91,48 @@ git show 4c74502602338d805062f05d8873f5b429ea8632opying:
 
 ---
 
+## Rebuilding `paymentRefs`
+
+The transaction screen reads a sale's payments **through**
+`sales/…/{saleId}/paymentRefs`. If those refs are missing, the screen shows no
+payments against a sale that plainly has a `totalPaid` — silent, and usually
+noticed by a customer first.
+
+Two situations produce that:
+
+- **A restore.** Sales recovered from an export predating the refs come back
+  with `totalPaid` set and no refs.
+- **A deleted ref.** An admin can remove one and the rules cannot prevent it
+  (see AUDIT_2026-07.md). The ledger is unaffected — only the index is lost.
+
+The mapping is already written and tested:
+`src/services/migrations/payment-refs-backfill.ts`. It is pure, so it needs a
+thin Admin SDK runner — same pattern as the wipe script, and it needs
+`firebase-admin` and `tsx` re-added first (see §"Write access at root depth"):
+
+```ts
+// scripts/backfill-payment-refs.ts
+import { planPaymentRefBackfill, isBackfillComplete } from '../src/services/migrations/payment-refs-backfill';
+// …initialise the Admin SDK exactly as the wipe script did…
+const payments = (await db.ref('payments').get()).val();
+const sales    = (await db.ref('sales').get()).val();
+const plan = planPaymentRefBackfill(payments, sales);
+
+console.log(`${plan.ledgerEntryCount} entries · ${Object.keys(plan.updates).length} refs to write`);
+console.log(`${plan.alreadyCorrect} already correct · ${plan.conflicts.length} conflicts · ${plan.orphans.length} orphans`);
+if (!process.argv.includes('--commit')) process.exit(0);   // dry run by default
+await db.ref().update(plan.updates);                        // one atomic update
+```
+
+**Read the conflicts and orphans before committing.** A conflict means a ref was
+written by hand and points elsewhere; the plan never overwrites one. An orphan
+means a payment references a sale that no longer exists — money recorded against
+nothing, which needs a person, not a script.
+
+Safe to re-run: a second pass produces an empty plan, which is covered by a test.
+
+---
+
 ## Bulk deletions go through a script, not the console
 
 The 2026-08-01 incident happened because eight records were deleted by hand in

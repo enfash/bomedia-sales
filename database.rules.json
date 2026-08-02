@@ -40,7 +40,12 @@
               "voidReason": {
                 ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
               },
-              ".validate": "!data.child('voidedAtMs').exists() || (newData.child('voidedAtMs').val() === data.child('voidedAtMs').val() && newData.child('voidedBy').val() === data.child('voidedBy').val() && newData.child('voidedByName').val() === data.child('voidedByName').val() && newData.child('voidReason').val() === data.child('voidReason').val())"
+              ".validate": "!data.child('voidedAtMs').exists() || (newData.child('voidedAtMs').val() === data.child('voidedAtMs').val() && newData.child('voidedBy').val() === data.child('voidedBy').val() && newData.child('voidedByName').val() === data.child('voidedByName').val() && newData.child('voidReason').val() === data.child('voidReason').val())",
+              "paymentRefs": {
+                "$key": {
+                  ".validate": "!data.exists() || newData.val() === data.val()"
+                }
+              }
             }
           }
         }

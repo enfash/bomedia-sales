@@ -55,6 +55,20 @@ export interface PaymentWrite {
   dayKey: string;
   paymentPath: string;
   totalPaidPath: string;
+  /**
+   * Pointer index on the SALE: `sales/…/{saleId}/paymentRefs/{key}`.
+   *
+   * The ledger is bucketed by payment date, which makes Daily Cash a
+   * single-day read but leaves "this sale's payments" a scan across every day.
+   * This ref makes that lookup structural without moving the ledger.
+   *
+   * It is an INDEX, not a record. The entry under `payments/…` is the money;
+   * this only says where to find it. If a ref is ever lost, it is rebuildable
+   * from the ledger — see scripts/backfill-payment-refs.ts.
+   */
+  refPath: string;
+  /** `{dayKey}/{uid}` — the ledger location, minus the shared key. */
+  refValue: string;
   entry: StoredPayment;
   /** Whole naira; what `totalPaid` must move by. */
   delta: number;
@@ -94,10 +108,16 @@ export function buildPaymentWrite(input: BuildPaymentInput): PaymentWrite {
       : {}),
   };
 
+  // The ref reuses the entry's own key, so ref key === entry key and the two
+  // can be reconciled by set comparison rather than by parsing values.
+  const refValue = `${dayKey}/${input.actor.uid}`;
+
   return {
     dayKey,
     paymentPath: `${PAYMENTS_ROOT}/${dayKey}/${input.actor.uid}/${input.key}`,
     totalPaidPath: `${input.batch.dbPath}/totalPaid`,
+    refPath: `${input.batch.dbPath}/paymentRefs/${input.key}`,
+    refValue,
     entry,
     delta: amount,
   };
@@ -165,10 +185,56 @@ export function parsePaymentsTree(root: any): PaymentEntry[] {
  * Kept separate from `subscribeToBatches` so Records and the Board do not pay
  * to fetch payments they never render.
  */
-export function subscribeToPayments(
+/**
+ * One sale's payments, via its `paymentRefs` index.
+ *
+ * Replaces a subscription to the WHOLE ledger that filtered client-side to find
+ * one sale's entries. Payments accumulate faster than sales, so that read
+ * degraded sooner than anything else in the app.
+ *
+ * Subscribes to the ref map only, then fetches each entry once. Entries are
+ * immutable — create-only by rule, corrected by reversal rather than edit — so
+ * there is nothing to watch on them. The ref map is the only thing that changes
+ * when a payment is added, and adding one re-runs this.
+ */
+export function subscribeToPaymentsForSale(
+  batchPath: string,
   callback: (payments: PaymentEntry[]) => void,
 ): () => void {
-  return dbService.subscribe(PAYMENTS_ROOT, (root) => callback(parsePaymentsTree(root)));
+  let cancelled = false;
+
+  const unsubscribe = dbService.subscribe<Record<string, string>>(
+    `${batchPath}/paymentRefs`,
+    async (refs) => {
+      if (!refs) {
+        if (!cancelled) callback([]);
+        return;
+      }
+
+      const entries = await Promise.all(
+        Object.entries(refs).map(async ([key, location]) => {
+          const node = await dbService.getRecord<StoredPayment>(
+            `${PAYMENTS_ROOT}/${location}/${key}`,
+          );
+          if (!node) return null;
+          const [dayKey, uid] = location.split('/');
+          return normalizePayment(node, key, dayKey, uid);
+        }),
+      );
+
+      if (cancelled) return;
+      callback(
+        entries
+          .filter((e): e is PaymentEntry => e !== null)
+          .sort((a, b) => b.atMs - a.atMs),
+      );
+    },
+  );
+
+  return () => {
+    cancelled = true;
+    unsubscribe();
+  };
 }
 
 /**
@@ -232,6 +298,7 @@ export async function recordPayment(input: RecordPaymentInput): Promise<string> 
   await dbService.updateAtomic({
     [write.paymentPath]: write.entry,
     [write.totalPaidPath]: dbService.increment(write.delta),
+    [write.refPath]: write.refValue,
   });
 
   return key;
@@ -272,6 +339,7 @@ export async function reversePayment(
   await dbService.updateAtomic({
     [write.paymentPath]: write.entry,
     [write.totalPaidPath]: dbService.increment(write.delta),
+    [write.refPath]: write.refValue,
   });
 
   return key;

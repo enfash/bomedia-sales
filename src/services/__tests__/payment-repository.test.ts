@@ -122,7 +122,7 @@ describe('recordPayment', () => {
 
     expect(mockUpdates).toHaveLength(1);
     const paths = Object.keys(mockUpdates[0]);
-    expect(paths).toHaveLength(2);
+    expect(paths).toHaveLength(3);
     expect(paths).toContain('payments/2026-08-01/uid-elijah/-KEY1');
     expect(paths).toContain('sales/2026/08/01/INV-260801-AAAA/totalPaid');
   });

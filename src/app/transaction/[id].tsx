@@ -10,7 +10,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { actorFrom, logActivity } from '@/services/activity';
 import { voidBatch } from '@/services/sales-repository';
 import { VoidModal } from '@/components/records/void-modal';
-import { recordPayment, subscribeToPayments } from '@/services/payment-repository';
+import { recordPayment, subscribeToPaymentsForSale } from '@/services/payment-repository';
 import { attachPayments, describeMismatch } from '@/services/payment-reconciliation';
 import { PaymentHistory } from '@/components/records/payment-history';
 import { WebDetailShell } from '@/components/web-detail-shell';
@@ -56,9 +56,13 @@ export default function TransactionDetails() {
   const [isRecording, setIsRecording] = useState(false);
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
 
-  // Payments live at their own root, so they need their own subscription.
-  // Staff only receive their own entries — the rules enforce that, not the UI.
-  useEffect(() => subscribeToPayments(setPayments), []);
+  // Scoped to THIS sale via its paymentRefs index, rather than subscribing to
+  // the whole ledger and filtering. Staff still only receive their own entries
+  // — the rules enforce that at the uid level, not the UI.
+  useEffect(() => {
+    if (!transaction?.dbPath) return;
+    return subscribeToPaymentsForSale(transaction.dbPath, setPayments);
+  }, [transaction?.dbPath]);
 
   const handleAddPayment = async () => {
     if (!transaction || !paymentAmount) return;

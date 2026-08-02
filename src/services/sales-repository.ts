@@ -293,7 +293,13 @@ export async function createBatch(input: NewBatchInput): Promise<string> {
       note: 'Advance taken at sale',
       now,
     });
-    await dbService.updateAtomic({ [dbPath]: node, [write.paymentPath]: write.entry });
+    // The batch, its opening ledger entry and the ref that finds it — one
+    // update. `totalPaid` is already on the node, so no increment is needed.
+    await dbService.updateAtomic({
+      [dbPath]: node,
+      [write.paymentPath]: write.entry,
+      [write.refPath]: write.refValue,
+    });
   } else {
     await dbService.setRecord(dbPath, node);
   }
@@ -357,6 +363,7 @@ export async function markBatchesPaid(
 
     updates[write.paymentPath] = write.entry;
     updates[write.totalPaidPath] = dbService.increment(write.delta);
+    updates[write.refPath] = write.refValue;
     settled.push(batch);
   }
 
