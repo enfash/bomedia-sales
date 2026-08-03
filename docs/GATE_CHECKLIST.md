@@ -431,6 +431,34 @@ all-clear, which is worse than no answer.
 
 ☐
 
+### E0. Staff can record a payment on an EXISTING sale
+
+**Do this FIRST in Part E.** It is the counter operator's main job, it was
+broken from `fee5d65` until 2026-08-04, and nothing in this checklist tested it
+— Part E only tested staff READS.
+
+**Do** — as staff, open a sale that already exists (not one you are creating)
+and record a payment on it.
+
+**Expect** — it saves. No error.
+
+**Verify**:
+
+```bash
+fb database:get /payments/$DAY/$UID | jq 'length'          # $UID = the STAFF uid
+fb database:get /sales/<Y/M/D>/<RECEIPT_ID>/paymentRefs | jq 'keys | length'
+```
+
+**If it fails** with `update at / failed: permission_denied` — the
+`paymentRefs/$key` write rule has regressed. That path has no ancestor grant for
+staff on an existing sale: the sale node's staff arm requires `!data.exists()`,
+which is false once the sale is there. The ledger entry and `totalPaid` are both
+permitted, so the update fails ENTIRELY on the ref — atomicity means all or
+nothing, and the operator sees a refusal with no clue which of the three paths
+caused it.
+
+☐
+
 ### E4. Staff cannot void
 
 **Expect** — no void control, and a direct attempt is rejected by the rules.
