@@ -32,8 +32,26 @@ Record the outcome inline: `☐` → `✅` or `❌ + note`.
 # The CLI needs to be logged in. The token expires on its own schedule and the
 # 401 it produces reads like a permissions error, not an expiry.
 firebase login --reauth          # only if a command below 401s
-export FBP="--project bomedia-official"
+
+# Every command below goes through this. It pins BOTH the project and the
+# database, and it works in zsh and bash alike.
+fb() { firebase "$@" --instance bomedia-official --project bomedia-official; }
 ```
+
+**Why a function and not `export FBP="--project …"`.** Two traps, both of which
+produce output that reads like a finding rather than a mistake:
+
+- **The database.** The project has two: `bomedia-official`, which the app uses
+  and which holds everything, and `bomedia-official-default-rtdb`, which is
+  empty and is what the CLI targets when you do not name one. A command without
+  `--instance` reads the empty database and answers `null`. This is how the
+  rules came to be deployed to the wrong database on 2026-08-03.
+- **The shell.** `export FBP="--project bomedia-official"` then `$FBP` works in
+  bash but **not in zsh**, which is the macOS default: zsh does not word-split
+  an unquoted expansion, so the whole string arrives as one argument and every
+  command fails with `error: unknown option '--project bomedia-official'`.
+
+Re-define `fb` in each new terminal — a shell function does not survive one.
 
 **Today's bucket key** — several checks need it. It is the LOCAL date:
 
@@ -45,9 +63,9 @@ echo $DAY
 **Your admin uid** — needed to read your own payment bucket:
 
 ```bash
-firebase database:get /users $FBP --shallow
+fb database:get /users --shallow
 # then, for the uid it prints:
-firebase database:get /users/<uid> $FBP
+fb database:get /users/<uid>
 ```
 
 ☐ `UID=` ______________________
@@ -111,8 +129,8 @@ minimum on printing, not on the invoice.
 **Verify** — the batch, its opening ledger entry and the ref all landed:
 
 ```bash
-firebase database:get /sales/$(date +%Y/%m/%d) $FBP --shallow      # find the receipt id
-firebase database:get /sales/$(date +%Y/%m/%d)/<RECEIPT_ID> $FBP
+fb database:get /sales/$(date +%Y/%m/%d) --shallow      # find the receipt id
+fb database:get /sales/$(date +%Y/%m/%d)/<RECEIPT_ID>
 ```
 
 Look for, on that node: `subtotal: 600`, `adjustments` containing the mov row,
@@ -128,7 +146,7 @@ bug fixed in `503c556`; you are on a stale bundle. Run `npx expo start -c`.
 **Verify**:
 
 ```bash
-firebase database:get /payments/$DAY/$UID $FBP
+fb database:get /payments/$DAY/$UID
 ```
 
 **Expect** — one entry: `amount: 400`, `method: "Cash"`, `receiptId` matching
@@ -166,7 +184,7 @@ method and your name.
 **Verify**:
 
 ```bash
-firebase database:get /payments/$DAY/$UID $FBP
+fb database:get /payments/$DAY/$UID
 ```
 
 ☐
@@ -206,7 +224,7 @@ number selected. If one was already paid, it is excluded.
 Records":
 
 ```bash
-firebase database:get /payments/$DAY/$UID $FBP
+fb database:get /payments/$DAY/$UID
 ```
 
 **If it fails** — partial settlement (some paid, some not) means the update is
@@ -224,7 +242,7 @@ A4/B1 only. POS and Transfer are excluded — they are in the bank.
 **Verify** — the sum of `amount` for `method: "Cash"` in:
 
 ```bash
-firebase database:get /payments/$DAY $FBP
+fb database:get /payments/$DAY
 ```
 
 ☐
@@ -255,8 +273,8 @@ append-only and the rules are not doing what they claim.
 **Verify**:
 
 ```bash
-firebase database:get /payments/$DAY/$UID $FBP           # entry is HERE (today)
-firebase database:get /sales/<Y/M/D of the sale>/<ID>/paymentRefs $FBP
+fb database:get /payments/$DAY/$UID           # entry is HERE (today)
+fb database:get /sales/<Y/M/D of the sale>/<ID>/paymentRefs
 ```
 
 **Expect** — the entry sits under **today's** bucket, not the sale's date, and a
@@ -337,7 +355,7 @@ filtering. There are twelve, plus `fetchBatchesByReceiptIds`.
 **Verify**:
 
 ```bash
-firebase database:get /payments/$DAY/$UID $FBP
+fb database:get /payments/$DAY/$UID
 ```
 
 **Expect** — the ₦400 entry is **still there**, and **Daily Cash still counts
@@ -365,7 +383,7 @@ watermark in the PDF.
 **Verify** — the rules pin it. This should be **rejected**:
 
 ```bash
-firebase database:set /sales/<Y/M/D>/<ID>/voidedAtMs 0 $FBP
+fb database:set /sales/<Y/M/D>/<ID>/voidedAtMs 0
 ```
 
 **If it succeeds** — the `.validate` pinning void field values is not deployed.
@@ -440,11 +458,11 @@ Not part of the gate. These answer questions the audit's Stage 4 re-examination
 ```bash
 # How many entries exist. --shallow returns KEYS ONLY, so this does not
 # download the feed to count it.
-firebase database:get /activity --shallow --instance bomedia-official $FBP | jq 'keys | length'
+fb database:get /activity --shallow | jq 'keys | length'
 
 # What the app downloads for that feed today, in bytes: the whole node, which
 # is exactly what subscribeToActivity fetches before discarding all but 100.
-firebase database:get /activity --instance bomedia-official $FBP | wc -c
+fb database:get /activity | wc -c
 ```
 
 Entries run ~200–300 bytes each. Under ~50 KB the fix is **preventive** — worth
@@ -455,8 +473,8 @@ admin app start.
 **Is the whole-tree sales read the 20 KB the re-examination claims?**
 
 ```bash
-firebase database:get /sales --instance bomedia-official $FBP | wc -c
-firebase database:get /sales --instance bomedia-official $FBP | jq '[.. | objects | select(has("receiptId"))] | length'
+fb database:get /sales | wc -c
+fb database:get /sales | jq '[.. | objects | select(has("receiptId"))] | length'
 ```
 
 The second is the batch count. If the byte figure is over a megabyte, the
@@ -467,7 +485,7 @@ the report attributes downloaded bytes per path, which is the figure the Stage 4
 premise assumed rather than measured. It opens a read stream and writes nothing:
 
 ```bash
-firebase database:profile --duration 60 --instance bomedia-official $FBP
+fb database:profile --duration 60
 ```
 
 The same figure over a longer window is in the Firebase console under Realtime
