@@ -28,7 +28,27 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  * writes — it is not durability, and Stage 5 does not ship durability.
  */
 
-const STORAGE_KEY = 'bomedia:pending-journal:v1';
+/**
+ * ONE STORAGE KEY PER ENTRY, not one blob holding all of them.
+ *
+ * The journal is PER DEVICE. AsyncStorage is local to this installation — on
+ * native a sandboxed store, on web `localStorage` for this origin — so the
+ * phone and a browser signed into the same account keep separate journals. A
+ * write recorded on the phone is invisible to the web app and vice versa; each
+ * device reconciles only what it issued, which is correct, because only the
+ * device that issued a write knows it was pending.
+ *
+ * But "per device" is not "one process". Two browser tabs of the web app share
+ * one `localStorage`, and an in-process lock cannot reach across them. Under a
+ * single JSON blob, that is a read-modify-write two tabs can interleave —
+ * dropping exactly the record whose job is not to be dropped.
+ *
+ * Storing each entry under its own key removes the race rather than narrowing
+ * it: `register` and `clear` become single-key writes, which are atomic in both
+ * backends, so there is no read-modify-write for anything to interleave with.
+ * `list()` scans the prefix.
+ */
+const KEY_PREFIX = 'bomedia:pending-journal:v1:';
 
 export type JournalKind = 'sale' | 'payment' | 'reversal';
 
@@ -77,40 +97,7 @@ export interface ReconcileResult {
   unverified: JournalEntry[];
 }
 
-type Journal = Record<string, JournalEntry>;
-
-/**
- * Every mutation goes through this chain.
- *
- * The journal is a read-modify-write on one storage key, and two payments
- * recorded a moment apart would otherwise interleave and drop one — losing
- * exactly the record whose job is to not be lost.
- */
-let queue: Promise<unknown> = Promise.resolve();
-
-function serialize<T>(work: () => Promise<T>): Promise<T> {
-  const next = queue.then(work, work);
-  // Keep the chain alive even if this link rejects.
-  queue = next.catch(() => undefined);
-  return next;
-}
-
-async function read(): Promise<Journal> {
-  const raw = await AsyncStorage.getItem(STORAGE_KEY);
-  if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? (parsed as Journal) : {};
-  } catch {
-    // Corrupt storage is not worth failing a sale over, and there is nothing to
-    // recover from unparseable JSON.
-    return {};
-  }
-}
-
-async function write(journal: Journal): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(journal));
-}
+const storageKeyFor = (key: string) => `${KEY_PREFIX}${key}`;
 
 /**
  * Record a write BEFORE issuing it.
@@ -118,14 +105,13 @@ async function write(journal: Journal): Promise<void> {
  * NEVER THROWS. A failed journal write degrades the safety net; it must not
  * refuse the payment. A sale that cannot be recorded because its insurance
  * could not be written is a worse outcome than an unrecorded insurance policy.
+ *
+ * One key, one write. Nothing is read first, so there is no read-modify-write
+ * for another tab or another process to interleave with.
  */
 export async function register(entry: JournalEntry): Promise<void> {
   try {
-    await serialize(async () => {
-      const journal = await read();
-      journal[entry.key] = entry;
-      await write(journal);
-    });
+    await AsyncStorage.setItem(storageKeyFor(entry.key), JSON.stringify(entry));
   } catch (err) {
     console.warn('pending-journal: could not record a pending write (continuing):', err);
   }
@@ -134,12 +120,7 @@ export async function register(entry: JournalEntry): Promise<void> {
 /** Drop an entry once the server has acked it. Never throws. */
 export async function clear(key: string): Promise<void> {
   try {
-    await serialize(async () => {
-      const journal = await read();
-      if (!(key in journal)) return;
-      delete journal[key];
-      await write(journal);
-    });
+    await AsyncStorage.removeItem(storageKeyFor(key));
   } catch (err) {
     console.warn('pending-journal: could not clear a pending write:', err);
   }
@@ -148,8 +129,26 @@ export async function clear(key: string): Promise<void> {
 /** Everything still unaccounted for, newest first. */
 export async function list(): Promise<JournalEntry[]> {
   try {
-    const journal = await serialize(read);
-    return Object.values(journal).sort((a, b) => b.atMs - a.atMs);
+    const keys = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith(KEY_PREFIX));
+    if (keys.length === 0) return [];
+
+    const pairs = await AsyncStorage.multiGet(keys);
+    const entries: JournalEntry[] = [];
+    for (const [, raw] of pairs) {
+      if (!raw) continue;
+      try {
+        const parsed = JSON.parse(raw);
+        // A corrupt entry is dropped from the list but LEFT in storage: there
+        // is nothing to act on, and deleting it would destroy the only trace
+        // that something was once pending.
+        if (parsed && typeof parsed === 'object' && typeof parsed.key === 'string') {
+          entries.push(parsed as JournalEntry);
+        }
+      } catch {
+        continue;
+      }
+    }
+    return entries.sort((a, b) => b.atMs - a.atMs);
   } catch {
     return [];
   }
@@ -231,6 +230,6 @@ export async function dismiss(key: string): Promise<void> {
 
 /** @internal Tests only — the module has process-wide state. */
 export async function __resetForTests(): Promise<void> {
-  queue = Promise.resolve();
-  await AsyncStorage.removeItem(STORAGE_KEY);
+  const keys = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith(KEY_PREFIX));
+  await Promise.all(keys.map((k) => AsyncStorage.removeItem(k)));
 }

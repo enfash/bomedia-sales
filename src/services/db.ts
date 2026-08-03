@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth';
 import { DATABASE_URL, db } from '@/lib/firebase';
+import { checkExistsOnServer } from '@/services/existence-check';
 import { endAt, get, increment, onValue, orderByChild, orderByKey, push, query, ref, remove, set, startAt, update } from 'firebase/database';
 
 /**
@@ -134,36 +135,16 @@ export const dbService = {
   /**
    * Does this node exist ON THE SERVER? `true` / `false` / `null` = could not tell.
    *
-   * Deliberately NOT `get()`. The SDK serves `get()` from its in-memory cache
-   * when a listener is attached, and that cache still holds the local echo of a
-   * write that never reached the server — so an un-synced payment would report
-   * as present and the pending-journal entry protecting it would be cleared.
-   * That turns the recovery path into a silent loss, which is the whole failure
-   * this exists to catch.
-   *
-   * A REST read bypasses the SDK entirely, so the answer cannot come from a
-   * cache no matter when this is called. `shallow=true` returns `true` for a
-   * node with children instead of downloading it.
-   *
-   * Rules apply — it authenticates as the signed-in user, not as an owner, so
-   * a node the user may not read answers `null` (unknown) rather than `false`.
-   * Never report a write lost on the strength of a read that could not run.
+   * The wiring only. What each HTTP outcome means — and why 401, 403 and 404
+   * must all answer `null` rather than "missing" — is in `existence-check.ts`,
+   * where it is tested without a network.
    */
-  async existsOnServer(path: string): Promise<boolean | null> {
-    try {
-      const user = auth.currentUser;
-      if (!user) return null;
-      const token = await user.getIdToken();
-      const clean = path.replace(/^\/+/, '');
-      const url = `${DATABASE_URL}/${clean}.json?shallow=true&auth=${encodeURIComponent(token)}`;
-      const response = await fetch(url);
-      if (!response.ok) return null;
-      const body = (await response.text()).trim();
-      return body !== 'null' && body !== '';
-    } catch {
-      // Offline, DNS failure, expired token — all "could not tell".
-      return null;
-    }
+  existsOnServer(path: string): Promise<boolean | null> {
+    return checkExistsOnServer(path, {
+      databaseUrl: DATABASE_URL,
+      getToken: async () => (auth.currentUser ? auth.currentUser.getIdToken() : null),
+      fetcher: (url, init) => fetch(url, init),
+    });
   },
 
   subscribe<T>(path: string, callback: (data: T | null) => void) {

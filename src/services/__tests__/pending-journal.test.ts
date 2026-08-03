@@ -41,6 +41,8 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
     removeItem: async (k: string) => {
       mockStore.delete(k);
     },
+    getAllKeys: async () => [...mockStore.keys()],
+    multiGet: async (keys: string[]) => keys.map((k) => [k, mockStore.get(k) ?? null]),
   },
 }));
 
@@ -90,9 +92,9 @@ describe('1. the entry is written before the write is issued', () => {
   });
 
   it('does not interleave two writes registered at once', async () => {
-    // A read-modify-write on one storage key: without serialisation the second
-    // registration clobbers the first, losing the record whose job is not to be
-    // lost.
+    // One storage key PER ENTRY, so there is no read-modify-write for a second
+    // registration — or a second browser tab, which an in-process lock could
+    // not reach — to interleave with and clobber.
     await Promise.all([
       register(entry({ key: '-K1' })),
       register(entry({ key: '-K2' })),
@@ -216,8 +218,48 @@ describe('4. a failed journal write degrades, it does not block', () => {
   });
 
   it('survives corrupt storage rather than failing the write', async () => {
-    mockStore.set('bomedia:pending-journal:v1', '{not json');
+    mockStore.set('bomedia:pending-journal:v1:-K1', '{not json');
     expect(await list()).toEqual([]);
     await expect(journalled(entry(), async () => 'ok')).resolves.toBe('ok');
+  });
+});
+
+describe('the journal is per device, and per-key within it', () => {
+  it('does not clobber an entry another process wrote between our calls', async () => {
+    // Two browser tabs share one localStorage, and an in-process lock cannot
+    // reach across them. With one key per entry there is nothing to clobber:
+    // this simulates the other tab writing directly into storage mid-flight.
+    await register(entry({ key: '-MINE' }));
+    mockStore.set(
+      'bomedia:pending-journal:v1:-THEIRS',
+      JSON.stringify(entry({ key: '-THEIRS' })),
+    );
+    await register(entry({ key: '-MINE-2' }));
+
+    expect((await list()).map((e) => e.key).sort()).toEqual(['-MINE', '-MINE-2', '-THEIRS']);
+  });
+
+  it('clearing one entry leaves every other one alone', async () => {
+    await register(entry({ key: '-A' }));
+    await register(entry({ key: '-B' }));
+    await clear('-A');
+    expect((await list()).map((e) => e.key)).toEqual(['-B']);
+  });
+
+  it('ignores keys belonging to anything else in storage', async () => {
+    mockStore.set('bomedia:activity:lastSeen:uid-a', '123');
+    mockStore.set('bomedia:records-filters', '{}');
+    await register(entry({ key: '-K1' }));
+    expect((await list()).map((e) => e.key)).toEqual(['-K1']);
+  });
+
+  it('drops a corrupt entry from the list but leaves it in storage', async () => {
+    await register(entry({ key: '-GOOD' }));
+    mockStore.set('bomedia:pending-journal:v1:-BAD', '{not json');
+
+    expect((await list()).map((e) => e.key)).toEqual(['-GOOD']);
+    // Still there: deleting it would destroy the only trace that something was
+    // pending, which is the opposite of this module's job.
+    expect(mockStore.has('bomedia:pending-journal:v1:-BAD')).toBe(true);
   });
 });
