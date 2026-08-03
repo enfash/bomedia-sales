@@ -18,7 +18,6 @@ import {
 } from '@/services/quote-repository';
 import { useAuth } from '@/context/auth-context';
 import { useSettings } from '@/context/settings-context';
-import { actorFrom } from '@/services/activity';
 import { formatCurrency } from '@/utils/currency';
 import { computeBatchTotals } from '@/utils/money';
 import { VoidModal } from '@/components/records/void-modal';
@@ -40,7 +39,7 @@ export default function QuoteScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { settings } = useSettings();
-  const { user } = useAuth();
+  const { actor } = useAuth();
   const clientInfoRef = useRef<ClientInfoRef>(null);
 
   // 'list' = saved quotes; 'new' = the entry form.
@@ -132,7 +131,7 @@ Estimated total: ${formatCurrency(quote.totalAmount)}`;
 
   const handleConvert = async (quote: QuoteRecord) => {
     try {
-      await convertQuoteToSale(quote, actorFrom(user));
+      await convertQuoteToSale(quote, actor);
       showConverted();
     } catch (e) {
       if (e instanceof MissingQuoteInfoError) {
@@ -158,7 +157,7 @@ Estimated total: ${formatCurrency(quote.totalAmount)}`;
       await updateQuoteDetails(quote, { clientName: modalName.trim(), contact: modalContact.trim() });
       await convertQuoteToSale(
         { ...quote, clientName: modalName.trim(), contact: modalContact.trim() },
-        actorFrom(user),
+        actor,
       );
       showConverted();
     } catch (e: any) {
@@ -177,7 +176,7 @@ Estimated total: ${formatCurrency(quote.totalAmount)}`;
     if (!voidTarget || isVoiding) return;
     setIsVoiding(true);
     try {
-      await voidQuote(voidTarget, reason, actorFrom(user));
+      await voidQuote(voidTarget, reason, actor);
       setVoidTarget(null);
     } catch (e: any) {
       Alert.alert('Could not void', e.message);

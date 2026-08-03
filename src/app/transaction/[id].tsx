@@ -7,7 +7,7 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
-import { actorFrom, logActivity } from '@/services/activity';
+import { logActivity } from '@/services/activity';
 import { voidBatch } from '@/services/sales-repository';
 import { VoidModal } from '@/components/records/void-modal';
 import { recordPayment, subscribeToPaymentsForSale } from '@/services/payment-repository';
@@ -43,7 +43,7 @@ export default function TransactionDetails() {
   const router = useRouter();
   const theme = useTheme();
 
-  const { user, isAdmin } = useAuth();
+  const { isAdmin, actor } = useAuth();
   // Opt in, and look up from the UNFILTERED list: every list hides voided
   // sales, but opening one by id must still work so its reason can be read.
   const { allBatches, loading } = useRecords(theme, { includeVoided: true });
@@ -79,12 +79,12 @@ export default function TransactionDetails() {
         amount,
         method: paymentMethod,
         note: paymentNote,
-        actor: actorFrom(user),
+        actor: actor,
       });
       logActivity({
         type: 'payment_recorded',
-        actor: actorFrom(user),
-        message: `${actorFrom(user).name} recorded a ${formatCurrency(amount)} ${paymentMethod} payment for ${transaction.clientName || 'a client'}`,
+        actor: actor,
+        message: `${actor.name} recorded a ${formatCurrency(amount)} ${paymentMethod} payment for ${transaction.clientName || 'a client'}`,
         meta: { batchId: transaction.id, amount },
       });
       setPaymentModalVisible(false);
@@ -104,11 +104,11 @@ export default function TransactionDetails() {
     if (!transaction || isVoiding) return;
     setIsVoiding(true);
     try {
-      await voidBatch(transaction, reason, actorFrom(user));
+      await voidBatch(transaction, reason, actor);
       logActivity({
         type: 'sale_deleted',
-        actor: actorFrom(user),
-        message: `${actorFrom(user).name} voided a ${formatCurrency(transaction.totalAmount)} sale for ${transaction.clientName || 'a client'} — ${reason}`,
+        actor: actor,
+        message: `${actor.name} voided a ${formatCurrency(transaction.totalAmount)} sale for ${transaction.clientName || 'a client'} — ${reason}`,
         meta: { batchId: transaction.id, reason },
       });
       setVoidModalVisible(false);

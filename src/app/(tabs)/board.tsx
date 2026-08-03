@@ -6,7 +6,7 @@ import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/auth-context';
-import { actorFrom, logActivity } from '@/services/activity';
+import { logActivity } from '@/services/activity';
 import { updateProductionStage } from '@/services/sales-repository';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
@@ -40,7 +40,7 @@ export default function BoardScreen() {
   const insets = { ...safeAreaInsets, bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three };
   const theme = useTheme();
   const router = useRouter();
-  const { user } = useAuth();
+  const { actor } = useAuth();
 
   const { sortedBatches: jobs, loading, refresh } = useRecords(theme);
   const { refreshing, onRefresh } = usePullRefresh([refresh]);
@@ -69,8 +69,8 @@ export default function BoardScreen() {
     await updateProductionStage(job, next);
     logActivity({
       type: 'production_moved',
-      actor: actorFrom(user),
-      message: `${actorFrom(user).name} moved ${job.clientName || 'a job'} to ${next}`,
+      actor: actor,
+      message: `${actor.name} moved ${job.clientName || 'a job'} to ${next}`,
       meta: { batchId: job.id, stage: next },
     });
   };

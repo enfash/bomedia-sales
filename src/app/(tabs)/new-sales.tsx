@@ -11,7 +11,7 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useSettings } from '@/context/settings-context';
 import { useTheme } from '@/hooks/use-theme';
-import { actorFrom, logActivity } from '@/services/activity';
+import { logActivity } from '@/services/activity';
 import { formatCurrency } from '@/utils/currency';
 import { computeBatchTotals } from '@/utils/money';
 
@@ -22,7 +22,7 @@ import { JobDetailCard } from '@/components/sales/job-detail-card';
 export default function NewSalesScreen() {
   const safeAreaInsets = useSafeAreaInsets();
   const { settings } = useSettings();
-  const { user } = useAuth();
+  const { actor } = useAuth();
   const insets = {
     ...safeAreaInsets,
     bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
@@ -85,13 +85,13 @@ export default function NewSalesScreen() {
         paymentMethod,
         items: batchItems,
         // Attributes the advance to whoever is at the counter.
-        actor: actorFrom(user),
+        actor: actor,
       });
 
       logActivity({
         type: 'sale_created',
-        actor: actorFrom(user),
-        message: `${actorFrom(user).name} created a ${formatCurrency(finalBatchTotal)} sale for ${clientData.clientName}`,
+        actor: actor,
+        message: `${actor.name} created a ${formatCurrency(finalBatchTotal)} sale for ${clientData.clientName}`,
         meta: { receiptId, amount: finalBatchTotal, clientName: clientData.clientName },
       });
 

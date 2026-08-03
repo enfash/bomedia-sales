@@ -7,6 +7,7 @@ import {
   setKeepSignedIn,
   setLastActiveAt,
 } from '@/lib/session';
+import { actorFrom, type ActivityActor } from '@/services/activity';
 import { dbService } from '@/services/db';
 import {
   onAuthStateChanged,
@@ -25,6 +26,14 @@ interface AuthContextValue {
   user: User | null;
   /** The user's role, or null while it loads / when signed out. */
   role: Role | null;
+  /** `users/{uid}.name` — the source of truth for how this person is named. */
+  profileName: string | null;
+  /**
+   * Who to attribute work to. Built once here so no caller can assemble a
+   * half-right actor: every sale, payment, void and activity entry signs with
+   * this. See `actorFrom` for the fallback chain.
+   */
+  actor: ActivityActor;
   /** Convenience: role === 'admin'. Staff until proven admin (fail-safe). */
   isAdmin: boolean;
   /** True until the first auth-state result + session check completes. */
@@ -54,6 +63,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<Role | null>(null);
+  const [profileName, setProfileName] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [sessionExpired, setSessionExpired] = useState(false);
 
@@ -106,34 +116,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, []);
 
-  // Load the user's role. On first login, self-register as `staff` (the owner
-  // promotes to `admin` in the Firebase console). Fail-safe: any error → staff.
+  // Load the user's role AND their profile name. On first login, self-register
+  // as `staff` (the owner promotes to `admin` in the Firebase console).
+  // Fail-safe: any error → staff.
+  //
+  // The name comes out of this same read, deliberately — it is used to attribute
+  // sales, payments and every activity entry, so a second fetch would mean a
+  // window where the app knows who you are but signs your work as your email
+  // address.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       if (!user) {
-        if (!cancelled) setRole(null);
+        if (!cancelled) {
+          setRole(null);
+          setProfileName(null);
+        }
         return;
       }
       const uid = user.uid;
       try {
-        const existing = await dbService.getRecord<{ role?: string }>(`users/${uid}`);
+        const existing = await dbService.getRecord<{ role?: string; name?: string }>(`users/${uid}`);
         if (cancelled) return;
-        if (existing?.role === 'admin') {
-          setRole('admin');
-          return;
-        }
         if (existing?.role) {
-          setRole('staff');
+          setProfileName(existing.name?.trim() || null);
+          setRole(existing.role === 'admin' ? 'admin' : 'staff');
           return;
         }
+        const name = user.displayName ?? '';
         await dbService.setRecord(`users/${uid}`, {
           role: 'staff',
           email: user.email ?? '',
-          name: user.displayName ?? '',
+          name,
           createdAt: new Date().toISOString(),
         });
-        if (!cancelled) setRole('staff');
+        if (!cancelled) {
+          setProfileName(name.trim() || null);
+          setRole('staff');
+        }
       } catch {
         if (!cancelled) setRole('staff');
       }
@@ -173,6 +193,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user,
       role,
+      profileName,
+      actor: actorFrom(user, profileName),
       isAdmin: role === 'admin',
       initializing,
       sessionExpired,
@@ -189,7 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await clearSessionKeys();
       },
     }),
-    [user, role, initializing, sessionExpired],
+    [user, role, profileName, initializing, sessionExpired],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

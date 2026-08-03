@@ -17,7 +17,7 @@ import type { BatchAdjustment, SalesBatch, SalesRecord } from '@/components/reco
 import { MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useSettings } from '@/context/settings-context';
-import { actorFrom, logActivity } from '@/services/activity';
+import { logActivity } from '@/services/activity';
 import { fetchBatchesByReceiptIds, updateBatchDetails } from '@/services/sales-repository';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate, isOverdue } from '@/utils/date';
@@ -51,7 +51,7 @@ export default function InvoiceScreen() {
   const { batchId } = useLocalSearchParams();
   const router = useRouter();
   const { settings, isLoading: settingsLoading } = useSettings();
-  const { user, isAdmin } = useAuth();
+  const { isAdmin, actor } = useAuth();
   const theme = useTheme();
   
   const [loading, setLoading] = useState(() => !!batchId);
@@ -172,8 +172,8 @@ export default function InvoiceScreen() {
       );
       logActivity({
         type: 'sale_edited',
-        actor: actorFrom(user),
-        message: `${actorFrom(user).name} edited invoice details for ${clientName}`,
+        actor: actor,
+        message: `${actor.name} edited invoice details for ${clientName}`,
         meta: { receiptIds: batchIds, clientName },
       });
       Alert.alert('Saved', 'Details saved successfully.');

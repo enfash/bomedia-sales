@@ -36,11 +36,34 @@ export interface ActivityActor {
   name: string;
 }
 
-/** Derive an activity actor from the authenticated Firebase user. */
-export function actorFrom(user: { uid: string; displayName?: string | null; email?: string | null } | null | undefined): ActivityActor {
+/**
+ * Derive an activity actor from the authenticated user and their profile.
+ *
+ * Prefer `useAuth().actor` — the context builds this once so no caller can
+ * assemble a half-right actor. This stays exported for the context and tests.
+ *
+ * The chain is ordered and exhaustive, and it NEVER returns a blank name — a
+ * nameless attribution is the same failure as a wrong one:
+ *
+ *   1. `users/{uid}.name` — the app's own profile record, and the only name a
+ *      person can be given from inside the app.
+ *   2. Firebase Auth `displayName` — **deliberately not the source of truth.**
+ *      It is unset on the accounts in use and lives outside the database, so a
+ *      name set there is invisible to every rule and every query. Do not
+ *      "fix" naming by setting it: set `users/{uid}.name`.
+ *   3. `email` — correct, if ugly. Old ledger entries carry these and are left
+ *      alone; see the attribution section in docs/AUDIT_2026-07.md.
+ *   4. `uid` — unreadable, but it identifies exactly one person and can be
+ *      resolved later. Never reached in practice.
+ */
+export function actorFrom(
+  user: { uid: string; displayName?: string | null; email?: string | null } | null | undefined,
+  profileName?: string | null,
+): ActivityActor {
+  const uid = user?.uid ?? '';
   return {
-    uid: user?.uid ?? '',
-    name: user?.displayName || user?.email || 'Someone',
+    uid,
+    name: profileName?.trim() || user?.displayName || user?.email || uid || 'Someone',
   };
 }
 

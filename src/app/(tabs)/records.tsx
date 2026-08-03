@@ -3,7 +3,7 @@ import { ThemedView } from '@/components/themed-view';
 import { usePageContainerStyles } from '@/components/ui/page-container';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { actorFrom, logActivity } from '@/services/activity';
+import { logActivity } from '@/services/activity';
 import type { PaymentMethod, SalesBatch } from '@/components/records/types';
 import { markBatchesPaid } from '@/services/sales-repository';
 import { formatCurrency } from '@/utils/currency';
@@ -21,7 +21,7 @@ import { formatDate } from '@/utils/date';
 
 export default function RecordsScreen() {
   const theme = useTheme();
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, actor } = useAuth();
 
   const {
     loading,
@@ -102,7 +102,7 @@ export default function RecordsScreen() {
     try {
       // markBatchesPaid returns only the batches it actually wrote for —
       // anything already settled is skipped rather than given a zero entry.
-      const settled = await markBatchesPaid(batches, method, actorFrom(user));
+      const settled = await markBatchesPaid(batches, method, actor);
       if (settled.length === 0) {
         Alert.alert('Nothing to record', 'Those sales are already fully paid.');
         return;
@@ -110,8 +110,8 @@ export default function RecordsScreen() {
       const paidTotal = settled.reduce((s, b) => s + (b.totalBalance || 0), 0);
       logActivity({
         type: 'payment_recorded',
-        actor: actorFrom(user),
-        message: `${actorFrom(user).name} marked ${settled.length} sale${settled.length !== 1 ? 's' : ''} paid by ${method} (${formatCurrency(paidTotal)})`,
+        actor: actor,
+        message: `${actor.name} marked ${settled.length} sale${settled.length !== 1 ? 's' : ''} paid by ${method} (${formatCurrency(paidTotal)})`,
         meta: { batchIds: settled.map((b) => b.id), amount: paidTotal },
       });
       setSelectedBatches([]);
