@@ -73,6 +73,15 @@ export interface JournalEntry {
   byName: string;
   at: string;
   atMs: number;
+  /**
+   * The write itself, so an entry the server does not have can be SENT again
+   * rather than only reported. Absent on entries written before the outbox
+   * existed — those are still reported, just not replayable.
+   *
+   * Replay is gated on the verdict `missing` and nothing else; see
+   * `outbox.ts` for why that is a safety invariant rather than a tuning knob.
+   */
+  op?: import('@/services/outbox').OutboxOp;
 }
 
 /**

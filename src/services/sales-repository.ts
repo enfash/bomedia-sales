@@ -24,7 +24,8 @@ import type {
   TurnaroundTime,
 } from '@/components/records/types';
 import { dbService } from '@/services/db';
-import { buildPaymentWrite, journalEntryFor, type PaymentActor } from '@/services/payment-repository';
+import { buildPaymentWrite, journalEntryFor, paymentUpdates, type PaymentActor } from '@/services/payment-repository';
+import { materialise } from '@/services/outbox-send';
 import { clear, journalled, register, type JournalEntry } from '@/services/pending-journal';
 import { isPastDue, localDayKey } from '@/utils/date';
 import { roundNaira } from '@/utils/money';
@@ -329,14 +330,17 @@ export async function createBatch(input: NewBatchInput): Promise<string> {
     // Nesting keeps the batch, its opening entry and the ref in one atomic
     // update, which is the property that matters. `totalPaid` is already on
     // the node, so no increment is needed either.
-    await journalled(pending, () =>
-      dbService.updateAtomic({
-        [dbPath]: { ...node, paymentRefs: { [key]: write.refValue } },
-        [write.paymentPath]: write.entry,
-      }),
+    const updates = {
+      [dbPath]: { ...node, paymentRefs: { [key]: write.refValue } },
+      [write.paymentPath]: write.entry,
+    };
+    await journalled({ ...pending, op: { kind: 'update', updates } }, () =>
+      dbService.updateAtomic(materialise(updates)),
     );
   } else {
-    await journalled(pending, () => dbService.setRecord(dbPath, node));
+    await journalled({ ...pending, op: { kind: 'set', path: dbPath, value: node } }, () =>
+      dbService.setRecord(dbPath, node),
+    );
   }
 
   return dbPath;
@@ -397,11 +401,13 @@ export async function markBatchesPaid(
       now,
     });
 
-    updates[write.paymentPath] = write.entry;
-    updates[write.totalPaidPath] = dbService.increment(write.delta);
-    updates[write.refPath] = write.refValue;
+    // Each sale's three paths are journalled as their OWN atomic update, so a
+    // replay re-sends exactly one sale rather than the whole bulk operation —
+    // the ones that landed are not re-sent alongside the one that did not.
+    const perSale = paymentUpdates(write);
+    Object.assign(updates, perSale);
     settled.push(batch);
-    pending.push(journalEntryFor(write, 'payment', actor));
+    pending.push({ ...journalEntryFor(write, 'payment', actor), op: { kind: 'update', updates: perSale } });
   }
 
   if (settled.length === 0) return [];
@@ -411,7 +417,7 @@ export async function markBatchesPaid(
   // per sale and needs to see which ones.
   for (const entry of pending) await register(entry);
   try {
-    await dbService.updateAtomic(updates);
+    await dbService.updateAtomic(materialise(updates));
   } finally {
     for (const entry of pending) await clear(entry.key);
   }

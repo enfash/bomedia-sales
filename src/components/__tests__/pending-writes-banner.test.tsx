@@ -51,7 +51,7 @@ const entry = (key: string): JournalEntry => ({
   atMs: 1_754_215_200_000,
 });
 
-const item = (state: PendingState, key = '-K1'): PendingItem => ({ entry: entry(key), state });
+const item = (state: PendingState, key = '-K1'): PendingItem => ({ entry: entry(key), state, replay: 'none' });
 
 afterEach(() => {
   mockValue = { items: [], reconciling: false };

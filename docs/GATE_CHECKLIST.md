@@ -585,6 +585,65 @@ warning into reassurance.
 
 ☐
 
+### F4b. The outbox re-sends a force-quit payment — exactly once
+
+**This is the check that matters most in Part F.** F3 proved the app can tell
+you a payment was lost. This proves it can get it back without recording it
+twice.
+
+**Do** — pick a sale and note its current balance and `totalPaid`:
+
+```bash
+fb database:get /sales/<Y/M/D>/<RECEIPT_ID> | jq '{totalAmount, totalPaid, totalBalance}'
+```
+
+Airplane mode ON. Record a **₦1,300 Cash** payment on that sale. **Write it on
+paper.** Force-quit the app. Turn the network back ON. Reopen the app and wait
+for the banner to settle.
+
+**Expect** —
+- the banner appears briefly saying the record is being **sent again**, and says
+  NOT to enter it a second time
+- it clears itself — no dismiss needed
+- the sale's balance is ₦1,300 lower than you noted. **Not ₦2,600.**
+
+**Verify** — one entry, and `totalPaid` moved once:
+
+```bash
+fb database:get /payments/$DAY/$UID | jq '[.[] | select(.amount == 1300)] | length'
+fb database:get /sales/<Y/M/D>/<RECEIPT_ID> | jq '{totalPaid, totalBalance}'
+```
+
+The first must be **exactly 1**. The second must show `totalPaid` increased by
+1300 from your noted figure.
+
+**If it fails** —
+- **two entries, or `totalPaid` up by 2600** — the duplicate-safety invariant is
+  broken. Stop and report it: this is worse than the bug the outbox fixes,
+  because the money is wrong rather than merely missing.
+- **nothing re-sent, banner says "enter it again"** — the payload is not being
+  stored with the journal entry, or the verdict came back `unverified` rather
+  than `missing`. Check what the banner actually said before assuming.
+
+☐ entries found `____`   ☐ totalPaid before `____`   after `____`
+
+### F4c. It does NOT re-send when it cannot ask
+
+**Do** — airplane mode ON. Record a **₦150** payment. Force-quit. Reopen the app
+**still in airplane mode**.
+
+**Expect** — the banner says it **could not be confirmed** and asks for paper.
+It must NOT say it is sending again, and nothing must be re-sent.
+
+**Then** turn the network on and reopen. Now it should re-send exactly once, as
+in F4b.
+
+**If it fails** — a re-send while offline means replay is running on
+`unverified`, which is the one thing it must never do. That is a duplicate
+waiting for a network that already had the write.
+
+☐
+
 ### F5. Permission denied says something a person can act on
 
 **Do** — sign in as the STAFF account and try to void a sale (or any

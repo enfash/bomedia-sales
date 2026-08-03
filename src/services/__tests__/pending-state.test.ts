@@ -11,6 +11,7 @@
 
 import {
   PENDING_COPY,
+  copyFor,
   bySeverity,
   classify,
   summarise,
@@ -59,11 +60,17 @@ describe('the copy never lets unverified read as progress', () => {
     expect(new Set(labels).size).toBe(labels.length);
   });
 
-  it('tells the operator to act on missing, and to wait only on pending', () => {
+  it('tells the operator to act on missing, and promises only what the outbox can keep', () => {
     expect(PENDING_COPY.missing.action).toMatch(/enter it again/i);
-    expect(PENDING_COPY.pending.action).toMatch(/keep the app open/i);
-    // Even "still trying" carries the paper instruction: a force-quit now
-    // still destroys it.
+
+    // Since the outbox, "pending" can honestly promise a retry — but only if
+    // the app is opened again, so it says "may not send" rather than the
+    // prompt pack's "will sync when you're back online".
+    expect(PENDING_COPY.pending.action).toMatch(/retry when the connection returns/i);
+    expect(PENDING_COPY.pending.action).toMatch(/may not send/i);
+    expect(PENDING_COPY.pending.action).not.toMatch(/will sync when you.?re back online/i);
+
+    // And it still asks for paper: a force-quit before the retry still loses it.
     expect(PENDING_COPY.pending.action).toMatch(/paper/i);
   });
 });
@@ -102,9 +109,9 @@ describe('classify — carried-over writes are never "pending"', () => {
 
 describe('ordering and summary put the actionable state first', () => {
   const items: PendingItem[] = [
-    { entry: entry('-P'), state: 'pending' },
-    { entry: entry('-U'), state: 'unverified' },
-    { entry: entry('-M'), state: 'missing' },
+    { entry: entry('-P'), state: 'pending', replay: 'none' },
+    { entry: entry('-U'), state: 'unverified', replay: 'none' },
+    { entry: entry('-M'), state: 'missing', replay: 'none' },
   ];
 
   it('sorts missing above unverified above pending', () => {
@@ -127,17 +134,49 @@ describe('ordering and summary put the actionable state first', () => {
 
   it('counts only the worst state, and gets the plural right', () => {
     const two: PendingItem[] = [
-      { entry: entry('-M1'), state: 'missing' },
-      { entry: entry('-M2'), state: 'missing' },
-      { entry: entry('-P'), state: 'pending' },
+      { entry: entry('-M1'), state: 'missing', replay: 'none' },
+      { entry: entry('-M2'), state: 'missing', replay: 'none' },
+      { entry: entry('-P'), state: 'pending', replay: 'none' },
     ];
     expect(summarise(two)?.text).toBe('2 records did not save');
     expect(summarise([two[0], two[2]])?.text).toBe('1 record did not save');
   });
 
   it('never describes unverified as saved or as in progress', () => {
-    const text = summarise([{ entry: entry('-U'), state: 'unverified' }])!.text;
+    const text = summarise([{ entry: entry('-U'), state: 'unverified', replay: 'none' }])!.text;
     expect(text).toMatch(/could not be confirmed/i);
     expect(text).not.toMatch(/sav(ed|ing)|sync|check/i);
+  });
+});
+
+describe('copyFor — never tells the operator to re-enter what the app is resending', () => {
+  it('says it is being sent again, and NOT to enter it twice', () => {
+    const copy = copyFor({ entry: entry('-K1'), state: 'missing', replay: 'auto' });
+    expect(copy.action).toMatch(/do not enter it a second time/i);
+    expect(copy.action).not.toMatch(/enter it again/i);
+  });
+
+  it('asks for a decision on an entry too old to send silently', () => {
+    const copy = copyFor({ entry: entry('-K1'), state: 'missing', replay: 'confirm' });
+    expect(copy.headline).toMatch(/12 hours/i);
+    expect(copy.action).toMatch(/not already entered/i);
+  });
+
+  it('falls back to re-entry when there is nothing to resend', () => {
+    const copy = copyFor({ entry: entry('-K1'), state: 'missing', replay: 'none' });
+    expect(copy.action).toMatch(/enter it again/i);
+  });
+
+  it('pending now promises a retry, but not that closing the app is safe', () => {
+    const copy = copyFor({ entry: entry('-K1'), state: 'pending', replay: 'auto' });
+    expect(copy.action).toMatch(/retry when the connection returns/i);
+    expect(copy.action).toMatch(/may not send/i);
+    // The sentence the prompt pack asked for, and the reason it was refused.
+    expect(copy.action).not.toMatch(/will sync when you.?re back online/i);
+  });
+
+  it('unverified still asks for paper — replay cannot help what it cannot confirm', () => {
+    const copy = copyFor({ entry: entry('-K1'), state: 'unverified', replay: 'auto' });
+    expect(copy.action).toMatch(/paper/i);
   });
 });

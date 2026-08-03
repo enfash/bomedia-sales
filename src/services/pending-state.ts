@@ -1,3 +1,4 @@
+import { isAutoReplayable } from '@/services/outbox';
 import type { JournalEntry, ReconcileResult } from '@/services/pending-journal';
 
 /**
@@ -23,6 +24,13 @@ export type PendingState = 'pending' | 'unverified' | 'missing';
 export interface PendingItem {
   entry: JournalEntry;
   state: PendingState;
+  /**
+   * What may happen to a `missing` entry:
+   *   auto     the outbox will resend it — the operator must NOT re-enter it
+   *   confirm  too old to send silently; the operator decides
+   *   none     nothing to resend (no stored payload), so re-enter by hand
+   */
+  replay: 'auto' | 'confirm' | 'none';
 }
 
 export interface PendingCopy {
@@ -38,10 +46,12 @@ export const PENDING_COPY: Record<PendingState, PendingCopy> = {
   pending: {
     label: 'Saving',
     headline: 'Saved on this phone only.',
-    // The app IS still trying, so this is the one state where waiting is the
-    // right instruction — and even here the paper note is offered, because a
-    // force-quit now still destroys it.
-    action: 'Keep the app open until this clears — and write it on paper now.',
+    // The outbox means this can now honestly promise a retry — but only if the
+    // app is opened again, and only if the server turns out not to have it. So
+    // it says "may not send", not "will sync when you're back online". The
+    // difference is the whole reason the copy was rewritten in the first place.
+    action:
+      'It will retry when the connection returns. If you close the app it may not send — write it on paper now.',
   },
   unverified: {
     label: 'Not confirmed',
@@ -55,6 +65,34 @@ export const PENDING_COPY: Record<PendingState, PendingCopy> = {
     action: 'Enter it again.',
   },
 };
+
+/**
+ * What a `missing` entry says depends on whether the app may resend it.
+ *
+ * Telling the operator to "enter it again" for a write the outbox is about to
+ * resend is how a duplicate payment gets created by the warning itself.
+ */
+export function copyFor(item: PendingItem): PendingCopy {
+  if (item.state !== 'missing') return PENDING_COPY[item.state];
+
+  if (item.replay === 'auto') {
+    return {
+      label: 'Sending again',
+      headline: 'This did not reach the server.',
+      action: 'Sending it again now — do not enter it a second time.',
+    };
+  }
+  if (item.replay === 'confirm') {
+    return {
+      label: 'Needs a decision',
+      headline: 'This did not save, and it is more than 12 hours old.',
+      // Half a day is long enough for the shop to have re-entered it by hand.
+      // Posting it silently now would be a duplicate nobody could trace.
+      action: 'Check it was not already entered, then send it or dismiss it.',
+    };
+  }
+  return PENDING_COPY.missing;
+}
 
 /**
  * Sort the journal into what the operator is shown.
@@ -72,13 +110,20 @@ export function classify(
   entries: JournalEntry[],
   carriedOver: Set<string>,
   reconciled?: ReconcileResult,
+  now = Date.now(),
 ): PendingItem[] {
   const missing = new Set((reconciled?.missing ?? []).map((e) => e.key));
 
   return entries.map((entry) => {
-    if (missing.has(entry.key)) return { entry, state: 'missing' as const };
-    if (carriedOver.has(entry.key)) return { entry, state: 'unverified' as const };
-    return { entry, state: 'pending' as const };
+    const replay: PendingItem['replay'] = !entry.op
+      ? 'none'
+      : isAutoReplayable(entry, now)
+        ? 'auto'
+        : 'confirm';
+
+    if (missing.has(entry.key)) return { entry, state: 'missing' as const, replay };
+    if (carriedOver.has(entry.key)) return { entry, state: 'unverified' as const, replay };
+    return { entry, state: 'pending' as const, replay };
   });
 }
 

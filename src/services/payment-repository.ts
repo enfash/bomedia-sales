@@ -22,6 +22,8 @@
 
 import type { PaymentEntry, PaymentMethod, SalesBatch, StoredPayment } from '@/components/records/types';
 import { dbService } from '@/services/db';
+import { encodeIncrement } from '@/services/outbox';
+import { materialise } from '@/services/outbox-send';
 import { journalled, type JournalEntry } from '@/services/pending-journal';
 import { localDayKey } from '@/utils/date';
 import { roundNaira } from '@/utils/money';
@@ -121,6 +123,39 @@ export function buildPaymentWrite(input: BuildPaymentInput): PaymentWrite {
     refValue,
     entry,
     delta: amount,
+  };
+}
+
+/**
+ * The three paths a ledger write touches, as ONE update.
+ *
+ * ⚠️ DO NOT SPLIT THIS INTO SEPARATE WRITES. Two properties depend on these
+ * three landing together or not at all:
+ *
+ *  1. The ledger and the `totalPaid` cache cannot disagree — the reason this is
+ *     atomic in the first place.
+ *  2. **The outbox's duplicate safety.** Replay asks one question: does the
+ *     payment entry key exist on the server? Because the increment travels in
+ *     the same update as that entry, the entry being present proves the
+ *     increment applied, and the entry being absent proves it did not. Split
+ *     them and the check stops being sufficient: an entry that failed while its
+ *     increment succeeded would be replayed, and `totalPaid` would double.
+ *
+ * The rules are the backstop for the same pair: the payment entry is
+ * create-only (`!data.exists()`), so a replay carrying a key the server already
+ * has is REJECTED rather than applied — which is what stops a duplicated key
+ * from doubling money even if the check were somehow wrong. That backstop also
+ * depends on the increment sharing the update: a lone increment has no
+ * create-only rule protecting it.
+ *
+ * Same class of dependency as the void fields being held by two rules, and
+ * documented here for the same reason.
+ */
+export function paymentUpdates(write: PaymentWrite): Record<string, unknown> {
+  return {
+    [write.paymentPath]: write.entry,
+    [write.totalPaidPath]: encodeIncrement(write.delta),
+    [write.refPath]: write.refValue,
   };
 }
 
@@ -323,16 +358,13 @@ export async function recordPayment(input: RecordPaymentInput): Promise<string> 
 
   const write = buildPaymentWrite({ ...input, key });
 
-  // Journalled: offline this write never settles, the listeners fire from the
-  // local cache, and the screen shows the balance dropping. If the app dies
-  // before reconnecting, the entry recorded here is the only evidence the money
-  // was taken.
-  await journalled(journalEntryFor(write, 'payment', input.actor), () =>
-    dbService.updateAtomic({
-      [write.paymentPath]: write.entry,
-      [write.totalPaidPath]: dbService.increment(write.delta),
-      [write.refPath]: write.refValue,
-    }),
+  // ONE atomic multi-path update — see the atomicity note on this function.
+  // The same encoded object is journalled and written, so a replay repeats
+  // exactly this write and cannot drift from it.
+  const updates = paymentUpdates(write);
+
+  await journalled({ ...journalEntryFor(write, 'payment', input.actor), op: { kind: 'update', updates } }, () =>
+    dbService.updateAtomic(materialise(updates)),
   );
 
   return key;
@@ -370,12 +402,10 @@ export async function reversePayment(
     reversalReason: reason,
   });
 
-  await journalled(journalEntryFor(write, 'reversal', actor), () =>
-    dbService.updateAtomic({
-      [write.paymentPath]: write.entry,
-      [write.totalPaidPath]: dbService.increment(write.delta),
-      [write.refPath]: write.refValue,
-    }),
+  const updates = paymentUpdates(write);
+
+  await journalled({ ...journalEntryFor(write, 'reversal', actor), op: { kind: 'update', updates } }, () =>
+    dbService.updateAtomic(materialise(updates)),
   );
 
   return key;

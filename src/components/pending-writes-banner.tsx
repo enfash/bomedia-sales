@@ -7,7 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { usePendingWrites } from '@/context/pending-writes-context';
 import { useTheme } from '@/hooks/use-theme';
-import { PENDING_COPY, type PendingItem, type PendingState } from '@/services/pending-state';
+import { copyFor, type PendingItem, type PendingState } from '@/services/pending-state';
 import { summarise } from '@/services/pending-state';
 import { formatCurrency } from '@/utils/currency';
 import { withAlpha } from '@/utils/color';
@@ -40,6 +40,10 @@ export function PendingWritesBanner() {
   if (!summary) return null;
 
   const tone = toneFor(summary.state, theme);
+  // The lead line borrows the copy of the worst item, so it never tells the
+  // operator to re-enter something the outbox is already resending.
+  const worst = [...items].sort((a, b) => (a.state === summary.state ? -1 : 1))[0];
+  const summaryAction = copyFor(worst).action;
 
   return (
     <View
@@ -56,7 +60,7 @@ export function PendingWritesBanner() {
       >
         <Feather name={tone.icon} size={16} color={tone.fg} />
         <ThemedText type="small" style={[styles.summaryText, { color: tone.fg }]} numberOfLines={2}>
-          {summary.text} — {PENDING_COPY[summary.state].action}
+          {summary.text} — {summaryAction}
         </ThemedText>
         <Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={tone.fg} />
       </Pressable>
@@ -74,7 +78,7 @@ export function PendingWritesBanner() {
 
 function PendingRow({ item, onDismiss }: { item: PendingItem; onDismiss: () => void }) {
   const theme = useTheme();
-  const copy = PENDING_COPY[item.state];
+  const copy = copyFor(item);
   const { entry } = item;
   const tone = toneFor(item.state, theme);
 
