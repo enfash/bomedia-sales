@@ -20,7 +20,13 @@ const expoPreset = require('jest-expo/jest-preset');
 module.exports = {
   preset: 'jest-expo',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
-  testMatch: ['<rootDir>/src/**/__tests__/**/*.test.ts?(x)'],
+  // `scripts/` is included so the backup script's judgement — what it refuses
+  // to write — is proven rather than eyeballed. Those helpers are plain CJS
+  // `.js`, outside tsconfig's `**/*.ts` include, so they need naming here.
+  testMatch: [
+    '<rootDir>/src/**/__tests__/**/*.test.ts?(x)',
+    '<rootDir>/scripts/**/__tests__/**/*.test.js',
+  ],
   // jest-expo already derives these from tsconfig's `paths`; stated explicitly
   // so the aliases keep working if that preset behaviour ever changes.
   moduleNameMapper: {

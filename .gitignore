@@ -47,3 +47,8 @@ secrets/
 *-service-account*.json
 *serviceAccount*.json
 firebase-adminsdk-*.json
+
+# Database backups — customer names and contact numbers. Keep them off the tree.
+backups/
+*.manifest.json
+bomedia-backups/

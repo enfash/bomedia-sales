@@ -146,7 +146,7 @@ for one field on one node. For anything else:
 
 ---
 
-## Exports
+## Backups
 
 Take one before **any** destructive or structural change, and a second after a
 correction but before a migration — they protect different mistakes. A backup's
@@ -154,14 +154,100 @@ job is to let you reach any earlier state, not to represent the state you
 intended.
 
 ```bash
-firebase login
-firebase database:get / --project bomedia-official \
-  --output ~/backups/bomedia-rtdb-$(date +%F)-pre-<what>.json
+npm run backup                        # → ~/bomedia-backups
+npm run backup -- --label pre-migration
 ```
 
-Console route: **Realtime Database → ⋮ → Export JSON**.
+Each run writes two files:
 
-Confirm it is real before proceeding — `ls -lh` (not 0 bytes) and `head -c 200`.
+| file | what it is |
+|---|---|
+| `bomedia-<instance>-<UTC>.json` | the database, plain — restorable by the script, by `firebase database:set`, or by the console's **Import JSON** |
+| `…​.manifest.json` | SHA-256, byte size, record counts, and the live security rules at that moment |
+
+It prints the counts and refuses to write anything that looks like a failed
+read. **Do not lower the floor to make a run succeed** — the floor is there
+because of the two failures below.
+
+> ### The old command in this section was broken
+>
+> It read `firebase database:get /` with `--project` but no `--instance`, so it
+> exported the project's OTHER, empty database and wrote `null` — five bytes.
+> The verification underneath it was *"`ls -lh` (not 0 bytes)"*, which a
+> five-byte file passes. Every backup taken by following this document was
+> empty, and the check meant to catch that could not.
+>
+> The same omission is how the security rules came to be deployed to a database
+> nobody uses, unnoticed for months. **Name the instance in every command.**
+
+### Verifying a backup is real
+
+`ls -lh` is not enough. Check the manifest against the app:
+
+```bash
+cat ~/bomedia-backups/<file>.manifest.json | jq '{takenAt, instance, bytes, counts}'
+shasum -a 256 ~/bomedia-backups/<file>.json     # must equal .sha256 in the manifest
+```
+
+The counts are the part worth reading. `batches`, `payments` and the two money
+totals should match what the app shows; `settings: MISSING` or a batch count of
+0 means the read was partial, whatever the file size says.
+
+## Restoring
+
+```bash
+node scripts/restore-db.mjs <file> --instance <instance>            # dry run
+node scripts/restore-db.mjs <file> --instance <instance> --commit
+```
+
+Dry run by default. A target that already holds data is refused even with
+`--commit` unless `--force` is also passed, because **restoring a stale backup
+over live data is worse than having no backup**: the loss is silent and it
+destroys the newer records that would have revealed it.
+
+`--instance` has no default here. Every other command in this project that let
+it default hit the wrong database.
+
+This writes as the project owner, so **the security rules do not stand between
+this script and your data**. The dry run and the non-empty refusal are the only
+guards.
+
+Rules are not restored by it. They are in the manifest for the record, and are
+deployed with `firebase deploy --only database`.
+
+### Rehearse it — a backup nobody has restored from is a hypothesis
+
+`bomedia-official-default-rtdb` — the project's other, empty database — is the
+rehearsal target. Same project, same deployed rules, no production risk.
+
+```bash
+BK=$(ls -t ~/bomedia-backups/*.json | grep -v manifest | head -1)
+
+node scripts/restore-db.mjs "$BK" --instance bomedia-official-default-rtdb --commit
+
+# does what landed match what was backed up?
+firebase database:get / --instance bomedia-official-default-rtdb --project bomedia-official | jq -S . > /tmp/restored.json
+jq -S . "$BK" > /tmp/original.json
+diff /tmp/original.json /tmp/restored.json && echo IDENTICAL
+
+# then clear the rehearsal target — check the instance name twice
+firebase database:remove / --instance bomedia-official-default-rtdb --project bomedia-official --force
+```
+
+Rehearsed 2026-08-03: 12,012 bytes, 4 batches / 3 payments / 1 quote / 21
+activity entries / 2 users, restored and diffed identical, target cleared.
+
+### Scheduling
+
+Runs on your own CLI login, so it is manual by design — no service-account key
+to store or rotate. For an unattended nightly run you would need one, and it is
+a full-admin credential; `.gitignore` already carries the patterns for it. Until
+then, take one before anything structural, and keep the files off this machine
+as well as on it.
+
+Console route, if the CLI is unavailable: **Realtime Database → ⋮ → Export
+JSON**. Check which database the console is showing first — the picker at the
+top defaults to whichever was opened last.
 
 ---
 
