@@ -591,58 +591,80 @@ warning into reassurance.
 you a payment was lost. This proves it can get it back without recording it
 twice.
 
-**Do** — pick a sale and note its current balance and `totalPaid`:
+**The sale, and its figures as of 2026-08-03 18:xx** — read from the database so
+you do not have to remember anything while force-quitting an app:
+
+| | |
+|---|---|
+| sale | `sales/2026/08/03/INV-260803-O436` — Idris |
+| total | ₦9,200 |
+| **`totalPaid` BEFORE** | **₦5,000** |
+| balance before | ₦4,200 |
+
+Chosen deliberately because it has already been PART paid. A sale at zero would
+pass this test even if the replay wrote `1300` as a literal instead of applying
+an increment — starting from 5,000 makes that mistake visible as a wrong number
+rather than a right one.
+
+**Do** — confirm the before figure still reads 5000:
 
 ```bash
-fb database:get /sales/<Y/M/D>/<RECEIPT_ID> | jq '{totalAmount, totalPaid, totalBalance}'
+fb database:get /sales/2026/08/03/INV-260803-O436 | jq '{totalPaid, totalAmount}'
 ```
 
 Airplane mode ON. Record a **₦1,300 Cash** payment on that sale. **Write it on
-paper.** Force-quit the app. Turn the network back ON. Reopen the app and wait
-for the banner to settle.
+paper.** Force-quit the app. Turn the network back ON. Reopen and wait for the
+banner to settle.
 
 **Expect** —
 - the banner appears briefly saying the record is being **sent again**, and says
   NOT to enter it a second time
 - it clears itself — no dismiss needed
-- the sale's balance is ₦1,300 lower than you noted. **Not ₦2,600.**
 
-**Verify** — one entry, and `totalPaid` moved once:
+**Verify** — one entry, and the arithmetic:
 
 ```bash
 fb database:get /payments/$DAY/$UID | jq '[.[] | select(.amount == 1300)] | length'
-fb database:get /sales/<Y/M/D>/<RECEIPT_ID> | jq '{totalPaid, totalBalance}'
+fb database:get /sales/2026/08/03/INV-260803-O436 | jq '{totalPaid, totalBalance: (9200 - .totalPaid)}'
 ```
 
-The first must be **exactly 1**. The second must show `totalPaid` increased by
-1300 from your noted figure.
+| `totalPaid` reads | meaning |
+|---|---|
+| **6300** | ✅ correct — applied exactly once |
+| 7600 | ❌ replayed twice, or replayed something that had landed |
+| 1300 | ❌ written as a value instead of an increment |
+| 5000 | ❌ nothing was re-sent — read what the banner actually said |
 
-**If it fails** —
-- **two entries, or `totalPaid` up by 2600** — the duplicate-safety invariant is
-  broken. Stop and report it: this is worse than the bug the outbox fixes,
-  because the money is wrong rather than merely missing.
-- **nothing re-sent, banner says "enter it again"** — the payload is not being
-  stored with the journal entry, or the verdict came back `unverified` rather
-  than `missing`. Check what the banner actually said before assuming.
+Entry count must be **exactly 1**.
 
-☐ entries found `____`   ☐ totalPaid before `____`   after `____`
+**If it fails with 7600** — stop. The duplicate-safety invariant is broken, and
+that is worse than the bug the outbox fixes: the money is now wrong rather than
+merely missing. Report the entry count and both figures.
+
+☐ entries `____`   ☐ `totalPaid` after `______`
 
 ### F4c. It does NOT re-send when it cannot ask
 
-**Do** — airplane mode ON. Record a **₦150** payment. Force-quit. Reopen the app
-**still in airplane mode**.
+**Do** — same sale. Airplane mode ON. Record a **₦150** payment. Force-quit.
+Reopen the app **still in airplane mode**.
 
 **Expect** — the banner says it **could not be confirmed** and asks for paper.
 It must NOT say it is sending again, and nothing must be re-sent.
 
-**Then** turn the network on and reopen. Now it should re-send exactly once, as
-in F4b.
+**Then** turn the network on and reopen. Now it re-sends exactly once.
 
-**If it fails** — a re-send while offline means replay is running on
-`unverified`, which is the one thing it must never do. That is a duplicate
-waiting for a network that already had the write.
+**Verify** — after reconnecting:
 
-☐
+```bash
+fb database:get /sales/2026/08/03/INV-260803-O436 | jq .totalPaid
+```
+
+Expect **6450** — that is 6300 from F4b plus 150. Anything higher means a
+re-send happened while offline, which is replay running on `unverified`: the one
+thing it must never do, and a duplicate waiting for a network that already had
+the write.
+
+☐ `totalPaid` after `______`
 
 ### F5. Permission denied says something a person can act on
 
