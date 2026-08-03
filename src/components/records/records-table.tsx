@@ -6,6 +6,7 @@ import { SalesBatch } from './types';
 import { Spacing } from '@/constants/theme';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
+import { PendingChip } from '@/components/records/pending-chip';
 import { TransactionCard } from '@/components/ui/transaction-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
@@ -95,6 +96,10 @@ export function RecordsTable({
             )}
             
             <View style={{ flex: 1 }}>
+              {/* Mobile is where airplane mode and force-quit actually happen,
+                  so the recovery path needs a surface here — same three voices,
+                  same source as the web table and the banner. */}
+              <PendingChip receiptId={batch.receiptId ?? batch.id} />
               <TransactionCard 
                 customerName={batch.clientName || 'Unknown'}
                 status={batch.status}
