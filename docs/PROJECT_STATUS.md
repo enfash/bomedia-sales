@@ -6,37 +6,47 @@ A running handoff so any new session can continue effectively. Source-of-truth d
 
 ---
 
-## ⚠️ What has NOT been verified
+## Verification status — read before trusting a green test run
 
-Read this before drawing any conclusion from a green test run.
-
-**`docs/GATE_CHECKLIST.md` is written and UNRUN.** Stages 1, 2 and 3 — the
-pricing arithmetic, the append-only payment ledger, void-instead-of-delete —
-all gate on real transactions, and **not one of them has had one**. No part of
-the financial logic has been exercised against a real sale, a real payment or a
-real void. The tests, `tsc` and lint are green; that is not the same claim and
-has already failed to be:
+**✅ `docs/GATE_CHECKLIST.md` was RUN on 2026-08-03 and passed, Parts A–E.**
+Stages 1, 2 and 3 have now been exercised against real transactions: the MOV
+arithmetic and an advance-taking sale (A), partial/second/bulk payments,
+Daily Cash and a reversal (B), payment bucket scoping and the ref path (C),
+void (D), and the staff account's read scoping (E). That is the first time any
+of the financial logic has been proven outside a test double, and it is why the
+static gate is not the claim to lean on:
 
 > 322 unit tests, clean `tsc`, clean lint and deployed rules did not stop New
 > Sale being completely broken for any sale taking an advance.
 
-The runtime has disagreed with what the rules *looked* like they said twice
-(`.validate` skipping deletes; multi-path ancestor paths), and on 2026-08-03 the
-security rules turned out to have been deployed to the wrong database for
-months — the app's own database was on `read/write: anyone signed in` the whole
-time. Static checks saw none of it.
+Keep the habit the checklist exists for. The runtime has disagreed with what
+the rules *looked* like they said twice (`.validate` skipping deletes;
+multi-path ancestor paths), and on 2026-08-03 the security rules turned out to
+have been deployed to the wrong database for months — the app's own database sat
+on `read/write: anyone signed in` the whole time. Static checks saw none of it.
+**Re-run the checklist after anything that touches money, rules or the write
+path.**
 
-**The web chrome has never been rendered in a browser.** The top bar, the
-detail-screen page bars and the unified sidebar (`d38267c`) were written,
-typechecked, linted and tested — and never once looked at. That is a known
-unknown, not a known bug: no visual defect is recorded because nobody has seen
-the pages. Treat any complaint about layout as unverified work rather than a
-regression.
+**Also verified on 2026-08-03:** security rules live on `bomedia-official` and
+diffed against `database.rules.json` (including the attribution rules); a full
+backup and a restore rehearsed end to end (`npm run backup`, and
+`docs/DATABASE_RUNBOOK.md`); attribution written by the app and shown in
+Records.
 
-**What has been verified**, so the line is clear: the security rules are live on
-`bomedia-official` and diffed against `database.rules.json`; a full backup and a
-restore have been taken and rehearsed end to end (`npm run backup`, and
-`docs/DATABASE_RUNBOOK.md`).
+### Still unverified
+
+**Most of the web chrome has not been rendered.** The Records table has been
+used (that is how the "Logged by" bug surfaced), but the top bar at both
+widths, the detail-screen page bars on `/cash` and `/transaction/[id]`, the
+sidebar reading identically across both shells, and the admin skeleton rows
+(`d38267c`) have not been looked at. A known unknown, not a known bug: no
+visual defect is recorded because nobody has seen those pages. Treat a layout
+complaint there as unverified work rather than a regression.
+
+**The attribution rules are deployed but their enforcement is untested.** The
+CLI writes as project owner and bypasses rules, so nothing run from a terminal
+can prove they reject a bad write. What is known: a sale recorded in the app
+saves and carries the writer's uid.
 
 ---
 
@@ -123,7 +133,7 @@ BOMedia internal operations app — Expo Router + React Native (react-native-pap
 
 ## Outstanding / next
 
-- **Run `docs/GATE_CHECKLIST.md` on a device.** This is the blocker for everything else, not one item among many — see the verification warning at the top of this file. Stage 4's remaining items and all of Stage 5 are deliberately held behind it.
+- ~~**Run `docs/GATE_CHECKLIST.md` on a device**~~ — ✅ done 2026-08-03, Parts A–E passed. It was the blocker for Stage 4's remaining items and all of Stage 5, both of which are now unblocked and still unwritten (`docs/AUDIT_2026-07.md` → "Stage 4 re-examined" and "Stage 5 scoped"). Re-run it after anything touching money, rules or the write path.
 - **Look at the web app in a browser** (`npm run web`) — the assistant environment cannot render or screenshot. Nothing in the chrome shipped in `d38267c` has been seen: the top bar at both widths, the page bar on `/cash` and `/transaction/[id]`, the sidebar reading identically across both shells, Daily Cash navigating without a full reload, and the admin skeleton rows.
 - ~~**Run the migration**~~ — **cancelled 2026-08-01**, and `scripts/migrate-sales.mjs` no longer exists. The database was wiped and restarted clean rather than migrated (`docs/AUDIT_2026-07.md` → "Legacy migration — CANCELLED", `docs/INCIDENT_2026-08-01-data-loss.md`). Do not go looking for that script.
 - **Verify `records.web.tsx` in a browser** (`npm run web`): sort headers, status/date filters, search, pagination, select-all + bulk actions (CSV export, Mark paid, Generate invoice), row → transaction detail.
