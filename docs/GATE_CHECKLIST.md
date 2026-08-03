@@ -498,3 +498,111 @@ Database → Usage → Downloads.
 For each failure: the step number, what you saw, and the exact error text if
 there was one. A screenshot of the console for the `database:get` output is more
 useful than a description — the shape of what landed is usually the answer.
+
+---
+
+## Part F — Offline and recovery (Stage 5)
+
+**Do this part LAST, and on a phone.** None of it is reachable from a unit
+test: the failures are airplane mode, a force-quit mid-write, and a write the
+rules refuse. Everything before this part assumes writes land; this part is
+about what the operator is told when they do not.
+
+Have a paper and pen. That is not a joke — F3 asks you to lose a payment on
+purpose, and the paper note is how you know what to re-enter.
+
+### F1. A normal write shows nothing
+
+**Do** — online, record a ₦500 payment on any unpaid sale.
+
+**Expect** — no banner, no chip. The write acked, so there is nothing to say.
+
+**If it fails** — a banner on a healthy write means entries are not being
+cleared on ack, and the warning will be permanent background noise within a day.
+
+☐
+
+### F2. Airplane mode — "saved on this phone only"
+
+**Do** — turn on airplane mode. Record a ₦700 Cash payment. Do NOT close the app.
+
+**Expect** —
+- the banner reads **saved on this phone only**, and says to keep the app open
+  and write it on paper
+- the Records row for that sale carries a **Saving** chip
+- the balance on screen drops — that is the local echo, and it is exactly the
+  lie the banner exists to caption
+
+**Then** turn airplane mode off and wait.
+
+**Expect** — the banner and chip disappear on their own once the server acks.
+
+**If it fails** — if nothing appears, the journal is not registering before the
+write. If it never clears after reconnecting, it is not clearing on the ack.
+
+☐
+
+### F3. Force quit mid-write — the failure this stage exists for
+
+**Do** — airplane mode ON. Record a ₦900 POS payment. **Write it on paper.**
+Now force-quit the app (swipe it away) WITHOUT turning the network back on.
+Turn the network on. Reopen the app.
+
+**Expect** — at startup, before you touch anything:
+- the banner says a record **did not save**, or that it **could not be
+  confirmed** if the check could not reach the server
+- expanding it shows ₦900, POS, and which sale it belonged to
+- it asks you to enter it again — it does NOT say it will sync
+
+**Verify** the ledger genuinely does not have it:
+
+```bash
+fb database:get /payments/$DAY/$UID | jq '[.[] | select(.amount == 900)] | length'
+```
+
+`0` means the payment is genuinely gone, which is the correct and expected
+outcome — the SDK's queue is in memory and the force-quit destroyed it. The
+banner is the only reason you know.
+
+**Then** re-enter the ₦900 payment by hand and dismiss the entry.
+
+**If it fails** — a banner that says "saving" or "syncing" here is the serious
+failure: it tells the operator to wait for something that will never happen.
+
+☐ amount recovered `______________`
+
+### F4. Unverified must not read like progress
+
+**Do** — with an entry outstanding from F3, put the phone on a network that
+cannot reach Firebase (airplane mode on, then reopen the app).
+
+**Expect** — the banner says the record **could not be confirmed** and asks for
+paper. It must NOT say checking, syncing, retrying, or show a spinner.
+
+**If it fails** — this is the one that quietly undoes the stage. Unverified is
+the most common non-clean state, and progress wording turns the most frequent
+warning into reassurance.
+
+☐
+
+### F5. Permission denied says something a person can act on
+
+**Do** — sign in as the STAFF account and try to void a sale (or any
+admin-only write the UI still offers).
+
+**Expect** — a message naming what was not allowed and what to do — ask the
+owner to check your role. No error codes, no "Firebase", no stack.
+
+**If it fails** — leaked internals here are what the rewritten copy replaced.
+
+☐
+
+### F6. A render error is recoverable
+
+**Do** — hard to force deliberately; check it opportunistically. If any screen
+ever goes blank, note what you were doing.
+
+**Expect** — a readable "Something broke on this screen" with a **Try again**
+button, never a white screen.
+
+☐

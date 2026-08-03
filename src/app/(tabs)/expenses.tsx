@@ -9,6 +9,7 @@ import { useAuth } from '@/context/auth-context';
 import { useExpenses } from '@/hooks/use-expenses';
 import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useTheme } from '@/hooks/use-theme';
+import { describeWriteError } from '@/utils/errors';
 import { logActivity } from '@/services/activity';
 import { dbService } from '@/services/db';
 import { formatCurrency } from '@/utils/currency';
@@ -150,7 +151,8 @@ export default function ExpensesScreen() {
       setMode('list');
     } catch (error) {
       console.error('Error logging expense:', error);
-      Alert.alert('Could not save', 'Failed to log expense. Please try again.');
+      const message = describeWriteError(error, 'log this expense');
+      Alert.alert(message.title, message.body);
     } finally {
       setSubmitting(false);
     }

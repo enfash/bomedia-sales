@@ -100,6 +100,24 @@ export interface ReconcileResult {
 const storageKeyFor = (key: string) => `${KEY_PREFIX}${key}`;
 
 /**
+ * Change notification, so the UI can show a write as pending the moment it is
+ * issued rather than a poll interval later. A module-level store rather than
+ * context: the writers are plain service functions with no React around them.
+ */
+const listeners = new Set<() => void>();
+
+export function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function notify(): void {
+  listeners.forEach((l) => l());
+}
+
+/**
  * Record a write BEFORE issuing it.
  *
  * NEVER THROWS. A failed journal write degrades the safety net; it must not
@@ -112,6 +130,7 @@ const storageKeyFor = (key: string) => `${KEY_PREFIX}${key}`;
 export async function register(entry: JournalEntry): Promise<void> {
   try {
     await AsyncStorage.setItem(storageKeyFor(entry.key), JSON.stringify(entry));
+    notify();
   } catch (err) {
     console.warn('pending-journal: could not record a pending write (continuing):', err);
   }
@@ -121,6 +140,7 @@ export async function register(entry: JournalEntry): Promise<void> {
 export async function clear(key: string): Promise<void> {
   try {
     await AsyncStorage.removeItem(storageKeyFor(key));
+    notify();
   } catch (err) {
     console.warn('pending-journal: could not clear a pending write:', err);
   }

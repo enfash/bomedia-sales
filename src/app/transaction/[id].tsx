@@ -7,6 +7,7 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
+import { describeWriteError } from '@/utils/errors';
 import { logActivity } from '@/services/activity';
 import { voidBatch } from '@/services/sales-repository';
 import { VoidModal } from '@/components/records/void-modal';
@@ -91,7 +92,8 @@ export default function TransactionDetails() {
       setPaymentAmount('');
       setPaymentNote('');
     } catch (e: any) {
-      Alert.alert('Could not record payment', e.message);
+      const message = describeWriteError(e, 'record this payment');
+      Alert.alert(message.title, message.body);
     } finally {
       setIsRecording(false);
     }
@@ -114,7 +116,8 @@ export default function TransactionDetails() {
       setVoidModalVisible(false);
       router.back();
     } catch (error: any) {
-      Alert.alert('Could not void', error.message);
+      const message = describeWriteError(error, 'void this sale');
+      Alert.alert(message.title, message.body);
     } finally {
       setIsVoiding(false);
     }

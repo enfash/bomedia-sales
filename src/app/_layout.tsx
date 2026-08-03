@@ -4,6 +4,9 @@ import { ActivityIndicator, Text, useColorScheme, View } from "react-native";
 import { PaperProvider } from 'react-native-paper';
 
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
+import { AppErrorBoundary } from "@/components/error-boundary";
+import { PendingWritesBanner } from "@/components/pending-writes-banner";
+import { PendingWritesProvider } from "@/context/pending-writes-context";
 import { SignInScreen } from "@/components/auth/sign-in-screen";
 import { AuthProvider, useAuth } from "@/context/auth-context";
 import { SettingsProvider } from "@/context/settings-context";
@@ -67,9 +70,19 @@ function AuthGate() {
   // authenticated. If it subscribed before sign-in, the deny-all rules reject
   // the read and Firebase permanently cancels that listener, so settings would
   // never load even after signing in.
+  // PendingWritesProvider sits ABOVE the navigator, so cold-start
+  // reconciliation runs before any screen subscribes to anything — the operator
+  // learns a payment may be missing before they start taking the next one.
   return (
     <SettingsProvider>
-      <RootStack />
+      <PendingWritesProvider>
+        <View style={{ flex: 1 }}>
+          <PendingWritesBanner />
+          <View style={{ flex: 1 }}>
+            <RootStack />
+          </View>
+        </View>
+      </PendingWritesProvider>
     </SettingsProvider>
   );
 }
@@ -79,13 +92,15 @@ export default function RootLayout() {
   const paperTheme = usePaperTheme();
 
   return (
-    <PaperProvider theme={paperTheme}>
-      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        <AuthProvider>
-          <AnimatedSplashOverlay />
-          <AuthGate />
-        </AuthProvider>
-      </ThemeProvider>
-    </PaperProvider>
+    <AppErrorBoundary>
+      <PaperProvider theme={paperTheme}>
+        <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+          <AuthProvider>
+            <AnimatedSplashOverlay />
+            <AuthGate />
+          </AuthProvider>
+        </ThemeProvider>
+      </PaperProvider>
+    </AppErrorBoundary>
   );
 }

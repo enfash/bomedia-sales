@@ -5,11 +5,13 @@ import { Panel } from '@/components/dashboard/panel';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { SalesBatch } from '@/components/records/types';
 import { ThemedText } from '@/components/themed-text';
+import { PendingChip } from '@/components/records/pending-chip';
 import { StatusChip } from '@/components/ui/status-chip';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
+import { describeWriteError } from '@/utils/errors';
 import { logActivity } from '@/services/activity';
 import type { PaymentMethod } from '@/components/records/types';
 import { markBatchesPaid } from '@/services/sales-repository';
@@ -137,7 +139,8 @@ export default function RecordsWeb() {
       });
       setSelected([]);
     } catch (e: any) {
-      Alert.alert('Could not mark as paid', String(e?.message ?? e));
+      const message = describeWriteError(e, 'mark these paid');
+      Alert.alert(message.title, message.body);
     }
   };
 
@@ -159,9 +162,14 @@ export default function RecordsWeb() {
       sortKey: 'Client',
       flex: 2,
       render: (b) => (
-        <ThemedText type="small" numberOfLines={1} style={{ fontWeight: '600' }}>
-          {b.clientName || 'Unknown'}
-        </ThemedText>
+        <View style={styles.clientCell}>
+          <ThemedText type="small" numberOfLines={1} style={{ fontWeight: '600' }}>
+            {b.clientName || 'Unknown'}
+          </ThemedText>
+          {/* Marks a row whose write has not been confirmed. The banner above
+              carries what to do about it; this only says which row. */}
+          <PendingChip receiptId={b.receiptId ?? b.id} />
+        </View>
       ),
     },
     {
@@ -419,6 +427,7 @@ function ToolbarButton({
 }
 
 const styles = StyleSheet.create({
+  clientCell: { gap: 2 },
   kpiRow: {
     flexDirection: 'row',
     gap: Spacing.four,

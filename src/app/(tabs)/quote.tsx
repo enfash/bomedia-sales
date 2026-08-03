@@ -8,6 +8,7 @@ import { ThemedTextInput } from '@/components/ui/themed-text-input';
 import type { QuoteRecord, QuoteStatus } from '@/components/records/types';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { describeWriteError } from '@/utils/errors';
 import {
   MissingQuoteInfoError,
   convertQuoteToSale,
@@ -179,7 +180,8 @@ Estimated total: ${formatCurrency(quote.totalAmount)}`;
       await voidQuote(voidTarget, reason, actor);
       setVoidTarget(null);
     } catch (e: any) {
-      Alert.alert('Could not void', e.message);
+      const message = describeWriteError(e, 'void this quote');
+      Alert.alert(message.title, message.body);
     } finally {
       setIsVoiding(false);
     }

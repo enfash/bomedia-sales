@@ -11,6 +11,7 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useSettings } from '@/context/settings-context';
 import { useTheme } from '@/hooks/use-theme';
+import { describeWriteError } from '@/utils/errors';
 import { logActivity } from '@/services/activity';
 import { formatCurrency } from '@/utils/currency';
 import { computeBatchTotals } from '@/utils/money';
@@ -104,7 +105,8 @@ export default function NewSalesScreen() {
       
     } catch (error) {
       console.error('Error submitting batch:', error);
-      Alert.alert('Error', 'Failed to submit batch. Check your connection or Firebase config.');
+      const message = describeWriteError(error, 'record this sale');
+      Alert.alert(message.title, message.body);
     } finally {
       setIsSubmitting(false);
     }

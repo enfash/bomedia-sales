@@ -147,6 +147,20 @@ export const dbService = {
     });
   },
 
+  /**
+   * Firebase's own view of the socket, via `.info/connected`.
+   *
+   * CONTEXT, NOT A SIGNAL. It reports whether a socket to the backend is up —
+   * not whether anything can reach the server. It reads connected through an
+   * uplink dropping every packet, and through a captive portal. Nothing may
+   * decide, clear or reassure on the strength of it; the journal is what knows
+   * whether a write landed. See docs/AUDIT_2026-07.md → "Do not train the
+   * operator on the connection dot".
+   */
+  subscribeConnection(callback: (connected: boolean) => void) {
+    return onValue(ref(db, '.info/connected'), (snapshot) => callback(snapshot.val() === true));
+  },
+
   subscribe<T>(path: string, callback: (data: T | null) => void) {
     const dbRef = ref(db, path);
     return onValue(dbRef, (snapshot) => {

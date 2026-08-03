@@ -3,6 +3,7 @@ import { ThemedView } from '@/components/themed-view';
 import { usePageContainerStyles } from '@/components/ui/page-container';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { describeWriteError } from '@/utils/errors';
 import { logActivity } from '@/services/activity';
 import type { PaymentMethod, SalesBatch } from '@/components/records/types';
 import { markBatchesPaid } from '@/services/sales-repository';
@@ -116,7 +117,8 @@ export default function RecordsScreen() {
       });
       setSelectedBatches([]);
     } catch (e: any) {
-      Alert.alert('Could not mark as paid', e.message);
+      const message = describeWriteError(e, 'mark these paid');
+      Alert.alert(message.title, message.body);
     }
   };
 
