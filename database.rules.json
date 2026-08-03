@@ -45,6 +45,12 @@
                 "$key": {
                   ".validate": "!data.exists() || newData.val() === data.val()"
                 }
+              },
+              "loggedByUid": {
+                ".validate": "(!data.exists() && newData.val() === auth.uid) || newData.val() === data.val()"
+              },
+              "loggedByName": {
+                ".validate": "!data.exists() || newData.val() === data.val()"
               }
             }
           }
