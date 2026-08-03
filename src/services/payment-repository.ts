@@ -22,6 +22,7 @@
 
 import type { PaymentEntry, PaymentMethod, SalesBatch, StoredPayment } from '@/components/records/types';
 import { dbService } from '@/services/db';
+import { journalled, type JournalEntry } from '@/services/pending-journal';
 import { localDayKey } from '@/utils/date';
 import { roundNaira } from '@/utils/money';
 
@@ -120,6 +121,33 @@ export function buildPaymentWrite(input: BuildPaymentInput): PaymentWrite {
     refValue,
     entry,
     delta: amount,
+  };
+}
+
+/**
+ * The journal entry for a ledger write: the key that was generated for it, the
+ * node whose existence proves it landed, and enough for the operator to
+ * re-enter it by hand — amount, method, and which sale it belonged to.
+ */
+export function journalEntryFor(
+  write: PaymentWrite,
+  kind: 'payment' | 'reversal',
+  actor: PaymentActor,
+): JournalEntry {
+  return {
+    key: write.paymentPath.split('/').pop() as string,
+    path: write.paymentPath,
+    kind,
+    // `StoredPayment` types every field optional — it doubles as the raw-read
+    // shape — but `buildPaymentWrite` always populates them. `delta` is the same
+    // rounded amount, so the fallbacks are exact rather than approximate.
+    amount: write.entry.amount ?? write.delta,
+    method: write.entry.method,
+    receiptId: write.entry.receiptId,
+    byUid: actor.uid,
+    byName: actor.name,
+    at: write.entry.at ?? new Date().toISOString(),
+    atMs: write.entry.atMs ?? Date.now(),
   };
 }
 
@@ -295,11 +323,17 @@ export async function recordPayment(input: RecordPaymentInput): Promise<string> 
 
   const write = buildPaymentWrite({ ...input, key });
 
-  await dbService.updateAtomic({
-    [write.paymentPath]: write.entry,
-    [write.totalPaidPath]: dbService.increment(write.delta),
-    [write.refPath]: write.refValue,
-  });
+  // Journalled: offline this write never settles, the listeners fire from the
+  // local cache, and the screen shows the balance dropping. If the app dies
+  // before reconnecting, the entry recorded here is the only evidence the money
+  // was taken.
+  await journalled(journalEntryFor(write, 'payment', input.actor), () =>
+    dbService.updateAtomic({
+      [write.paymentPath]: write.entry,
+      [write.totalPaidPath]: dbService.increment(write.delta),
+      [write.refPath]: write.refValue,
+    }),
+  );
 
   return key;
 }
@@ -336,11 +370,13 @@ export async function reversePayment(
     reversalReason: reason,
   });
 
-  await dbService.updateAtomic({
-    [write.paymentPath]: write.entry,
-    [write.totalPaidPath]: dbService.increment(write.delta),
-    [write.refPath]: write.refValue,
-  });
+  await journalled(journalEntryFor(write, 'reversal', actor), () =>
+    dbService.updateAtomic({
+      [write.paymentPath]: write.entry,
+      [write.totalPaidPath]: dbService.increment(write.delta),
+      [write.refPath]: write.refValue,
+    }),
+  );
 
   return key;
 }

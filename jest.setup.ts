@@ -34,3 +34,17 @@ if (januaryOffset !== -60 || julyOffset !== -60) {
       `January=${-januaryOffset}min July=${-julyOffset}min. The ICU timezone data may be missing.`,
   );
 }
+
+/**
+ * AsyncStorage has no native module under Jest, and importing it throws at
+ * module load. The pending-write journal lives in the money path — every
+ * repository now imports it — so without this every service suite fails on
+ * import rather than on anything it asserts.
+ *
+ * The package ships this mock for exactly that. A test that needs storage to
+ * misbehave (see `pending-journal.test.ts`) declares its own `jest.mock`, which
+ * takes precedence over this one.
+ */
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);

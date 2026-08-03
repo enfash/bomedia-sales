@@ -24,7 +24,8 @@ import type {
   TurnaroundTime,
 } from '@/components/records/types';
 import { dbService } from '@/services/db';
-import { buildPaymentWrite, type PaymentActor } from '@/services/payment-repository';
+import { buildPaymentWrite, journalEntryFor, type PaymentActor } from '@/services/payment-repository';
+import { clear, journalled, register, type JournalEntry } from '@/services/pending-journal';
 import { isPastDue, localDayKey } from '@/utils/date';
 import { roundNaira } from '@/utils/money';
 import { computePaymentStatus, STATUS_META } from '@/utils/payment-status';
@@ -283,6 +284,24 @@ export async function createBatch(input: NewBatchInput): Promise<string> {
     items,
   };
 
+  // Recorded BEFORE the write is issued, so a force-quit between the two leaves
+  // evidence rather than nothing. The batch node is the proof-of-landing path:
+  // batch, opening entry and ref go in one atomic update, so if the node is
+  // there, all three are.
+  const pending: JournalEntry = {
+    key: input.receiptId,
+    path: dbPath,
+    kind: 'sale',
+    amount: roundNaira(input.totalAmount),
+    method: input.paymentMethod,
+    receiptId: input.receiptId,
+    clientName: input.clientName,
+    byUid: input.actor.uid,
+    byName: input.actor.name,
+    at: now.toISOString(),
+    atMs: now.getTime(),
+  };
+
   // An advance taken at the counter IS a payment. Without a ledger entry it
   // would sit in `totalPaid` untraceable, and the day's drawer would be short
   // by every deposit taken — deposits being the most common cash of all.
@@ -310,12 +329,14 @@ export async function createBatch(input: NewBatchInput): Promise<string> {
     // Nesting keeps the batch, its opening entry and the ref in one atomic
     // update, which is the property that matters. `totalPaid` is already on
     // the node, so no increment is needed either.
-    await dbService.updateAtomic({
-      [dbPath]: { ...node, paymentRefs: { [key]: write.refValue } },
-      [write.paymentPath]: write.entry,
-    });
+    await journalled(pending, () =>
+      dbService.updateAtomic({
+        [dbPath]: { ...node, paymentRefs: { [key]: write.refValue } },
+        [write.paymentPath]: write.entry,
+      }),
+    );
   } else {
-    await dbService.setRecord(dbPath, node);
+    await journalled(pending, () => dbService.setRecord(dbPath, node));
   }
 
   return dbPath;
@@ -360,6 +381,7 @@ export async function markBatchesPaid(
   const now = new Date();
   const updates: Record<string, unknown> = {};
   const settled: SalesBatch[] = [];
+  const pending: JournalEntry[] = [];
 
   for (const batch of batches) {
     const outstanding = roundNaira(batch.totalBalance ?? batch.totalAmount - batch.totalPaid);
@@ -379,11 +401,20 @@ export async function markBatchesPaid(
     updates[write.totalPaidPath] = dbService.increment(write.delta);
     updates[write.refPath] = write.refValue;
     settled.push(batch);
+    pending.push(journalEntryFor(write, 'payment', actor));
   }
 
   if (settled.length === 0) return [];
 
-  await dbService.updateAtomic(updates);
+  // One journal entry per settled sale, not one for the batch operation: the
+  // update is atomic, so they land or fail together, but the operator re-enters
+  // per sale and needs to see which ones.
+  for (const entry of pending) await register(entry);
+  try {
+    await dbService.updateAtomic(updates);
+  } finally {
+    for (const entry of pending) await clear(entry.key);
+  }
   return settled;
 }
 
