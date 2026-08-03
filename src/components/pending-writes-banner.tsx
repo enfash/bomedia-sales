@@ -1,6 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -28,6 +29,12 @@ export function PendingWritesBanner() {
   const theme = useTheme();
   const { items, dismiss } = usePendingWrites();
   const [expanded, setExpanded] = useState(false);
+  // This is now the topmost element in the tree, so it owns the status-bar
+  // inset. Without it the warning renders UNDER the clock and battery, which is
+  // where it was least readable and most easily mistaken for chrome. The
+  // padding is inside the coloured container, so the tint runs to the top of
+  // the screen rather than leaving a strip above it. Zero on web.
+  const insets = useSafeAreaInsets();
 
   const summary = summarise(items);
   if (!summary) return null;
@@ -35,7 +42,12 @@ export function PendingWritesBanner() {
   const tone = toneFor(summary.state, theme);
 
   return (
-    <View style={[styles.container, { backgroundColor: tone.bg, borderBottomColor: tone.border }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: tone.bg, borderBottomColor: tone.border, paddingTop: insets.top },
+      ]}
+    >
       <Pressable
         onPress={() => setExpanded((v) => !v)}
         accessibilityRole="button"

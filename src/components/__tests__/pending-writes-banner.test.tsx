@@ -23,6 +23,10 @@ jest.mock('@/context/pending-writes-context', () => ({
   usePendingWrites: () => ({ ...mockValue, dismiss: jest.fn(), refresh: jest.fn() }),
 }));
 
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 44, bottom: 0, left: 0, right: 0 }),
+}));
+
 jest.mock('@/hooks/use-theme', () => ({
   useTheme: () => ({
     error: '#ba1a1a',
