@@ -180,8 +180,11 @@ export default function RecordsWeb() {
       sortKey: 'LoggedBy',
       flex: 1.2,
       render: (b) => (
+        // Never a default name. Attribution the data does not support is worse
+        // than none — this column read "Admin" for every sale, staff included,
+        // because nothing had ever written the field.
         <ThemedText type="small" themeColor="onSurfaceVariant" numberOfLines={1}>
-          {b.records[0]?.loggedBy || 'Admin'}
+          {b.loggedByName || '—'}
         </ThemedText>
       ),
     },

@@ -56,7 +56,10 @@ export interface SalesRecord {
   clientName?: string;
   contact?: string;
   createdAt?: string;
-  loggedBy?: string;
+  // `loggedBy` used to live here, a leftover of the flat structure. Nothing
+  // ever wrote it, so `records[0]?.loggedBy || 'Admin'` in the Records table
+  // attributed EVERY sale to "Admin", including staff ones. Attribution is a
+  // property of the sale, so it is `loggedByUid`/`loggedByName` on SalesBatch.
   notes?: string;
   dueDate?: string;
 }
@@ -185,6 +188,14 @@ export interface SalesBatch {
   voidedByName?: string;
   voidReason?: string;
 
+  /**
+   * Who recorded the sale. Undefined means genuinely unknown — the UI must say
+   * so rather than naming anyone. Both fields travel together: a name with no
+   * uid is a label, not an attribution.
+   */
+  loggedByUid?: string;
+  loggedByName?: string;
+
   notes?: string;
   dueDate?: string;
 }
@@ -239,6 +250,13 @@ export interface StoredBatch {
   productionStage?: ProductionStage;
   notes?: string;
   dueDate?: string;
+  /* -- Attribution: who recorded this sale ------------------------------ *
+   * Both, always. A name without a uid displays correctly and filters as
+   * nobody, and it cannot be checked against anything — it is a label, not
+   * an attribution. Absent on batches written before 2026-08-03; those read
+   * as unknown rather than being attributed to a default. */
+  loggedByUid?: string;
+  loggedByName?: string;
   /* -- Void (soft delete). A sale is never removed; it is marked. -------- *
    * Cancelled jobs are normal in printing. Erasing the record is not — it
    * takes the payment history with it and leaves the ledger pointing at a

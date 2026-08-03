@@ -114,6 +114,23 @@ describe('normalizeBatch', () => {
     expect(result.productionStage).toBe('Queued');
   });
 
+  it('passes attribution through as stored', () => {
+    const result = normalizeBatch(
+      makeStoredBatch({ loggedByUid: 'uid-office', loggedByName: 'Office' }),
+      BATCH_PATH,
+    );
+    expect(result.loggedByUid).toBe('uid-office');
+    expect(result.loggedByName).toBe('Office');
+  });
+
+  it('leaves attribution UNDEFINED on a batch written before it existed', () => {
+    // The read path must not invent an attribution. The Records table used to
+    // default this to "Admin", which attributed every staff sale to an admin.
+    const result = normalizeBatch(makeStoredBatch(), BATCH_PATH);
+    expect(result.loggedByName).toBeUndefined();
+    expect(result.loggedByUid).toBeUndefined();
+  });
+
   it('derives the batch id from the last path segment', () => {
     const result = normalizeBatch(makeStoredBatch({ receiptId: undefined }), 'sales/2026/07/15/INV-ZZZ');
     expect(result.id).toBe('INV-ZZZ');

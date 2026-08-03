@@ -6,6 +6,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 type SortColumn = 'Date' | 'Amount' | 'Balance' | 'Client' | 'Status' | 'LoggedBy';
 
+/**
+ * Shown, filtered and sorted on when a batch carries no attribution.
+ *
+ * It is a distinct value rather than a fallback name on purpose: this used to
+ * be `'Admin'`, which meant every sale ever recorded — staff sales included —
+ * was attributed to an admin by a UI default, and filtering by anyone else
+ * matched nothing.
+ */
+export const UNATTRIBUTED = '—';
+
 interface UseRecordsOptions {
   /**
    * Include voided sales. Default false.
@@ -154,8 +164,8 @@ export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
       }
 
       if (loggedByFilter !== 'All') {
-        const batchLoggedBy = batch.records[0]?.loggedBy || 'Admin';
-        if (batchLoggedBy !== loggedByFilter) return false;
+        // Unattributed batches match only an explicit '—', never a person.
+        if ((batch.loggedByName || UNATTRIBUTED) !== loggedByFilter) return false;
       }
 
       if (dateFilter !== 'All Time') {
@@ -193,8 +203,8 @@ export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
         valA = a.status;
         valB = b.status;
       } else if (sortColumn === 'LoggedBy') {
-        valA = a.records[0]?.loggedBy || 'Admin';
-        valB = b.records[0]?.loggedBy || 'Admin';
+        valA = a.loggedByName || UNATTRIBUTED;
+        valB = b.loggedByName || UNATTRIBUTED;
       }
 
       if (valA === valB) return 0;

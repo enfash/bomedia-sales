@@ -174,3 +174,34 @@ describe('createBatch always writes the money fields', () => {
     expect(mockOpeningEntries[0].node.method).toBe('Cash');
   });
 });
+
+/**
+ * Attribution, not decoration.
+ *
+ * The Records table used to render `records[0]?.loggedBy || 'Admin'` against a
+ * field NOTHING had ever written, so every sale — staff sales included — was
+ * attributed to an admin by a UI default. A record asserting an authority
+ * claim its data does not support is the §1.4 UI-only-RBAC class of bug.
+ */
+describe('createBatch records who logged the sale', () => {
+  it('writes both attribution fields from the actor', async () => {
+    await createBatch(input({ actor: { uid: 'uid-office', name: 'Office' } }));
+    const node = mockWritten[0].node;
+    expect(node.loggedByUid).toBe('uid-office');
+    expect(node.loggedByName).toBe('Office');
+  });
+
+  it('never writes a name without the uid that backs it', async () => {
+    await createBatch(input());
+    const node = mockWritten[0].node;
+    // A name alone displays correctly and filters as nobody, and cannot be
+    // checked against auth. Both fields travel together or neither does.
+    expect(Boolean(node.loggedByName)).toBe(Boolean(node.loggedByUid));
+  });
+
+  it('attributes the sale to the same person as its opening ledger entry', async () => {
+    await createBatch(input({ totalPaid: 400, actor: { uid: 'uid-office', name: 'Office' } }));
+    expect(mockWritten[0].node.loggedByUid).toBe(mockOpeningEntries[0].node.byUid);
+    expect(mockWritten[0].node.loggedByName).toBe(mockOpeningEntries[0].node.byName);
+  });
+});

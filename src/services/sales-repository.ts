@@ -122,6 +122,11 @@ export function normalizeBatch(
     voidedAt: node.voidedAt,
     voidedByName: node.voidedByName,
     voidReason: node.voidReason,
+    // Passed through as stored, including absent. A batch written before
+    // attribution existed is UNKNOWN, and the UI must say so rather than
+    // defaulting to a name — which is the bug this replaced.
+    loggedByUid: node.loggedByUid,
+    loggedByName: node.loggedByName,
     notes: node.notes,
     dueDate: node.dueDate,
   };
@@ -268,6 +273,11 @@ export async function createBatch(input: NewBatchInput): Promise<string> {
     paymentMethod: input.paymentMethod,
     status: computePaymentStatus(input.totalAmount, input.totalPaid),
     productionStage: 'Queued',
+    // Attribution, from the same actor the ledger entry below uses, so a sale
+    // and its opening payment always name the same person. Both fields or
+    // neither: a name with no uid cannot be checked against anything.
+    loggedByUid: input.actor.uid,
+    loggedByName: input.actor.name,
     ...(input.notes ? { notes: input.notes } : {}),
     ...(input.dueDate ? { dueDate: input.dueDate } : {}),
     items,
