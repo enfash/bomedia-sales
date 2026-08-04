@@ -189,6 +189,15 @@ export interface SalesBatch {
   voidReason?: string;
 
   /**
+   * How many ledger entries this sale has, from its `paymentRefs` index.
+   *
+   * Readable by anyone who can read the sale, unlike the entries themselves —
+   * which is what lets a staff member be told how many payments she cannot see
+   * without being shown them.
+   */
+  paymentRefCount: number;
+
+  /**
    * Who recorded the sale. Undefined means genuinely unknown — the UI must say
    * so rather than naming anyone. Both fields travel together: a name with no
    * uid is a label, not an attribution.

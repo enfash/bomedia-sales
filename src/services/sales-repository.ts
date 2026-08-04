@@ -120,6 +120,7 @@ export function normalizeBatch(
     status,
     statusColor: STATUS_META[status].color,
     productionStage: (node.productionStage as ProductionStage) || 'Queued',
+    paymentRefCount: node.paymentRefs ? Object.keys(node.paymentRefs).length : 0,
     isVoided: node.voidedAtMs != null,
     voidedAt: node.voidedAt,
     voidedByName: node.voidedByName,

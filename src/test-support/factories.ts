@@ -87,6 +87,7 @@ export function makeBatch(overrides: Partial<SalesBatch> = {}): SalesBatch {
     statusColor: '#ba1a1a',
     productionStage: 'Queued',
     isVoided: false,
+    paymentRefCount: 0,
     ...overrides,
   };
 }

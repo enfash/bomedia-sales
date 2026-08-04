@@ -1,6 +1,7 @@
 import type { PaymentEntry } from '@/components/records/types';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { deriveHiddenPayments } from '@/services/hidden-payments';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
 import { STATUS_META } from '@/utils/payment-status';
@@ -17,6 +18,10 @@ interface PaymentHistoryProps {
    * story — an operator who thinks a payment is missing will record it twice.
    */
   isPartialView?: boolean;
+  /** The sale's `totalPaid` — counts everyone's payments, readable by all. */
+  totalPaid?: number;
+  /** The sale's `paymentRefs` count — indexes every entry, readable by all. */
+  refCount?: number;
   /** Admin-only. Omitted for staff, who cannot reverse. */
   onReverse?: (entry: PaymentEntry) => void;
   /** Plain-language mismatch line, when the ledger and the cached total differ. */
@@ -28,10 +33,17 @@ export function PaymentHistory({
   payments,
   theme,
   isPartialView = false,
+  totalPaid = 0,
+  refCount = 0,
   onReverse,
   mismatchMessage,
   onRecalculate,
 }: PaymentHistoryProps) {
+  // Only computed for the partial view; an admin sees every entry already.
+  const hidden = isPartialView
+    ? deriveHiddenPayments({ totalPaid, refCount, visible: payments })
+    : null;
+
   return (
     <Surface
       style={[styles.card, { backgroundColor: theme.elevation?.level1 || theme.surface }]}
@@ -111,11 +123,31 @@ export function PaymentHistory({
       })}
 
       {isPartialView && (
-        <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.footnote}>
-          You can only see payments you took yourself. A colleague may have
-          collected against this sale too — check with an admin before recording
-          anything again.
-        </ThemedText>
+        <>
+          {/* The complete figure, without the attribution she may not read.
+              Derived from the sale node — no extra read, no rules change. */}
+          {hidden === 'unknown' ? (
+            <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.footnote}>
+              Someone else may have collected against this sale. The figures here
+              do not add up, so no amount is shown — check with an admin before
+              recording anything again.
+            </ThemedText>
+          ) : hidden ? (
+            <>
+              <ThemedText type="small" style={[styles.hidden, { color: theme.onSurface }]}>
+                {formatCurrency(hidden.amount)} collected in {hidden.count} earlier{' '}
+                {hidden.count === 1 ? 'payment' : 'payments'}, not recorded by you.
+              </ThemedText>
+              <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.footnote}>
+                Check with an admin before recording anything again.
+              </ThemedText>
+            </>
+          ) : (
+            <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.footnote}>
+              Check with an admin before recording anything again.
+            </ThemedText>
+          )}
+        </>
       )}
     </Surface>
   );
@@ -136,4 +168,5 @@ const styles = StyleSheet.create({
   mismatch: { padding: Spacing.three, borderRadius: 12, gap: Spacing.two },
   recalc: { alignSelf: 'flex-start' },
   footnote: { lineHeight: 18, fontStyle: 'italic' },
+  hidden: { lineHeight: 18, fontWeight: '600' },
 });

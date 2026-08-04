@@ -229,6 +229,11 @@ ${itemsString}`;
             payments={withPayments.payments}
             theme={theme}
             isPartialView={!isAdmin}
+            // Both readable by any signed-in user, unlike the entries
+            // themselves — which is what lets the partial view state a complete
+            // total without showing whose payments make it up.
+            totalPaid={transaction.totalPaid}
+            refCount={transaction.paymentRefCount}
             mismatchMessage={
               withPayments.hasMismatch ? describeMismatch(withPayments, formatCurrency) : undefined
             }
