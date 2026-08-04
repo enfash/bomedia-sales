@@ -260,9 +260,22 @@ export function parsePaymentsTree(root: any): PaymentEntry[] {
  * there is nothing to watch on them. The ref map is the only thing that changes
  * when a payment is added, and adding one re-runs this.
  */
+export interface SalePaymentsMeta {
+  /**
+   * Refs whose entry could not be read — almost always the rules refusing a
+   * staff account an entry taken by someone else.
+   *
+   * Reported rather than thrown: one unreadable entry must not cost the whole
+   * payment history. And it is reported as a NUMBER rather than inferred from
+   * the reader's role, because what matters to the screen is what actually
+   * failed, not who is looking.
+   */
+  unreadable: number;
+}
+
 export function subscribeToPaymentsForSale(
   batchPath: string,
-  callback: (payments: PaymentEntry[]) => void,
+  callback: (payments: PaymentEntry[], meta: SalePaymentsMeta) => void,
 ): () => void {
   let cancelled = false;
 
@@ -270,26 +283,38 @@ export function subscribeToPaymentsForSale(
     `${batchPath}/paymentRefs`,
     async (refs) => {
       if (!refs) {
-        if (!cancelled) callback([]);
+        if (!cancelled) callback([], { unreadable: 0 });
         return;
       }
 
-      const entries = await Promise.all(
+      // Settled, not `Promise.all`: a single denied ref used to reject the
+      // whole batch and take the payment history down with it — which is what a
+      // staff account hit on any sale a colleague had collected against.
+      const results = await Promise.all(
         Object.entries(refs).map(async ([key, location]) => {
-          const node = await dbService.getRecord<StoredPayment>(
-            `${PAYMENTS_ROOT}/${location}/${key}`,
-          );
-          if (!node) return null;
-          const [dayKey, uid] = location.split('/');
-          return normalizePayment(node, key, dayKey, uid);
+          try {
+            const node = await dbService.getRecord<StoredPayment>(
+              `${PAYMENTS_ROOT}/${location}/${key}`,
+            );
+            // A ref pointing at nothing is a broken index, not a refusal —
+            // rebuildable by `planPaymentRefBackfill`, and not this screen's
+            // problem to report.
+            if (!node) return { entry: null, unreadable: false };
+            const [dayKey, uid] = location.split('/');
+            return { entry: normalizePayment(node, key, dayKey, uid), unreadable: false };
+          } catch {
+            return { entry: null, unreadable: true };
+          }
         }),
       );
 
       if (cancelled) return;
       callback(
-        entries
+        results
+          .map((r) => r.entry)
           .filter((e): e is PaymentEntry => e !== null)
           .sort((a, b) => b.atMs - a.atMs),
+        { unreadable: results.filter((r) => r.unreadable).length },
       );
     },
   );

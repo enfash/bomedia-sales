@@ -56,13 +56,20 @@ export default function TransactionDetails() {
   const [paymentNote, setPaymentNote] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
+  // How many entries on this sale could not be read, from the subscription
+  // itself. The partial-view notice keys off this rather than off the role: it
+  // should say what actually happened, not what someone's permissions imply.
+  const [unreadablePayments, setUnreadablePayments] = useState(0);
 
   // Scoped to THIS sale via its paymentRefs index, rather than subscribing to
   // the whole ledger and filtering. Staff still only receive their own entries
   // — the rules enforce that at the uid level, not the UI.
   useEffect(() => {
     if (!transaction?.dbPath) return;
-    return subscribeToPaymentsForSale(transaction.dbPath, setPayments);
+    return subscribeToPaymentsForSale(transaction.dbPath, (next, meta) => {
+      setPayments(next);
+      setUnreadablePayments(meta.unreadable);
+    });
   }, [transaction?.dbPath]);
 
   const handleAddPayment = async () => {
@@ -228,7 +235,7 @@ ${itemsString}`;
           <PaymentHistory
             payments={withPayments.payments}
             theme={theme}
-            isPartialView={!isAdmin}
+            isPartialView={unreadablePayments > 0}
             // Both readable by any signed-in user, unlike the entries
             // themselves — which is what lets the partial view state a complete
             // total without showing whose payments make it up.
