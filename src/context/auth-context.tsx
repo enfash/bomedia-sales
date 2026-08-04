@@ -1,4 +1,5 @@
 import { applyPersistence, auth } from '@/lib/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   clearSessionKeys,
   getKeepSignedIn,
@@ -17,6 +18,12 @@ import {
 } from 'firebase/auth';
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
+
+/**
+ * Last known role per uid. Read on launch to answer `pending` faster, and only
+ * ever trusted when it says `staff` — see the note in the role effect.
+ */
+const ROLE_CACHE_PREFIX = 'bomedia:role:';
 
 /** App role. New users self-register as `staff`; the owner promotes to `admin`. */
 export type Role = 'admin' | 'staff';
@@ -135,12 +142,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       const uid = user.uid;
+
+      // Fast path, in ONE direction only.
+      //
+      // The role is re-read from the database on every launch, so for a second
+      // or two after sign-in nobody's role is known and every admin-gated screen
+      // sits in `pending` — which is why a staff member opening /cash watched a
+      // Daily Cash skeleton for seconds before being redirected.
+      //
+      // A remembered 'staff' is applied immediately; a remembered 'admin' is
+      // NOT. Restoring 'staff' can only ever restrict, so a stale cache costs
+      // an admin one skeleton — while restoring 'admin' would show admin UI to
+      // an account that may since have been demoted, on the strength of this
+      // device's memory. The server read follows either way and settles it.
+      try {
+        const remembered = await AsyncStorage.getItem(`${ROLE_CACHE_PREFIX}${uid}`);
+        if (!cancelled && remembered === 'staff') setRole('staff');
+      } catch {
+        // No cache is simply the slow path.
+      }
+
       try {
         const existing = await dbService.getRecord<{ role?: string; name?: string }>(`users/${uid}`);
         if (cancelled) return;
         if (existing?.role) {
+          const resolved: Role = existing.role === 'admin' ? 'admin' : 'staff';
           setProfileName(existing.name?.trim() || null);
-          setRole(existing.role === 'admin' ? 'admin' : 'staff');
+          setRole(resolved);
+          void AsyncStorage.setItem(`${ROLE_CACHE_PREFIX}${uid}`, resolved).catch(() => {});
           return;
         }
         const name = user.displayName ?? '';
@@ -153,6 +182,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!cancelled) {
           setProfileName(name.trim() || null);
           setRole('staff');
+          void AsyncStorage.setItem(`${ROLE_CACHE_PREFIX}${uid}`, 'staff').catch(() => {});
         }
       } catch {
         if (!cancelled) setRole('staff');

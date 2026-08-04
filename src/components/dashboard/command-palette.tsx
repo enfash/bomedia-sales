@@ -6,6 +6,8 @@ import { useTheme } from '@/hooks/use-theme';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
 import { Feather } from '@expo/vector-icons';
+import { WEB_NAV } from '@/constants/web-nav';
+import { useAdminGate } from '@/hooks/use-admin-gate';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
@@ -24,6 +26,20 @@ export function openCommandPalette(query?: string) {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT, { detail: { query } }));
 }
+
+/** Extra search terms per destination — the labels alone are not enough. */
+const NAV_KEYWORDS: Record<string, string> = {
+  '/': 'home overview dashboard',
+  '/records': 'sales transactions history',
+  '/clients': 'customers debtors',
+  '/board': 'kanban jobs production',
+  '/quote': 'estimate quotation',
+  '/new-sales': 'add create sale',
+  '/expenses': 'spend costs',
+  '/analytics': 'insights charts reports',
+  '/settings': 'preferences materials pricing',
+  '/cash': 'drawer reconciliation takings',
+};
 
 interface CommandItem {
   id: string;
@@ -84,6 +100,7 @@ function PaletteModal({
 }) {
   const theme = useTheme();
   const router = useRouter();
+  const gate = useAdminGate();
   const { sortedBatches: batches } = useRecords(theme);
 
   const [index, setIndex] = useState(0);
@@ -94,19 +111,30 @@ function PaletteModal({
     router.push(path as any);
   };
 
+  /**
+   * Derived from WEB_NAV and filtered by role — never hand-written.
+   *
+   * It was a second, hardcoded copy of the destination list, so it offered
+   * Analytics and Settings to staff: the sidebar hid them and the palette
+   * handed them straight back. Same class as the two sidebars disagreeing, and
+   * the same fix — one list, read by everything that navigates.
+   *
+   * Admin destinations appear only on `allowed`. While the role is still
+   * `pending` they are omitted, because offering a route and then removing it
+   * mid-keystroke is worse than showing it a beat late.
+   */
   const navItems: CommandItem[] = useMemo(
-    () => [
-      { id: 'nav-home', title: 'Dashboard', group: 'Navigation', icon: 'home', keywords: 'home overview', run: () => go('/') },
-      { id: 'nav-records', title: 'Records', group: 'Navigation', icon: 'archive', keywords: 'sales transactions', run: () => go('/records') },
-      { id: 'nav-clients', title: 'Clients', group: 'Navigation', icon: 'users', keywords: 'customers', run: () => go('/clients') },
-      { id: 'nav-board', title: 'Production Board', group: 'Navigation', icon: 'layout', keywords: 'kanban jobs', run: () => go('/board') },
-      { id: 'nav-quote', title: 'Quotes', group: 'Navigation', icon: 'file-text', keywords: 'estimate', run: () => go('/quote') },
-      { id: 'nav-expenses', title: 'Expenses', group: 'Navigation', icon: 'dollar-sign', keywords: 'spend costs', run: () => go('/expenses') },
-      { id: 'nav-analytics', title: 'Analytics', group: 'Navigation', icon: 'bar-chart-2', keywords: 'insights charts reports', run: () => go('/analytics') },
-      { id: 'nav-settings', title: 'Settings', group: 'Navigation', icon: 'settings', keywords: 'preferences', run: () => go('/settings') },
-    ],
+    () =>
+      WEB_NAV.filter((item) => !item.adminOnly || gate === 'allowed').map((item) => ({
+        id: `nav-${item.href}`,
+        title: item.label,
+        group: 'Navigation',
+        icon: item.icon,
+        keywords: NAV_KEYWORDS[item.href] ?? '',
+        run: () => go(item.href),
+      })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [gate],
   );
 
   const actionItems: CommandItem[] = useMemo(
