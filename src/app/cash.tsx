@@ -43,7 +43,17 @@ export default function CashReconciliationScreen() {
   // No need to clear on day change: `summariseDay` filters by dayKey, so any
   // entries still in state from the previous day are excluded rather than
   // briefly shown.
-  useEffect(() => subscribeToPaymentsForDay(dayKey, setPayments), [dayKey]);
+  //
+  // GATED BEFORE THE SUBSCRIPTION ATTACHES, not after. This hook used to run
+  // for everyone and let the gate below decide only what was RENDERED, which
+  // meant a non-admin device fetched the whole day's takings behind a screen
+  // that says "Admins only" — with the security rules as the only thing
+  // actually stopping it. A hook that fetches what its own gate refuses is
+  // wrong on its own terms, whatever the rules happen to allow this week.
+  useEffect(() => {
+    if (gate !== 'allowed') return;
+    return subscribeToPaymentsForDay(dayKey, setPayments);
+  }, [dayKey, gate]);
 
   const day = useMemo(() => summariseDay(dayKey, payments), [dayKey, payments]);
   const isToday = dayKey === todayKey();

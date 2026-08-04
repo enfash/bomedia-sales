@@ -1,7 +1,6 @@
 import type { PaymentEntry } from '@/components/records/types';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
-import { deriveHiddenPayments } from '@/services/hidden-payments';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
 import { STATUS_META } from '@/utils/payment-status';
@@ -17,11 +16,15 @@ interface PaymentHistoryProps {
    * legitimately incomplete. Say so rather than implying the list is the whole
    * story — an operator who thinks a payment is missing will record it twice.
    */
-  isPartialView?: boolean;
-  /** The sale's `totalPaid` — counts everyone's payments, readable by all. */
-  totalPaid?: number;
-  /** The sale's `paymentRefs` count — indexes every entry, readable by all. */
-  refCount?: number;
+  /**
+   * How many entries on this sale could not be read — reported by the
+   * subscription, not inferred from the reader's role.
+   *
+   * Since 2026-08-04 any signed-in user may read any payment entry by its exact
+   * path, so this is normally 0. A non-zero value means a read actually failed,
+   * which is worth saying out loud.
+   */
+  unreadable?: number;
   /** Admin-only. Omitted for staff, who cannot reverse. */
   onReverse?: (entry: PaymentEntry) => void;
   /** Plain-language mismatch line, when the ledger and the cached total differ. */
@@ -32,18 +35,11 @@ interface PaymentHistoryProps {
 export function PaymentHistory({
   payments,
   theme,
-  isPartialView = false,
-  totalPaid = 0,
-  refCount = 0,
+  unreadable = 0,
   onReverse,
   mismatchMessage,
   onRecalculate,
 }: PaymentHistoryProps) {
-  // Only computed for the partial view; an admin sees every entry already.
-  const hidden = isPartialView
-    ? deriveHiddenPayments({ totalPaid, refCount, visible: payments })
-    : null;
-
   return (
     <Surface
       style={[styles.card, { backgroundColor: theme.elevation?.level1 || theme.surface }]}
@@ -122,32 +118,16 @@ export function PaymentHistory({
         );
       })}
 
-      {isPartialView && (
-        <>
-          {/* The complete figure, without the attribution she may not read.
-              Derived from the sale node — no extra read, no rules change. */}
-          {hidden === 'unknown' ? (
-            <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.footnote}>
-              Someone else may have collected against this sale. The figures here
-              do not add up, so no amount is shown — check with an admin before
-              recording anything again.
-            </ThemedText>
-          ) : hidden ? (
-            <>
-              <ThemedText type="small" style={[styles.hidden, { color: theme.onSurface }]}>
-                {formatCurrency(hidden.amount)} collected in {hidden.count} earlier{' '}
-                {hidden.count === 1 ? 'payment' : 'payments'}, not recorded by you.
-              </ThemedText>
-              <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.footnote}>
-                Check with an admin before recording anything again.
-              </ThemedText>
-            </>
-          ) : (
-            <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.footnote}>
-              Check with an admin before recording anything again.
-            </ThemedText>
-          )}
-        </>
+      {/* Not "you can only see payments you took yourself" — every signed-in
+          user can now read every entry on a sale. What is left is a read that
+          genuinely failed, which is a different thing and must not be silent:
+          a list quietly missing an entry is how a payment gets taken twice. */}
+      {unreadable > 0 && (
+        <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.footnote}>
+          {unreadable} {unreadable === 1 ? 'payment' : 'payments'} on this sale could not be
+          read just now. The total above still counts {unreadable === 1 ? 'it' : 'them'} —
+          check with an admin before recording anything again.
+        </ThemedText>
       )}
     </Surface>
   );
@@ -168,5 +148,4 @@ const styles = StyleSheet.create({
   mismatch: { padding: Spacing.three, borderRadius: 12, gap: Spacing.two },
   recalc: { alignSelf: 'flex-start' },
   footnote: { lineHeight: 18, fontStyle: 'italic' },
-  hidden: { lineHeight: 18, fontWeight: '600' },
 });

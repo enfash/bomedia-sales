@@ -399,20 +399,48 @@ is doing it from the app as an admin.
 **Blocked without a second account with `role: "staff"`.** Mark it blocked, not
 skipped — these rules are deployed and entirely unexercised.
 
-### E1. A staff member sees only their own payments
+### E0b. Staff can SEE a payment recorded by someone else
 
-**Do** — sign in as staff. Record a payment on any sale. Open a sale that
-**you (admin)** took a payment on.
+**Do** — as staff, open a sale that has a payment recorded by the ADMIN account.
+`sales/2026/08/03/INV-260803-O436` has one: ₦5,000 Transfer, taken by Elijah.
 
-**Expect** — their own entry is visible. **Yours is not.** The history shows the
-note: "You can only see payments you took yourself…"
+**Expect** — the entry is listed, with **Elijah's name on it**, alongside any of
+her own. No "you can only see payments you took yourself" message — that copy is
+gone, because it stopped being true on 2026-08-04.
 
-**If it fails** — if they see your entries, the `payments/$day/$uid` read rule
-is not doing its job and this is a second instance of UI-only RBAC.
+**If it fails** — an empty or short list means the entry-level `.read` rule has
+regressed. A bare "Permission denied" instead means the per-sale fan-out is
+throwing again rather than reporting what it could not read.
 
 ☐
 
+### E1. ~~A staff member sees only their own payments~~ — REVERSED 2026-08-04
+
+This step asserted the opposite of the current rule and is replaced by **E0b**
+above. It is struck out rather than deleted so that anyone who ran it before
+today, or who finds this checklist in an older state, sees that the change was
+deliberate.
+
+**What it used to expect:** a staff member sees her own entries on a sale and
+NOT the admin's, with the note "You can only see payments you took yourself…".
+
+**Why it changed:** two staff cover the same counter, and a sale a colleague had
+collected against looked unpaid to her. The advice was "check with an admin",
+which fails at 6pm when the admin is not reachable — and the operator standing
+in front of a customer takes the payment again. `payments/{day}/{uid}/{key}` is
+now readable by any signed-in user BY EXACT PATH; the day and uid buckets are
+still not listable. See the audit, "uid bucketing after 2026-08-04".
+
+**If a staff account today shows only her own entries**, the entry-level `.read`
+has regressed — run E0b, which is the live version of this check.
+
 ### E2. Staff cannot read the day bucket
+
+> **Still true, and the point of the narrow rule.** Staff may read any single
+> entry by its exact path, and may NOT list a day or a colleague's uid bucket.
+> If this step starts passing for staff, the rule has been widened past what was
+> agreed on 2026-08-04.
+
 
 **Expect** — Daily Cash is not reachable from the More menu for staff, and the
 screen refuses if reached directly.

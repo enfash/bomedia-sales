@@ -110,6 +110,7 @@
         "$uid": {
           ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || auth.uid === $uid)",
           "$paymentId": {
+            ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'staff')",
             ".write": "auth != null && !data.exists() && newData.exists() && auth.uid === $uid && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'staff') && (!newData.hasChild('reversalOf') || root.child('users').child(auth.uid).child('role').val() === 'admin')",
             ".validate": "newData.hasChildren(['amount','method','at','atMs','byUid','receiptId','batchPath']) && newData.child('amount').isNumber() && newData.child('byUid').val() === auth.uid && newData.child('byUid').val() === $uid && newData.child('method').isString() && newData.child('atMs').isNumber() && (newData.child('amount').val() > 0 || (newData.hasChild('reversalOf') && newData.hasChild('reversalReason') && newData.child('reversalReason').isString() && newData.child('reversalReason').val().length > 0))",
             "amount": {
