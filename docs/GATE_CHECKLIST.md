@@ -701,6 +701,27 @@ merely missing. Report the entry count and both figures.
 
 ### F4c. It does NOT re-send when it cannot ask
 
+> ⚠️ **NOT RUNNABLE UNDER EXPO GO.** This step needs the app to COLD START while
+> offline, and under Expo Go the app cannot start at all without reaching the
+> Metro server — the JS bundle is fetched at launch. Airplane mode stops the app
+> booting rather than stopping Firebase.
+>
+> Two ways to run it anyway:
+>
+> 1. **Keep the LAN, kill the internet.** Leave the phone on the same Wi-Fi as
+>    Metro so the bundle still loads, and take the router's uplink down (or use a
+>    laptop hotspot with the laptop's own internet off). Firebase is then
+>    unreachable while the app boots normally — which is exactly the state this
+>    step needs.
+> 2. **Build it standalone.** `eas build --profile preview` bundles the JS into
+>    the app, so it launches with no network at all. Also the only way to test
+>    what your operator actually runs.
+>
+> Marked **BLOCKED**, not skipped, until one of those happens: the invariant it
+> checks — never replay on `unverified` — is the one that separates this feature
+> from a duplicate-payment generator, and it is currently proven only by unit
+> test.
+
 **Do** — same sale. Airplane mode ON. Record a **₦150** payment. Force-quit.
 Reopen the app **still in airplane mode**.
 
