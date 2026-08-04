@@ -28,7 +28,7 @@ import {
   type RangePreset,
 } from '@/services/analytics';
 import { formatCurrency, formatCurrencyCompact } from '@/utils/currency';
-import { formatDate, isSameLocalDay, parseDate } from '@/utils/date';
+import { formatDate, isSameLocalDay, isToday, parseDate } from '@/utils/date';
 import { STATUS_META } from '@/utils/payment-status';
 import { useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
@@ -77,7 +77,13 @@ export default function DashboardWeb() {
   const trend = useMemo(() => revenueByMonth(windowBatches, win.months, win.endRef), [windowBatches, win]);
   const ready = useMemo(() => readyJobs(sortedBatches), [sortedBatches]);
   const owing = useMemo(() => clientsOwing(sortedBatches), [sortedBatches]);
-  const recent = useMemo(() => recentSales(sortedBatches, 8), [sortedBatches]);
+  // TODAY only, for everyone. See the note in the mobile twin: a card that
+  // mixes today's sales with last week's invites an old total to be read as
+  // the day's takings. Full history is one tap away in Records.
+  const recent = useMemo(
+    () => recentSales(sortedBatches.filter((b) => isToday(b.createdAt)), 8),
+    [sortedBatches],
+  );
 
   // Live daily snapshot — always shown, independent of the range toggle.
   const today = useMemo(() => {
@@ -282,8 +288,8 @@ export default function DashboardWeb() {
 
           {/* Recent sales table */}
           <Panel
-            title="Recent sales"
-            subtitle="Latest transactions"
+            title="Today's sales"
+            subtitle="Recorded today — full history in Records"
             right={
               <Pressable onPress={() => router.push('/records')}>
                 <ThemedText type="smallBold" style={{ color: theme.primary }}>View all →</ThemedText>
@@ -301,7 +307,7 @@ export default function DashboardWeb() {
 
             {recent.length === 0 ? (
               <View style={{ padding: Spacing.six, alignItems: 'center' }}>
-                <ThemedText type="small" themeColor="onSurfaceVariant">No sales recorded yet.</ThemedText>
+                <ThemedText type="small" themeColor="onSurfaceVariant">No sales yet today.</ThemedText>
               </View>
             ) : (
               recent.map((b) => (

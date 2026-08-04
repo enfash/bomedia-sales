@@ -7,16 +7,26 @@ import { ThemedTextInput } from '@/components/ui/themed-text-input';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { MaterialItem, PrinterItem, useSettings } from '@/context/settings-context';
 import { useAdminGate } from '@/hooks/use-admin-gate';
+import { useRouter } from 'expo-router';
 import { useTheme } from '@/hooks/use-theme';
 import { STATUS_META } from '@/utils/payment-status';
 import { SymbolView } from 'expo-symbols';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 export default function SettingsScreen() {
   const theme = useTheme();
   const gate = useAdminGate();
   const { settings, updateSettings } = useSettings();
+  const router = useRouter();
+
+  // Same as Daily Cash: a route this account cannot use is not a place to leave
+  // it standing. Only on `denied` — redirecting while the role is `pending`
+  // would bounce an admin whose users/{uid} read has not returned yet.
+  useEffect(() => {
+    if (gate === 'denied') router.replace('/');
+  }, [gate, router]);
+
 
   // Local state for edits
   const [businessName, setBusinessName] = useState(settings.businessName);

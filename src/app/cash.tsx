@@ -23,7 +23,7 @@ import { subscribeToPaymentsForDay } from '@/services/payment-repository';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate, localDayKey } from '@/utils/date';
 import { STATUS_META } from '@/utils/payment-status';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Surface } from 'react-native-paper';
@@ -36,6 +36,19 @@ const shiftDay = (dayKey: string, days: number) => {
 export default function CashReconciliationScreen() {
   const theme = useTheme();
   const gate = useAdminGate();
+  const router = useRouter();
+
+
+  // A staff member who reaches an admin route by URL is sent home rather than
+  // shown a wall. The refusal page told them nothing they could act on, and a
+  // route they cannot use is not a place to leave them standing.
+  //
+  // ONLY on `denied`. Redirecting while the role is still `pending` would bounce
+  // an ADMIN who deep-links here before the users/{uid} read returns — the same
+  // "not known yet is not a no" mistake the gate exists to prevent.
+  useEffect(() => {
+    if (gate === 'denied') router.replace('/');
+  }, [gate, router]);
 
   const [dayKey, setDayKey] = useState(todayKey());
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
@@ -73,10 +86,11 @@ export default function CashReconciliationScreen() {
               <LoadingSkeleton width="100%" height={180} borderRadius={16} />
             </View>
           ) : (
+            // Rendered only for the instant before the redirect above lands.
             <EmptyState
               iconName="lock"
               title="Admins only"
-              message="Daily cash reconciliation shows every staff member's takings, so it is limited to admin accounts."
+              message="Taking you back to the dashboard."
             />
           )}
         </View>

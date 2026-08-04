@@ -11,6 +11,7 @@ import type { ProductionStage } from '@/components/records/types';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { Spacing } from '@/constants/theme';
 import { useAdminGate } from '@/hooks/use-admin-gate';
+import { useRouter } from 'expo-router';
 import { useAllExpenses } from '@/hooks/use-all-expenses';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
@@ -28,7 +29,7 @@ import {
 } from '@/services/analytics';
 import { formatCurrency, formatCurrencyCompact } from '@/utils/currency';
 import { STATUS_META } from '@/utils/payment-status';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 /** Stage accents (mirrors the Production Board's semantic pipeline colours). */
@@ -43,6 +44,15 @@ const STAGE_ACCENT: Record<ProductionStage, string> = {
 export default function AnalyticsWeb() {
   const theme = useTheme();
   const gate = useAdminGate();
+  const router = useRouter();
+
+  // Same as Daily Cash: a route this account cannot use is not a place to leave
+  // it standing. Only on `denied` — redirecting while the role is `pending`
+  // would bounce an admin whose users/{uid} read has not returned yet.
+  useEffect(() => {
+    if (gate === 'denied') router.replace('/');
+  }, [gate, router]);
+
   const { sortedBatches: batches, loading: recordsLoading } = useRecords(theme);
   const { expenses, loading: expensesLoading } = useAllExpenses();
   const loading = recordsLoading || expensesLoading;

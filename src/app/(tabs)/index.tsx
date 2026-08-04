@@ -58,7 +58,7 @@ function compactMoney(v: number): string {
 export default function DashboardScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
 
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -78,12 +78,15 @@ export default function DashboardScreen() {
   const ready = useMemo(() => readyJobs(sortedBatches), [sortedBatches]);
   const owing = useMemo(() => clientsOwing(sortedBatches), [sortedBatches]);
   const days7 = useMemo(() => revenueByDay(sortedBatches, 7), [sortedBatches]);
-  // Staff don't see prior days' sales in Records, so keep the dashboard's
-  // "Recent" list consistent — today only for staff, full history for admins.
-  const recent = useMemo(() => {
-    const source = isAdmin ? sortedBatches : sortedBatches.filter((b) => isToday(b.createdAt));
-    return recentSales(source, 3);
-  }, [sortedBatches, isAdmin]);
+  // TODAY only, for everyone — the dashboard is a "what is happening now"
+  // screen, and a card mixing today's sales with last week's invites the
+  // operator to read an old total as the day's takings. History lives in
+  // Records, which is one tap away. Not role-dependent: an admin wanting the
+  // day's focus is the same want as a staff member's.
+  const recent = useMemo(
+    () => recentSales(sortedBatches.filter((b) => isToday(b.createdAt)), 3),
+    [sortedBatches],
+  );
 
   // Collected vs owed over the last 7 days — a weekly cash pulse, not all-time.
   const split7 = useMemo(() => {
@@ -259,7 +262,7 @@ export default function DashboardScreen() {
           <Surface elevation={1} style={[styles.card, { backgroundColor: theme.surface }]}>
             <SectionHeader title="Recent" actionLabel="Records" onPress={() => router.push('/records')} theme={theme} />
             {recent.length === 0 ? (
-              <ThemedText type="small" themeColor="onSurfaceVariant">No sales recorded yet.</ThemedText>
+              <ThemedText type="small" themeColor="onSurfaceVariant">No sales yet today.</ThemedText>
             ) : (
               <View>
                 {recent.map((b, i) => (
