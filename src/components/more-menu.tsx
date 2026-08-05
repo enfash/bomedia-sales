@@ -11,6 +11,17 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+/**
+ * How long to wait after closing the drawer before showing a dialog behind it.
+ *
+ * React Native's `Modal` runs its own fade on dismiss, platform-controlled and
+ * separate from the panel slide. A dialog shown before that finishes renders
+ * underneath a window that is still on screen — the bug this whole flow exists
+ * to avoid. Comfortably longer than the fade rather than exactly equal to it:
+ * being 100ms late is invisible, being 10ms early is the bug back.
+ */
+const MODAL_FADE_MS = 320;
+
 const PANEL_WIDTH = Math.min(300, Dimensions.get('window').width * 0.82);
 
 /** Emit this (via DeviceEventEmitter) to open the More menu from anywhere. */
@@ -71,16 +82,23 @@ export function MoreMenu({ visible, onClose, counts = {} }: MoreMenuProps) {
       toValue: visible ? 0 : -PANEL_WIDTH,
       duration: visible ? 240 : 160,
       useNativeDriver: true,
-    }).start(({ finished }) => {
-      // Only once the panel has actually left. Showing the dialog on the same
-      // tick as the close would put it behind a Modal still fading out — the
-      // very thing this fixes, just briefly. setState in the animation-done
-      // callback, never synchronously in the effect body.
-      if (finished && !visible && logoutPending.current) {
-        logoutPending.current = false;
-        setConfirmingLogout(true);
-      }
-    });
+    }).start();
+
+    // Wait for the WINDOW to go, then ask the question.
+    //
+    // This deliberately does not hang off the animation's completion callback.
+    // Hiding the Modal tears down the view the native driver is animating, so
+    // that animation is cancelled and reports `finished: false` — a callback
+    // gated on `finished` never fires, which is exactly how this dialog came to
+    // never appear at all.
+    //
+    // The wait is for the Modal's own fade, which is platform-controlled and
+    // not the panel slide above. setState happens in the timer, never
+    // synchronously in the effect body.
+    if (visible || !logoutPending.current) return;
+    logoutPending.current = false;
+    const t = setTimeout(() => setConfirmingLogout(true), MODAL_FADE_MS);
+    return () => clearTimeout(t);
   }, [visible, translateX]);
 
   const go = (href: string) => {
