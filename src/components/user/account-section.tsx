@@ -11,6 +11,14 @@ import { useState } from 'react';
 interface AccountSectionProps {
   /** Extra style for the outer container (e.g. borders/padding per surface). */
   style?: object;
+  /**
+   * Take over the logout flow instead of confirming here.
+   *
+   * Passed by a host that lives inside a native `Modal` — the confirm dialog
+   * cannot render above that window, and would be unmounted with it anyway when
+   * the drawer closes. Such a host closes itself and renders `LogoutConfirm`.
+   */
+  onLogoutPress?: () => void;
 }
 
 /**
@@ -18,15 +26,19 @@ interface AccountSectionProps {
  * shared confirm dialog ("Log out of BOMedia?"). Rendered by BOTH the mobile
  * More menu and the web sidebar, so the identity + logout logic lives once.
  */
-export function AccountSection({ style }: AccountSectionProps) {
-  const theme = useTheme();
-  const { user, signOut } = useAuth();
-
-  const [confirming, setConfirming] = useState(false);
+/**
+ * The confirm + sign-out itself, separated from where the button lives.
+ *
+ * The mobile More menu is a React Native `Modal` — a separate native window
+ * above the whole app tree — and Paper's `Portal` renders at the provider root,
+ * UNDERNEATH it. So a dialog opened from inside the drawer renders behind the
+ * drawer, and no z-index can lift it: it is in the wrong window, not the wrong
+ * layer. The drawer therefore closes first and renders this OUTSIDE its Modal,
+ * which is why the dialog cannot live inside `AccountSection` for that host.
+ */
+export function LogoutConfirm({ visible, onDismiss }: { visible: boolean; onDismiss: () => void }) {
+  const { signOut } = useAuth();
   const [loading, setLoading] = useState(false);
-
-  const name = user?.displayName?.trim() || 'Signed in';
-  const email = user?.email || '';
 
   const handleLogout = async () => {
     setLoading(true);
@@ -34,9 +46,33 @@ export function AccountSection({ style }: AccountSectionProps) {
       await signOut(); // AuthProvider flips the gate → sign-in screen; this unmounts.
     } finally {
       setLoading(false);
-      setConfirming(false);
+      onDismiss();
     }
   };
+
+  return (
+    <ConfirmDialog
+      visible={visible}
+      title="Log out"
+      message="Log out of BOMedia?"
+      confirmLabel="Log out"
+      cancelLabel="Cancel"
+      isDestructive
+      isLoading={loading}
+      onConfirm={handleLogout}
+      onCancel={onDismiss}
+    />
+  );
+}
+
+export function AccountSection({ style, onLogoutPress }: AccountSectionProps) {
+  const theme = useTheme();
+  const { user } = useAuth();
+
+  const [confirming, setConfirming] = useState(false);
+
+  const name = user?.displayName?.trim() || 'Signed in';
+  const email = user?.email || '';
 
   return (
     <View style={[styles.container, { borderTopColor: theme.outlineVariant }, style]}>
@@ -52,23 +88,17 @@ export function AccountSection({ style }: AccountSectionProps) {
 
       <SecondaryButton
         icon="logout"
-        onPress={() => setConfirming(true)}
+        onPress={() => (onLogoutPress ? onLogoutPress() : setConfirming(true))}
         style={styles.logout}
       >
         Log out
       </SecondaryButton>
 
-      <ConfirmDialog
-        visible={confirming}
-        title="Log out"
-        message="Log out of BOMedia?"
-        confirmLabel="Log out"
-        cancelLabel="Cancel"
-        isDestructive
-        isLoading={loading}
-        onConfirm={handleLogout}
-        onCancel={() => setConfirming(false)}
-      />
+      {/* Only when this host owns the flow. A host inside a native Modal passes
+          `onLogoutPress` and renders LogoutConfirm outside that Modal itself. */}
+      {onLogoutPress ? null : (
+        <LogoutConfirm visible={confirming} onDismiss={() => setConfirming(false)} />
+      )}
     </View>
   );
 }

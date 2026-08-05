@@ -1,5 +1,5 @@
 import { ThemedText } from '@/components/themed-text';
-import { AccountSection } from '@/components/user/account-section';
+import { AccountSection, LogoutConfirm } from '@/components/user/account-section';
 import { useAuth } from '@/context/auth-context';
 import { useActivity } from '@/hooks/use-activity';
 import { Spacing } from '@/constants/theme';
@@ -7,7 +7,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { STATUS_META } from '@/utils/payment-status';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, usePathname } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -57,12 +57,30 @@ export function MoreMenu({ visible, onClose, counts = {} }: MoreMenuProps) {
   // The Activity row's badge shows the live unread count.
   const mergedCounts: Record<string, number> = { ...counts, '/activity': unreadCount };
 
+  /**
+   * A logout asked for from inside the drawer, waiting for the drawer to go.
+   *
+   * A ref rather than state: it is read in an animation callback, and flipping
+   * it must not re-render the panel mid-slide.
+   */
+  const logoutPending = useRef(false);
+  const [confirmingLogout, setConfirmingLogout] = useState(false);
+
   useEffect(() => {
     Animated.timing(translateX, {
       toValue: visible ? 0 : -PANEL_WIDTH,
       duration: visible ? 240 : 160,
       useNativeDriver: true,
-    }).start();
+    }).start(({ finished }) => {
+      // Only once the panel has actually left. Showing the dialog on the same
+      // tick as the close would put it behind a Modal still fading out — the
+      // very thing this fixes, just briefly. setState in the animation-done
+      // callback, never synchronously in the effect body.
+      if (finished && !visible && logoutPending.current) {
+        logoutPending.current = false;
+        setConfirmingLogout(true);
+      }
+    });
   }, [visible, translateX]);
 
   const go = (href: string) => {
@@ -71,6 +89,7 @@ export function MoreMenu({ visible, onClose, counts = {} }: MoreMenuProps) {
   };
 
   return (
+    <>
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close menu" />
@@ -145,11 +164,22 @@ export function MoreMenu({ visible, onClose, counts = {} }: MoreMenuProps) {
           <View style={{ flex: 1 }} />
 
           <View style={styles.account}>
-            <AccountSection />
+            <AccountSection
+              onLogoutPress={() => {
+                logoutPending.current = true;
+                onClose();
+              }}
+            />
           </View>
         </Animated.View>
       </View>
     </Modal>
+
+      {/* OUTSIDE the Modal, deliberately. Paper's Portal renders at the provider
+          root, which is below a native Modal window — and anything inside the
+          drawer is unmounted the moment it closes. */}
+      <LogoutConfirm visible={confirmingLogout} onDismiss={() => setConfirmingLogout(false)} />
+    </>
   );
 }
 
