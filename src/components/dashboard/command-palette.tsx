@@ -10,7 +10,7 @@ import { WEB_NAV } from '@/constants/web-nav';
 import { useAdminGate } from '@/hooks/use-admin-gate';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 /** Window event any UI can dispatch to open the palette (e.g. the top bar). */
 export const OPEN_COMMAND_PALETTE_EVENT = 'bomedia:command-palette';
@@ -105,6 +105,9 @@ function PaletteModal({
 
   const [index, setIndex] = useState(0);
   const inputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  /** Row y-offsets by flat index, so the keyboard cursor can be scrolled to. */
+  const rowOffsets = useRef<number[]>([]);
 
   const go = (path: string) => {
     onClose();
@@ -213,6 +216,17 @@ function PaletteModal({
     return () => clearTimeout(t);
   }, []);
 
+  // Keep the highlighted row on screen. Without this the list scrolls but the
+  // arrow keys do not: the cursor walks off the bottom and the palette looks
+  // frozen while it is in fact several rows below the fold.
+  useEffect(() => {
+    const y = rowOffsets.current[safeIndex];
+    if (y === undefined) return;
+    // A row height of margin either side, so the cursor is never flush against
+    // the edge with no visible context.
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 56), animated: false });
+  }, [safeIndex]);
+
   let running = -1; // running flat index across groups
 
   return (
@@ -237,7 +251,13 @@ function PaletteModal({
           </View>
         </View>
 
-        <View style={styles.results}>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.results}
+          contentContainerStyle={styles.resultsContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator
+        >
           {flat.length === 0 ? (
             <View style={styles.empty}>
               <ThemedText type="small" themeColor="onSurfaceVariant">No results for &ldquo;{query}&rdquo;</ThemedText>
@@ -254,6 +274,9 @@ function PaletteModal({
                     <Pressable
                       key={it.id}
                       onPress={it.run}
+                      onLayout={(e) => {
+                        rowOffsets.current[rowIndex] = e.nativeEvent.layout.y;
+                      }}
                       onHoverIn={() => setIndex(rowIndex)}
                       style={[styles.row, active && { backgroundColor: theme.primary + '14' }]}
                     >
@@ -277,7 +300,7 @@ function PaletteModal({
               </View>
             ))
           )}
-        </View>
+        </ScrollView>
       </View>
     </View>
   );
@@ -302,6 +325,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     overflow: 'hidden',
+    // A column, so the search row keeps its height and the results take
+    // whatever is left — which is what gives them something to scroll inside.
+    flexDirection: 'column',
     boxShadow: '0px 20px 50px rgba(0,0,0,0.25)',
   },
   searchRow: {
@@ -324,6 +350,12 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   results: {
+    // flexShrink, not flex:1 — the panel must still hug a short list rather
+    // than stretching to 460px to show three items.
+    flexShrink: 1,
+    minHeight: 0,
+  },
+  resultsContent: {
     padding: Spacing.two,
     paddingTop: Spacing.three,
   },
