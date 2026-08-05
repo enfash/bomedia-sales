@@ -106,8 +106,20 @@ function PaletteModal({
   const [index, setIndex] = useState(0);
   const inputRef = useRef<TextInput>(null);
   const scrollRef = useRef<ScrollView>(null);
-  /** Row y-offsets by flat index, so the keyboard cursor can be scrolled to. */
-  const rowOffsets = useRef<number[]>([]);
+  /** Row geometry by flat index, so the keyboard cursor can be scrolled to. */
+  const rowOffsets = useRef<{ y: number; h: number }[]>([]);
+  /** Live scroll position and viewport height, for "scroll only if needed". */
+  const scrollY = useRef(0);
+  const viewportH = useRef(0);
+  /**
+   * What moved the highlight last.
+   *
+   * ONLY the keyboard may scroll. Hover also sets the index, and scrolling on
+   * hover is a feedback loop: the scroll slides a different row under a
+   * stationary cursor, that fires hover, which sets the index, which scrolls
+   * again — the list runs away from the mouse.
+   */
+  const movedBy = useRef<'keyboard' | 'pointer'>('pointer');
 
   const go = (path: string) => {
     onClose();
@@ -198,9 +210,11 @@ function PaletteModal({
         onClose();
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
+        movedBy.current = 'keyboard';
         setIndex((i) => (flat.length ? (i + 1) % flat.length : 0));
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
+        movedBy.current = 'keyboard';
         setIndex((i) => (flat.length ? (i - 1 + flat.length) % flat.length : 0));
       } else if (e.key === 'Enter') {
         e.preventDefault();
@@ -216,15 +230,30 @@ function PaletteModal({
     return () => clearTimeout(t);
   }, []);
 
-  // Keep the highlighted row on screen. Without this the list scrolls but the
-  // arrow keys do not: the cursor walks off the bottom and the palette looks
-  // frozen while it is in fact several rows below the fold.
+  // Keep the highlighted row on screen — for the KEYBOARD only, and only when
+  // the row is actually out of view.
+  //
+  // Scrolling on every index change made the list chase the mouse; scrolling
+  // even when the row was already visible made every arrow key re-centre the
+  // list, which reads as the palette lurching under the cursor. Neither is
+  // "scroll into view", which is what this is.
   useEffect(() => {
-    const y = rowOffsets.current[safeIndex];
-    if (y === undefined) return;
-    // A row height of margin either side, so the cursor is never flush against
-    // the edge with no visible context.
-    scrollRef.current?.scrollTo({ y: Math.max(0, y - 56), animated: false });
+    if (movedBy.current !== 'keyboard') return;
+
+    const row = rowOffsets.current[safeIndex];
+    const view = viewportH.current;
+    if (!row || !view) return;
+
+    const pad = 8;
+    const top = scrollY.current;
+    const bottom = top + view;
+
+    if (row.y < top + pad) {
+      scrollRef.current?.scrollTo({ y: Math.max(0, row.y - pad), animated: false });
+    } else if (row.y + row.h > bottom - pad) {
+      scrollRef.current?.scrollTo({ y: row.y + row.h - view + pad, animated: false });
+    }
+    // Already visible: leave the list exactly where the reader put it.
   }, [safeIndex]);
 
   let running = -1; // running flat index across groups
@@ -257,6 +286,13 @@ function PaletteModal({
           contentContainerStyle={styles.resultsContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator
+          scrollEventThrottle={16}
+          onScroll={(e) => {
+            scrollY.current = e.nativeEvent.contentOffset.y;
+          }}
+          onLayout={(e) => {
+            viewportH.current = e.nativeEvent.layout.height;
+          }}
         >
           {flat.length === 0 ? (
             <View style={styles.empty}>
@@ -275,9 +311,13 @@ function PaletteModal({
                       key={it.id}
                       onPress={it.run}
                       onLayout={(e) => {
-                        rowOffsets.current[rowIndex] = e.nativeEvent.layout.y;
+                        const { y, height } = e.nativeEvent.layout;
+                        rowOffsets.current[rowIndex] = { y, h: height };
                       }}
-                      onHoverIn={() => setIndex(rowIndex)}
+                      onHoverIn={() => {
+                        movedBy.current = 'pointer';
+                        setIndex(rowIndex);
+                      }}
                       style={[styles.row, active && { backgroundColor: theme.primary + '14' }]}
                     >
                       <View style={[styles.rowIcon, { backgroundColor: active ? theme.primary + '22' : theme.surfaceVariant }]}>
