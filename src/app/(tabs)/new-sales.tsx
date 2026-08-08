@@ -11,6 +11,7 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useSettings } from '@/context/settings-context';
 import { useTheme } from '@/hooks/use-theme';
+import { UNCONFIRMED_MESSAGE, useConfirmWindow } from '@/hooks/use-confirm-window';
 import { describeWriteError } from '@/utils/errors';
 import { logActivity } from '@/services/activity';
 import { formatCurrency } from '@/utils/currency';
@@ -37,6 +38,7 @@ export default function NewSalesScreen() {
   const [advancePayment, setAdvancePayment] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'POS' | 'Transfer'>('Transfer');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const confirmWindow = useConfirmWindow();
 
   const scrollViewRef = useRef<ScrollView | null>(null);
   const clientInfoRef = useRef<ClientInfoRef>(null);
@@ -71,10 +73,13 @@ export default function NewSalesScreen() {
     }
 
     setIsSubmitting(true);
-    try {
-      const receiptId = generateReceiptId();
+    const receiptId = generateReceiptId();
 
-      await createBatch({
+    // Bounded, like every money write. Offline this never settles, and a second
+    // tap creates a SECOND real sale under a different receipt id — nothing
+    // downstream can tell them apart.
+    const result = await confirmWindow.run(
+      createBatch({
         receiptId,
         clientName: clientData.clientName,
         contact: clientData.contact,
@@ -86,29 +91,40 @@ export default function NewSalesScreen() {
         paymentMethod,
         items: batchItems,
         // Attributes the advance to whoever is at the counter.
-        actor: actor,
-      });
+        actor,
+      }),
+    );
+    setIsSubmitting(false);
 
-      logActivity({
-        type: 'sale_created',
-        actor: actor,
-        message: `${actor.name} created a ${formatCurrency(finalBatchTotal)} sale for ${clientData.clientName}`,
-        meta: { receiptId, amount: finalBatchTotal, clientName: clientData.clientName },
-      });
-
-      Alert.alert('Success', `Batch submitted successfully!\nReceipt: ${receiptId}`);
-      setBatchItems([]);
-      clientInfoRef.current.reset();
-      setDeliveryCost('');
-      setAdvancePayment('');
-      setPaymentMethod('Transfer');
-      
-    } catch (error) {
-      console.error('Error submitting batch:', error);
-      const message = describeWriteError(error, 'record this sale');
+    if (result.outcome === 'failed') {
+      // An answer, and a refusal. Keep the form as it is so it can be retried
+      // or corrected without re-entering everything.
+      console.error('Error submitting batch:', result.error);
+      const message = describeWriteError(result.error, 'record this sale');
       Alert.alert(message.title, message.body);
-    } finally {
-      setIsSubmitting(false);
+      return;
+    }
+
+    logActivity({
+      type: 'sale_created',
+      actor,
+      message: `${actor.name} created a ${formatCurrency(finalBatchTotal)} sale for ${clientData.clientName}`,
+      meta: { receiptId, amount: finalBatchTotal, clientName: clientData.clientName },
+    });
+
+    // The form is cleared for BOTH confirmed and unconfirmed. An unconfirmed
+    // sale may well have landed, and leaving the form populated invites it to
+    // be submitted a second time under a new receipt id.
+    setBatchItems([]);
+    clientInfoRef.current.reset();
+    setDeliveryCost('');
+    setAdvancePayment('');
+    setPaymentMethod('Transfer');
+
+    if (confirmWindow.isUnconfirmed(result.outcome)) {
+      Alert.alert('Not confirmed', `Receipt ${receiptId}. ${UNCONFIRMED_MESSAGE}`);
+    } else {
+      Alert.alert('Success', `Batch submitted successfully!\nReceipt: ${receiptId}`);
     }
   };
 
@@ -177,7 +193,11 @@ export default function NewSalesScreen() {
                 loading={isSubmitting}
                 style={{ paddingHorizontal: 16 }}
               >
-                {isSubmitting ? 'Recording…' : 'Record Sale'}
+                {confirmWindow.secondsLeft !== null
+                  ? `Confirming… ${confirmWindow.secondsLeft}s`
+                  : isSubmitting
+                    ? 'Recording…'
+                    : 'Record Sale'}
               </PrimaryButton>
             </View>
           </View>

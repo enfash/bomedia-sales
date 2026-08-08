@@ -7,6 +7,8 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
+import { usePendingFor } from '@/context/pending-writes-context';
+import { UNCONFIRMED_MESSAGE, useConfirmWindow } from '@/hooks/use-confirm-window';
 import { describeWriteError } from '@/utils/errors';
 import { logActivity } from '@/services/activity';
 import { voidBatch } from '@/services/sales-repository';
@@ -55,6 +57,12 @@ export default function TransactionDetails() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Cash');
   const [paymentNote, setPaymentNote] = useState('');
   const [isRecording, setIsRecording] = useState(false);
+  const confirm = useConfirmWindow();
+  // Disabled off the PENDING SET, not off local state: it knows a write for
+  // this sale is outstanding, and it survives a remount that local state does
+  // not. `missing` and `unverified` deliberately do not block — those are
+  // exactly the ones the operator may need to enter again.
+  const outstanding = usePendingFor(transaction?.receiptId ?? transaction?.id)?.state === 'pending';
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
   // How many entries on this sale could not be read, from the subscription
   // itself. The partial-view notice keys off this rather than off the role: it
@@ -81,28 +89,44 @@ export default function TransactionDetails() {
     if (isNaN(amount) || amount <= 0) return;
 
     setIsRecording(true);
-    try {
-      await recordPayment({
+
+    // Money waits for the server, but not forever. Offline the write never
+    // settles at all, so an unbounded await leaves the modal spinning and the
+    // operator taps again — which queues a SECOND ledger entry.
+    const result = await confirm.run(
+      recordPayment({
         batch: transaction,
         amount,
         method: paymentMethod,
         note: paymentNote,
-        actor: actor,
-      });
-      logActivity({
-        type: 'payment_recorded',
-        actor: actor,
-        message: `${actor.name} recorded a ${formatCurrency(amount)} ${paymentMethod} payment for ${transaction.clientName || 'a client'}`,
-        meta: { batchId: transaction.id, amount },
-      });
-      setPaymentModalVisible(false);
-      setPaymentAmount('');
-      setPaymentNote('');
-    } catch (e: any) {
-      const message = describeWriteError(e, 'record this payment');
+        actor,
+      }),
+    );
+    setIsRecording(false);
+
+    if (result.outcome === 'failed') {
+      // The server answered, and said no. The modal stays open: this is the one
+      // outcome the operator can act on immediately.
+      const message = describeWriteError(result.error, 'record this payment');
       Alert.alert(message.title, message.body);
-    } finally {
-      setIsRecording(false);
+      return;
+    }
+
+    logActivity({
+      type: 'payment_recorded',
+      actor,
+      message: `${actor.name} recorded a ${formatCurrency(amount)} ${paymentMethod} payment for ${transaction.clientName || 'a client'}`,
+      meta: { batchId: transaction.id, amount },
+    });
+    setPaymentModalVisible(false);
+    setPaymentAmount('');
+    setPaymentNote('');
+
+    if (confirm.isUnconfirmed(result.outcome)) {
+      // NOT "failed". The write is still queued and may land in a moment; the
+      // journal holds it either way. Saying it failed would send the operator
+      // to record the same money twice.
+      Alert.alert('Not confirmed', UNCONFIRMED_MESSAGE);
     }
   };
 
@@ -338,7 +362,8 @@ ${itemsString}`;
           setPaymentMethod={setPaymentMethod}
           paymentNote={paymentNote}
           setPaymentNote={setPaymentNote}
-          isSubmitting={isRecording}
+          isSubmitting={isRecording || outstanding}
+        secondsLeft={confirm.secondsLeft}
           paymentModalVisible={paymentModalVisible}
           setPaymentModalVisible={setPaymentModalVisible}
           selectedPaymentRecord={transaction}

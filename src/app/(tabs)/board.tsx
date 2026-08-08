@@ -5,6 +5,7 @@ import { BottomTabInset, MaxContentWidth, Spacing, WebContentMaxWidth, WebConten
 import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useRecords } from '@/hooks/use-records';
 import { useTheme } from '@/hooks/use-theme';
+import { describeWriteError } from '@/utils/errors';
 import { useAuth } from '@/context/auth-context';
 import { logActivity } from '@/services/activity';
 import { updateProductionStage } from '@/services/sales-repository';
@@ -14,7 +15,7 @@ import { STATUS_META } from '@/utils/payment-status';
 import { SymbolView } from 'expo-symbols';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { FlatList, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, FlatList, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /** Colour accent per production stage (semantic, brand-aligned). */
@@ -66,13 +67,28 @@ export default function BoardScreen() {
     const next = PRODUCTION_STAGES[idx + dir];
     if (!next) return;
     setActiveJob({ ...job, productionStage: next });
-    await updateProductionStage(job, next);
-    logActivity({
-      type: 'production_moved',
-      actor: actor,
-      message: `${actor.name} moved ${job.clientName || 'a job'} to ${next}`,
-      meta: { batchId: job.id, stage: next },
-    });
+
+    // RESOLVES OPTIMISTICALLY, unlike every money write. A stage is not money:
+    // a wrong one is visible on the board and fixed with one tap, so making the
+    // operator wait ten seconds for a server to agree costs more than the
+    // mistake it prevents. It is not journalled either — a lost stage move is
+    // re-doable, and putting it through the outbox would put every write in the
+    // app behind machinery built for payments.
+    updateProductionStage(job, next)
+      .then(() => {
+        logActivity({
+          type: 'production_moved',
+          actor,
+          message: `${actor.name} moved ${job.clientName || 'a job'} to ${next}`,
+          meta: { batchId: job.id, stage: next },
+        });
+      })
+      .catch((error) => {
+        // The board re-renders from the subscription, so a refused move snaps
+        // back on its own. Say so rather than leaving it unexplained.
+        const message = describeWriteError(error, 'move this job');
+        Alert.alert(message.title, message.body);
+      });
   };
 
   const isWeb = Platform.OS === 'web';

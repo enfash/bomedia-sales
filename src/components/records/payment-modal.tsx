@@ -23,6 +23,15 @@ interface PaymentModalProps {
   handleAddPayment: () => void;
   /** Blocks the double-tap that would otherwise queue two ledger entries. */
   isSubmitting?: boolean;
+  /**
+   * Seconds left in the confirmation window, or null when nothing is waiting.
+   *
+   * Shown as a countdown rather than a spinner: the failure being designed
+   * against is the operator tapping again, and that comes from not knowing
+   * whether anything is happening. A number going down is a promise the wait
+   * ends; a spinner is not.
+   */
+  secondsLeft?: number | null;
   theme: any;
 }
 
@@ -38,6 +47,7 @@ export function PaymentModal({
   setPaymentNote,
   handleAddPayment,
   isSubmitting = false,
+  secondsLeft = null,
   theme,
 }: PaymentModalProps) {
   const isBatch = selectedPaymentRecord?.records && Array.isArray(selectedPaymentRecord.records);
@@ -171,7 +181,11 @@ export function PaymentModal({
                 fontWeight: '700',
               }}
             >
-              {isSubmitting ? 'Recording…' : `Record ${formatCurrency(amount)}`}
+              {secondsLeft !== null
+                ? `Confirming… ${secondsLeft}s`
+                : isSubmitting
+                  ? 'Recording…'
+                  : `Record ${formatCurrency(amount)}`}
             </Text>
           </Pressable>
         </View>
