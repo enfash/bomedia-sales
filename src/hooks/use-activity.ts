@@ -1,5 +1,5 @@
 import { useAuth } from '@/context/auth-context';
-import { ActivityEntry, subscribeToActivity } from '@/services/activity';
+import { ActivityEntry, fetchActivity } from '@/services/activity';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -25,15 +25,21 @@ function setWatermark(key: string, ms: number) {
 }
 
 /**
- * Activity feed for the admin: live entries plus an unread count relative to a
- * per-user "last seen" watermark (persisted so the badge survives reloads).
- * Only admins can read the feed (security rules), so the subscription is a
- * no-op for staff.
+ * Activity feed for the admin: a fetched snapshot plus an unread count
+ * relative to a per-user "last seen" watermark (persisted so the badge
+ * survives reloads). Only admins can read the feed (RLS), so the fetch is
+ * skipped entirely for staff.
+ *
+ * Fetched once on mount / when `isAdmin` resolves — not realtime (out of
+ * scope for this port; see supabase/README.md). A caller that needs fresher
+ * data calls `refresh()`, typically wired to pull-to-refresh via
+ * `usePullRefresh`. Consumers that stay mounted without a refresh gesture of
+ * their own (the web drawer) call `refresh()` when they open instead.
  */
 export function useActivity() {
   const { user, isAdmin } = useAuth();
   const [rawEntries, setRawEntries] = useState<ActivityEntry[]>([]);
-  const [subLoading, setSubLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   const seenKey = user ? `${LAST_SEEN_PREFIX}${user.uid}` : null;
   const [lastSeenMs, setLastSeenMs] = useState<number>(() => (seenKey ? watermarks.get(seenKey) ?? 0 : 0));
@@ -66,20 +72,31 @@ export function useActivity() {
     };
   }, [seenKey]);
 
-  // Subscribe to the feed (admins only). setState happens only inside the
-  // subscription callback — never synchronously in the effect body.
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!isAdmin) return;
-    const unsubscribe = subscribeToActivity((next) => {
-      setRawEntries(next);
-      setSubLoading(false);
-    });
-    return () => unsubscribe();
+    try {
+      const entries = await fetchActivity();
+      setRawEntries(entries);
+    } catch (err) {
+      console.warn('useActivity: fetch failed:', err);
+    } finally {
+      setLoading(false);
+    }
   }, [isAdmin]);
 
-  // Staff can't read the feed, so their view is always empty and settled.
+  // Fetch once per admin resolution. Staff never fetch — their view is
+  // always empty and settled, matching what the realtime subscription used
+  // to do for them (a no-op, since RLS gave them nothing to read).
+  useEffect(() => {
+    if (!isAdmin) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    void load();
+  }, [isAdmin, load]);
+
   const entries = isAdmin ? rawEntries : [];
-  const loading = isAdmin ? subLoading : false;
   const unreadCount = entries.reduce((n, e) => n + ((e.atMs || 0) > lastSeenMs ? 1 : 0), 0);
 
   const markAllSeen = useCallback(async () => {
@@ -93,5 +110,5 @@ export function useActivity() {
     }
   }, [seenKey]);
 
-  return { entries, loading, unreadCount, markAllSeen };
+  return { entries, loading, unreadCount, markAllSeen, refresh: load };
 }

@@ -5,9 +5,11 @@ import { PageContainer } from '@/components/ui/page-container';
 import { WebDetailShell } from '@/components/web-detail-shell';
 import { Spacing } from '@/constants/theme';
 import { useActivity } from '@/hooks/use-activity';
+import { usePullRefresh } from '@/hooks/use-pull-refresh';
+import { useTheme } from '@/hooks/use-theme';
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 /**
  * Admin activity feed — a chronological log of who did what (sales, payments,
@@ -16,7 +18,9 @@ import { ScrollView, StyleSheet, View } from 'react-native';
  * (see activity-drawer); this full screen is the mobile surface.
  */
 export default function ActivityScreen() {
-  const { entries, loading, markAllSeen } = useActivity();
+  const theme = useTheme();
+  const { entries, loading, markAllSeen, refresh } = useActivity();
+  const { refreshing, onRefresh } = usePullRefresh([refresh]);
 
   // Opening the feed clears the unread watermark.
   useEffect(() => {
@@ -35,7 +39,15 @@ export default function ActivityScreen() {
           </ThemedText>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Spacing.six }}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: Spacing.six }}
+          refreshControl={
+            Platform.OS !== 'web'
+              ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />
+              : undefined
+          }
+        >
           <ActivityList entries={entries} loading={loading} />
         </ScrollView>
       </ThemedView>

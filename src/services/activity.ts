@@ -1,11 +1,16 @@
-import { dbService } from '@/services/db';
+import { supabase } from '@/lib/auth';
+import type { Json } from '@/types/supabase';
 
 /**
  * In-app activity feed. Every meaningful mutation (sale created, payment
  * recorded, production moved, expense logged, sale deleted) appends an entry
- * under `activity/{pushId}`. The feed is admin-only to read (see the security
- * rules) and append-only to write, so staff actions surface to the owner
- * without staff being able to read or tamper with the log.
+ * to `activity`. The feed is admin-only to read (RLS) and append-only to
+ * write, so staff actions surface to the owner without staff being able to
+ * read or tamper with the log.
+ *
+ * Read side is a one-shot fetch, not a live subscription — realtime is out
+ * of scope for this port (see supabase/README.md's port plan); screens that
+ * show this feed refresh it via pull-to-refresh or on demand, not push.
  */
 
 export type ActivityType =
@@ -45,12 +50,11 @@ export interface ActivityActor {
  * The chain is ordered and exhaustive, and it NEVER returns a blank name — a
  * nameless attribution is the same failure as a wrong one:
  *
- *   1. `users/{uid}.name` — the app's own profile record, and the only name a
+ *   1. `profiles.name` — the app's own profile record, and the only name a
  *      person can be given from inside the app.
- *   2. Firebase Auth `displayName` — **deliberately not the source of truth.**
- *      It is unset on the accounts in use and lives outside the database, so a
- *      name set there is invisible to every rule and every query. Do not
- *      "fix" naming by setting it: set `users/{uid}.name`.
+ *   2. Google's display name — **deliberately not the source of truth.** A
+ *      name set only on the auth provider is invisible to every query. Do
+ *      not "fix" naming by relying on it: set `profiles.name`.
  *   3. `email` — correct, if ugly. Old ledger entries carry these and are left
  *      alone; see the attribution section in docs/AUDIT_2026-07.md.
  *   4. `uid` — unreadable, but it identifies exactly one person and can be
@@ -77,39 +81,67 @@ interface LogActivityInput {
 /**
  * Append an activity entry. Fire-and-forget: logging must never break the
  * primary action, so failures are swallowed (and surfaced to the console only).
+ *
+ * Do NOT chain `.select()` onto this insert. Staff can only ever satisfy
+ * `activity`'s SELECT policy for entries they're admin on (never, by
+ * design) — Postgres checks that SELECT policy against an INSERT's
+ * RETURNING output, so a staff member's own, otherwise-valid insert would
+ * start failing outright the moment this asks for a representation back.
+ * See the migration that creates this table for the full explanation.
  */
 export async function logActivity(input: LogActivityInput): Promise<void> {
   try {
-    const now = new Date();
-    await dbService.pushRecord('activity', {
+    const { error } = await supabase.from('activity').insert({
       type: input.type,
       message: input.message,
-      actorUid: input.actor.uid || '',
-      actorName: input.actor.name || 'Unknown',
-      at: now.toISOString(),
-      atMs: now.getTime(),
-      ...(input.meta ? { meta: input.meta } : {}),
+      actor_uid: input.actor.uid || '',
+      actor_name: input.actor.name || 'Unknown',
+      // meta is caller-supplied structured context (batchId, amount, etc.) —
+      // always plain JSON-serializable data by convention, same contract as
+      // the Firebase version's untyped meta field. Json's recursive union
+      // can't be verified structurally against Record<string, unknown>.
+      meta: (input.meta ?? null) as unknown as Json,
     });
+    if (error) throw error;
   } catch (err) {
     console.warn('logActivity failed (non-fatal):', err);
   }
 }
 
+function fromRow(row: {
+  id: string;
+  type: string;
+  message: string;
+  actor_uid: string;
+  actor_name: string;
+  created_at: string;
+  meta: unknown;
+}): ActivityEntry {
+  return {
+    id: row.id,
+    type: row.type as ActivityType,
+    message: row.message,
+    actorUid: row.actor_uid,
+    actorName: row.actor_name,
+    at: row.created_at,
+    atMs: new Date(row.created_at).getTime(),
+    meta: (row.meta as Record<string, unknown> | null) ?? undefined,
+  };
+}
+
 /**
- * Subscribe to the activity feed, newest-first. Returns an unsubscribe fn.
- * `limit` caps how many entries are kept client-side.
+ * Fetch the activity feed, newest first. Returns `[]` for a staff caller —
+ * RLS filters the read to nothing rather than erroring, same as it always
+ * has (see the empty-select behaviour proved when this table's RLS was
+ * built), so this never throws on a permission boundary.
  */
-export function subscribeToActivity(
-  callback: (entries: ActivityEntry[]) => void,
-  limit = 100,
-): () => void {
-  return dbService.subscribe<Record<string, Omit<ActivityEntry, 'id'>>>('activity', (data) => {
-    if (!data || typeof data !== 'object') {
-      callback([]);
-      return;
-    }
-    const entries: ActivityEntry[] = Object.keys(data).map((id) => ({ ...data[id], id }));
-    entries.sort((a, b) => (b.atMs || 0) - (a.atMs || 0));
-    callback(entries.slice(0, limit));
-  });
+export async function fetchActivity(limit = 100): Promise<ActivityEntry[]> {
+  const { data, error } = await supabase
+    .from('activity')
+    .select('id, type, message, actor_uid, actor_name, created_at, meta')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []).map(fromRow);
 }

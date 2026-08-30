@@ -22,20 +22,25 @@ export function ActivityDrawer() {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false); // keeps the panel in the tree during the close animation
-  const { entries, loading, markAllSeen } = useActivity();
+  const { entries, loading, markAllSeen, refresh } = useActivity();
 
   // useState (not useRef) so the Animated.Values are created once without
   // reading a ref during render (lint: react-hooks/refs).
   const [translateX] = useState(() => new Animated.Value(PANEL_WIDTH));
   const [backdrop] = useState(() => new Animated.Value(0));
 
-  // Opening mounts the panel and clears the unread badge (done in the handler,
-  // never as a synchronous setState inside an effect body).
+  // Opening mounts the panel, clears the unread badge, and re-fetches (done
+  // in the handler, never as a synchronous setState inside an effect body).
+  // This drawer stays mounted for the whole session so its data can go
+  // stale — unlike the mobile screen, it has no pull-to-refresh gesture of
+  // its own, so opening it is the only freshness trigger it gets, now that
+  // the feed is a fetch rather than a live subscription.
   const doOpen = useCallback(() => {
     setMounted(true);
     setOpen(true);
     markAllSeen();
-  }, [markAllSeen]);
+    void refresh();
+  }, [markAllSeen, refresh]);
 
   // Listen for the open event (dispatched by the sidebar bell).
   useEffect(() => {
