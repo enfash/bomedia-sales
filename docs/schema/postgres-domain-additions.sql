@@ -1,0 +1,39 @@
+-- ============================================================================
+-- SUPERSEDED — the real, complete schema now lives in supabase/migrations/.
+-- ============================================================================
+-- This file was a first pass written without the base schema in context, so
+-- its `sales` and `inventory_rolls` tables were guesses (marked ASSUMED) and
+-- it was missing batch_adjustments, payment_batches, and payment_allocations
+-- entirely. Rather than maintain two copies of the DDL that can drift apart,
+-- everything executable has been removed from here — see:
+--
+--   supabase/migrations/20260829120100_enums.sql               enums
+--   supabase/migrations/20260829120200_tables.sql               tables
+--   supabase/migrations/20260829120300_functions_triggers.sql   cross-row invariants
+--   supabase/migrations/20260829120400_views.sql                client_debt, materials_valuation
+--   supabase/migrations/20260829120500_rls.sql                  RLS policies
+--   supabase/migrations/20260829120600_verify.sql                schema-shape assertions
+--
+-- Two decisions made in this first pass carried over unchanged into the
+-- migrations (both confirmed correct once the base schema was known):
+--
+-- job_status: chose the live Expo app's ProductionStage set
+-- (Queued/Printing/Finishing/Ready/Delivered) over the old system's
+-- JOB_STATUSES (which started at Quoted). With `quotes` now a real table, a
+-- row only lands in `sales` once a quote has converted — there's nothing
+-- left for a job_status of 'Quoted' to describe, and admitting it would let
+-- a sale be simultaneously "just a quote" and "a real order," which is the
+-- ambiguity the quotes/sales split exists to remove. Full reasoning is in
+-- the enums migration.
+--
+-- clients: dedup via a generated, unique `name_key` (trim + collapse
+-- whitespace + lowercase) rather than porting the old app's frequency-vote
+-- heuristic (lib/client-names.ts canonicalClientName) into SQL. That
+-- heuristic only existed because there was no real table to enforce
+-- uniqueness against; with `name_key` unique, the spelling that wins on
+-- first insert becomes canonical and every later sale reuses the same
+-- client_id, so the duplication it was compensating for can't recur. It's
+-- still needed once, to pick each customer's initial spelling when
+-- backfilling the historical sales export — a migration script, not schema.
+-- Full reasoning is in the tables migration.
+-- ============================================================================

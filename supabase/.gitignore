@@ -1,0 +1,13 @@
+# Supabase
+.branches
+.temp
+
+# dotenvx
+.env.keys
+.env.local
+.env.*.local
+
+# Real values (Google OAuth client id/secret for local `supabase start`) go
+# here, gitignored — the CLI-generated rules above don't cover a plain
+# `.env`. See ../README.md → "Google sign-in redirect URLs".
+.env
