@@ -12,7 +12,7 @@ import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { PageContainer } from '@/components/ui/page-container';
 import { Sparkline } from '@/components/ui/sparkline';
 import { StatusChip } from '@/components/ui/status-chip';
-import type { ProductionStage, SalesBatch } from '@/components/records/types';
+import type { SalesBatch } from '@/components/records/types';
 import { UserAvatar } from '@/components/user/user-avatar';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
@@ -37,14 +37,7 @@ import { withAlpha } from '@/utils/color';
 import { formatCurrency } from '@/utils/currency';
 import { isToday, parseDate } from '@/utils/date';
 import { STATUS_META } from '@/utils/payment-status';
-
-const STAGE_ACCENT: Record<ProductionStage, string> = {
-  Queued: '#767683',
-  Printing: '#2e388d',
-  Finishing: '#b26a00',
-  Ready: '#1c7d4d',
-  Delivered: '#454651',
-};
+import { STAGE_META } from '@/utils/production-stage';
 
 /** Compact money, e.g. ₦1.2m / ₦450k / ₦900 — keeps big figures scannable. */
 function compactMoney(v: number): string {
@@ -279,14 +272,14 @@ export default function DashboardScreen() {
             <SectionHeader title="Production" actionLabel="Board" onPress={() => router.push('/board')} theme={theme} />
             <View style={[styles.prodBar, { backgroundColor: withAlpha(theme.onSurface, 0.06) }]}>
               {stages.map((s) => (s.count > 0 ? (
-                <View key={s.stage} style={{ flex: s.count, backgroundColor: STAGE_ACCENT[s.stage] }} />
+                <View key={s.stage} style={{ flex: s.count, backgroundColor: STAGE_META[s.stage] }} />
               ) : null))}
             </View>
             <Pressable style={styles.stageRow} onPress={() => router.push('/board')}>
               {stages.map((s) => (
                 <View key={s.stage} style={styles.stageItem}>
-                  <View style={[styles.stageCount, { backgroundColor: withAlpha(STAGE_ACCENT[s.stage], 0.14) }]}>
-                    <ThemedText style={[styles.stageNum, { color: STAGE_ACCENT[s.stage] }]}>{s.count}</ThemedText>
+                  <View style={[styles.stageCount, { backgroundColor: withAlpha(STAGE_META[s.stage], 0.14) }]}>
+                    <ThemedText style={[styles.stageNum, { color: STAGE_META[s.stage] }]}>{s.count}</ThemedText>
                   </View>
                   <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.stageLabel} numberOfLines={1}>{s.stage}</ThemedText>
                 </View>

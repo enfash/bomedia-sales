@@ -7,7 +7,6 @@ import { RangeControl } from '@/components/dashboard/range-control';
 import { SplitBar } from '@/components/dashboard/split-bar';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { ThemedText } from '@/components/themed-text';
-import type { ProductionStage } from '@/components/records/types';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { Spacing } from '@/constants/theme';
 import { useAdminGate } from '@/hooks/use-admin-gate';
@@ -29,17 +28,9 @@ import {
 } from '@/services/analytics';
 import { formatCurrency, formatCurrencyCompact } from '@/utils/currency';
 import { STATUS_META } from '@/utils/payment-status';
+import { STAGE_META } from '@/utils/production-stage';
 import { useMemo, useState, useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
-
-/** Stage accents (mirrors the Production Board's semantic pipeline colours). */
-const STAGE_ACCENT: Record<ProductionStage, string> = {
-  Queued: '#767683',
-  Printing: '#2e388d',
-  Finishing: '#b26a00',
-  Ready: '#1c7d4d',
-  Delivered: '#454651',
-};
 
 export default function AnalyticsWeb() {
   const theme = useTheme();
@@ -97,7 +88,7 @@ export default function AnalyticsWeb() {
     label: t.stage,
     value: t.count,
     caption: formatCurrency(t.value),
-    accent: STAGE_ACCENT[t.stage],
+    accent: STAGE_META[t.stage],
   }));
 
   const materialRows: BarRow[] = materials.map((m) => ({

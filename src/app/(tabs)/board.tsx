@@ -12,20 +12,12 @@ import { updateProductionStage } from '@/services/sales-repository';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
 import { STATUS_META } from '@/utils/payment-status';
+import { STAGE_META } from '@/utils/production-stage';
 import { SymbolView } from 'expo-symbols';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Alert, FlatList, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-/** Colour accent per production stage (semantic, brand-aligned). */
-const STAGE_ACCENT: Record<ProductionStage, string> = {
-  Queued: '#767683',
-  Printing: '#2e388d',
-  Finishing: '#b26a00',
-  Ready: '#1c7d4d',
-  Delivered: '#454651',
-};
 
 const isRush = (job: SalesBatch) =>
   job.records.some((r) => r.turnaroundTime === 'Rush' || r.turnaroundTime === 'Same Day');
@@ -115,7 +107,7 @@ export default function BoardScreen() {
         </ThemedView>
         <ThemedView type="surface" style={styles.statBox}>
           <ThemedText type="code" themeColor="onSurfaceVariant">Ready</ThemedText>
-          <ThemedText type="smallBold" style={[styles.statValue, { color: STAGE_ACCENT.Ready }]}>{stats.ready} jobs</ThemedText>
+          <ThemedText type="smallBold" style={[styles.statValue, { color: STAGE_META.Ready }]}>{stats.ready} jobs</ThemedText>
         </ThemedView>
         <ThemedView type="surface" style={styles.statBox}>
           <ThemedText type="code" themeColor="onSurfaceVariant">Pipeline Value</ThemedText>
@@ -153,7 +145,7 @@ export default function BoardScreen() {
   const renderJobCard = (job: SalesBatch, compact?: boolean) => (
     <Pressable key={job.id} onPress={() => setActiveJob(job)}>
       <ThemedView type="surface" style={[styles.jobCard, { borderColor: theme.surfaceVariant }]}>
-        <View style={[styles.accent, { backgroundColor: STAGE_ACCENT[job.productionStage] }]} />
+        <View style={[styles.accent, { backgroundColor: STAGE_META[job.productionStage] }]} />
         <View style={{ flex: 1, gap: 4 }}>
           <View style={styles.rowBetween}>
             <ThemedText type="smallBold" numberOfLines={1} style={{ flex: 1 }}>{job.clientName || 'Unknown'}</ThemedText>
@@ -197,8 +189,8 @@ export default function BoardScreen() {
           <View style={[styles.modalPanel, { backgroundColor: theme.background }]}>
             <View style={styles.rowBetween}>
               <ThemedText type="small" themeColor="onSurfaceVariant">Current stage</ThemedText>
-              <View style={[styles.stageBadge, { backgroundColor: STAGE_ACCENT[activeJob.productionStage] + '1A' }]}>
-                <ThemedText type="smallBold" style={{ color: STAGE_ACCENT[activeJob.productionStage] }}>{activeJob.productionStage}</ThemedText>
+              <View style={[styles.stageBadge, { backgroundColor: STAGE_META[activeJob.productionStage] + '1A' }]}>
+                <ThemedText type="smallBold" style={{ color: STAGE_META[activeJob.productionStage] }}>{activeJob.productionStage}</ThemedText>
               </View>
             </View>
             <View style={styles.rowBetween}>
@@ -257,7 +249,7 @@ export default function BoardScreen() {
                     <ThemedView key={stage} type="surface" style={styles.column}>
                       <View style={styles.rowBetween}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <View style={[styles.dot, { backgroundColor: STAGE_ACCENT[stage] }]} />
+                          <View style={[styles.dot, { backgroundColor: STAGE_META[stage] }]} />
                           <ThemedText type="smallBold" style={styles.columnTitle}>{stage}</ThemedText>
                         </View>
                         <ThemedView type="surfaceVariant" style={styles.countBadge}><ThemedText type="code">{items.length}</ThemedText></ThemedView>

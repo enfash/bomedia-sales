@@ -2,10 +2,10 @@ import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
 
 import { useTheme } from '@/hooks/use-theme';
 import { MD3Theme } from 'react-native-paper';
-import { Fonts } from '@/constants/theme';
+import { Fonts, FontSize } from '@/constants/theme';
 
 export type ThemedTextProps = TextProps & {
-  type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code' | 'defaultSemiBold';
+  type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code' | 'defaultSemiBold' | 'caption';
   themeColor?: keyof MD3Theme['colors'];
 };
 
@@ -26,6 +26,7 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
         type === 'linkPrimary' && styles.linkPrimary,
         type === 'code' && styles.code,
         type === 'defaultSemiBold' && styles.defaultSemiBold,
+        type === 'caption' && styles.caption,
         style,
       ]}
       {...rest}
@@ -35,47 +36,51 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
 
 const styles = StyleSheet.create({
   small: {
-    fontSize: 14,
+    fontSize: FontSize.body,
     lineHeight: 20,
     fontWeight: 500,
   },
   smallBold: {
-    fontSize: 14,
+    fontSize: FontSize.body,
     lineHeight: 20,
     fontWeight: 700,
   },
   default: {
-    fontSize: 16,
+    fontSize: FontSize.medium,
     lineHeight: 24,
     fontWeight: 500,
   },
   defaultSemiBold: {
-    fontSize: 16,
+    fontSize: FontSize.medium,
     lineHeight: 24,
     fontWeight: 600,
   },
   title: {
-    fontSize: 48,
+    fontSize: FontSize.jumbo,
     fontWeight: 600,
     lineHeight: 52,
   },
   subtitle: {
-    fontSize: 32,
+    fontSize: FontSize.huge,
     lineHeight: 44,
     fontWeight: 600,
   },
   link: {
     lineHeight: 30,
-    fontSize: 14,
+    fontSize: FontSize.body,
   },
   linkPrimary: {
     lineHeight: 30,
-    fontSize: 14,
+    fontSize: FontSize.body,
     color: '#3c87f7',
   },
   code: {
     fontFamily: Fonts.mono,
     fontWeight: Platform.select({ android: 700 }) ?? 500,
-    fontSize: 12,
+    fontSize: FontSize.small,
+  },
+  caption: {
+    fontSize: FontSize.caption,
+    lineHeight: 20,
   },
 });
