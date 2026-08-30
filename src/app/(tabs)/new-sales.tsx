@@ -2,14 +2,14 @@ import { PageContainer } from '@/components/ui/page-container';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { createBatch, generateReceiptId } from '@/services/sales-repository';
 import { useCallback, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
-import { useSettings } from '@/context/settings-context';
+import { DEFAULT_SETTINGS, useSettings } from '@/context/settings-context';
 import { useTheme } from '@/hooks/use-theme';
 import { UNCONFIRMED_MESSAGE, useConfirmWindow } from '@/hooks/use-confirm-window';
 import { describeWriteError } from '@/utils/errors';
@@ -23,7 +23,7 @@ import { JobDetailCard } from '@/components/sales/job-detail-card';
 
 export default function NewSalesScreen() {
   const safeAreaInsets = useSafeAreaInsets();
-  const { settings } = useSettings();
+  const { settings, isLoading: settingsLoading, loadError: settingsLoadError, refreshSettings } = useSettings();
   const { actor } = useAuth();
   const insets = {
     ...safeAreaInsets,
@@ -128,6 +128,36 @@ export default function NewSalesScreen() {
     }
   };
 
+  // An operator must never price a real job against fallback material
+  // prices. Blocks on either signal independently: still loading, or loaded
+  // but stuck on DEFAULT_SETTINGS (the mint-firebase-token bridge timed out
+  // — see whenFirebaseAuthed in @/lib/firebase). No form, no 12px spinner
+  // easy to miss — a full blocking message instead.
+  if (settingsLoading || settings === DEFAULT_SETTINGS) {
+    return (
+      <ThemedView style={[styles.blockedContainer, { backgroundColor: theme.background }]}>
+        {settingsLoadError ? (
+          <>
+            <ThemedText type="subtitle" style={styles.blockedTitle}>Settings did not load</ThemedText>
+            <ThemedText themeColor="onSurfaceVariant" style={styles.blockedBody}>
+              Material prices could not be confirmed, so a new sale cannot be
+              priced safely right now. Check your connection and try again —
+              if this keeps happening, tell the owner.
+            </ThemedText>
+            <PrimaryButton onPress={refreshSettings}>Try again</PrimaryButton>
+          </>
+        ) : (
+          <>
+            <ActivityIndicator size="large" color={theme.primary} />
+            <ThemedText themeColor="onSurfaceVariant" style={[styles.blockedBody, { marginTop: Spacing.three }]}>
+              Loading settings…
+            </ThemedText>
+          </>
+        )}
+      </ThemedView>
+    );
+  }
+
   return (
     <>
       <KeyboardAvoidingView 
@@ -208,6 +238,20 @@ export default function NewSalesScreen() {
 }
 
 const styles = StyleSheet.create({
+  blockedContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.four,
+    gap: Spacing.two,
+  },
+  blockedTitle: {
+    textAlign: 'center',
+  },
+  blockedBody: {
+    textAlign: 'center',
+    maxWidth: 360,
+  },
   container: {
     flex: 1,
     gap: Spacing.four,

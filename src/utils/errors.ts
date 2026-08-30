@@ -8,6 +8,8 @@
  * system the reader does not own.
  */
 
+import { auth as firebaseAuth } from '@/lib/firebase';
+
 export interface OperatorMessage {
   title: string;
   body: string;
@@ -43,6 +45,20 @@ export function describeWriteError(error: unknown, what: string): OperatorMessag
     code.includes('42501') ||
     code.includes('row-level security')
   ) {
+    // RTDB's rules deny for two genuinely different reasons that look
+    // identical from the error alone: this account really doesn't have the
+    // role for it, OR mint-firebase-token's bridge never established a
+    // Firebase Auth session at all (see supabase/README.md → "Firebase Auth
+    // bridge") — in which case blaming the operator's role sends them to ask
+    // about the wrong thing. `firebaseAuth.currentUser` is the distinguishing
+    // signal: null means no bridge session exists, so this can't be a real
+    // role check at all — RTDB never got far enough to evaluate one.
+    if (!firebaseAuth.currentUser) {
+      return {
+        title: `Could not ${what}`,
+        body: 'The connection needed to save this did not start correctly. Try again in a moment — if it keeps failing, tell the owner exactly what this said.',
+      };
+    }
     return {
       title: `Not allowed to ${what}`,
       body: 'Your account does not have permission for this. Ask the owner to check your role, then try again.',

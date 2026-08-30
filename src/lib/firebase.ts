@@ -59,14 +59,42 @@ const auth = getAuth(app);
  *
  * `attach()` should call the real `onValue`/`get`-based subscribe and
  * return its own unsubscribe function.
+ *
+ * TIMEOUT. Waiting is correct while the bridge is in flight, but waiting
+ * FOREVER is not — if `mint-firebase-token` is down (bad/missing secret,
+ * network, the function itself erroring), a caller that only shows a
+ * spinner while this pends is stuck on a spinner permanently, and a caller
+ * that renders fallback/default data while it pends (settings-context.tsx
+ * did) shows that fallback data as if it were real, indefinitely, with no
+ * signal anything is wrong. After `timeoutMs` with no Firebase Auth session,
+ * `onTimeout` fires once so the caller can show a real error state instead
+ * of continuing to wait silently. If auth DOES arrive after the timeout
+ * already fired, `attach()` still runs normally — this only controls how
+ * long a caller waits before being told something looks stuck.
  */
-export function whenFirebaseAuthed(attach: () => () => void): () => void {
+export function whenFirebaseAuthed(
+  attach: () => () => void,
+  options?: { timeoutMs?: number; onTimeout?: () => void },
+): () => void {
+  const timeoutMs = options?.timeoutMs ?? 15000;
   let detachCurrent: (() => void) | null = null;
   let cancelled = false;
+
+  const timeoutId = setTimeout(() => {
+    if (cancelled || detachCurrent) return; // already authed by then — nothing to report
+    if (options?.onTimeout) {
+      options.onTimeout();
+    } else {
+      console.error(
+        `whenFirebaseAuthed: no Firebase Auth session after ${timeoutMs}ms — the mint-firebase-token bridge may be down. See supabase/README.md → "Firebase Auth bridge".`,
+      );
+    }
+  }, timeoutMs);
 
   const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
     if (cancelled) return;
     if (fbUser) {
+      clearTimeout(timeoutId);
       if (!detachCurrent) detachCurrent = attach();
     } else if (detachCurrent) {
       detachCurrent();
@@ -76,6 +104,7 @@ export function whenFirebaseAuthed(attach: () => () => void): () => void {
 
   return () => {
     cancelled = true;
+    clearTimeout(timeoutId);
     unsubscribeAuth();
     if (detachCurrent) detachCurrent();
   };

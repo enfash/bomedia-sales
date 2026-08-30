@@ -160,15 +160,22 @@ shortens this — only a shorter `jwt_expiry` project-wide narrows the window
 for everyone, at the cost of more frequent refreshes for every active
 session.
 
-**One more step while the Firebase RTDB bridge exists (see "Firebase Auth
-bridge" below): also delete `users/{their-supabase-uid}` from the Firebase
-Realtime Database, by hand, via the Firebase console or REST.** The steps
-above fully revoke Supabase/Postgres access, but `mint-firebase-token`
-mirrors a role into that RTDB node on sign-in, and nothing here deletes it
-on revocation — see the bridge function's own comment for exactly why. Until
-that node is gone, a Firebase Auth session they already hold keeps
-satisfying RTDB's `role` check on every write, even after steps 1–3 above.
-This step goes away entirely once the db.ts cutover retires RTDB.
+**Plainly: until cutover, steps 1–3 above do NOT fully revoke someone. You
+must also delete `users/{their-supabase-uid}` from the Firebase Realtime
+Database, by hand, via the Firebase console or REST — and that manual
+deletion is the ONLY thing that closes this hole.** `mint-firebase-token`
+mirrors a role into that RTDB node on sign-in (see "Firebase Auth bridge"
+below), and nothing automated deletes it on revocation: not `revoke_user()`,
+not the JWT-expiry window in steps 1–3, nothing. A Firebase Auth session
+someone already holds keeps refreshing on its own schedule (not bounded by
+`jwt_expiry` — that's a Supabase setting, and this is a different, separate
+Firebase session) and keeps satisfying RTDB's `role` check on every write
+for as long as that RTDB node exists — which, left alone, is indefinitely.
+Skipping this step means a revoked person can keep writing sales/payments/
+quotes/waste_log after every other part of "Offboarding" above says they
+can't. This requirement, and the bridge itself, disappear entirely once the
+db.ts cutover retires RTDB — see "Cutover plan" below, where verifying the
+bridge is actually gone is a checklist item for exactly that reason.
 
 ## Closed signup — enforced by a trigger, NOT the dashboard toggle
 
@@ -484,7 +491,21 @@ Two orders are possible. Only one is safe:
    `normalizeSale`). Quotes are untouched — `quote-repository.ts` stays on
    Firebase, out of scope for this or any slice, per the earlier decision to
    drop that slice entirely.
-7. Unfreeze onto Expo. The app now reads and writes Postgres exclusively;
+7. **Verify the Firebase Auth bridge is GONE, as a checklist item, not an
+   assumption.** Once every RTDB-dependent write/read above is off Firebase,
+   the bridge has nothing left to bridge. Confirm all of: `mint-firebase-token`
+   (the Edge Function) deleted; `src/lib/firebase-bridge.ts` deleted; the
+   `bridgeFirebaseAuth`/`unbridgeFirebaseAuth` calls removed from
+   `auth-context.tsx`; `whenFirebaseAuthed` and the Firebase `auth` export
+   removed from `src/lib/firebase.ts` (or `firebase.ts` removed entirely, if
+   nothing else in it survives); `database.rules.json` retired along with
+   whatever still deploys it; the `FIREBASE_SERVICE_ACCOUNT_JSON` secret
+   revoked/deleted, not just left set. Leaving any of this in place "just in
+   case" keeps the unbounded revocation gap documented in "Offboarding"
+   above alive for no reason — the bridge exists only because RTDB writes
+   are live, and once they aren't, half-removing it is strictly worse than
+   fully removing it.
+8. Unfreeze onto Expo. The app now reads and writes Postgres exclusively;
    Next.js/Sheets becomes read-only history, kept for audit, not written to
    again. Firebase was never part of this lineage and needs no disposition.
 
