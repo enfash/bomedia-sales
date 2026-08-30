@@ -11,7 +11,7 @@ import { usePullRefresh } from '@/hooks/use-pull-refresh';
 import { useTheme } from '@/hooks/use-theme';
 import { describeWriteError } from '@/utils/errors';
 import { logActivity } from '@/services/activity';
-import { dbService } from '@/services/db';
+import { createExpense, type ExpenseRecord } from '@/services/expense-repository';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate, isToday as isTodayIso } from '@/utils/date';
 import { SymbolView } from 'expo-symbols';
@@ -19,25 +19,31 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 import { Button, Surface } from 'react-native-paper';
 
-export interface ExpenseRecord {
-  id: string;
-  amount: number;
-  category: string;
-  description: string;
-  loggedBy: string;
-  uid?: string;
-  createdAt: string;
-  dbPath?: string;
-}
+export type { ExpenseRecord };
 
-const CATEGORIES = [
-  'Materials & Printing',
-  'Fuel & Transport',
-  'Maintenance',
-  'Office Supplies',
-  'Salaries',
-  'Miscellaneous',
+/**
+ * All 21 `expense_category` enum values, grouped into the 6 sections the
+ * picker has always shown — a UI grouping, not a schema one (the DB enum is
+ * the source of truth; see supabase/migrations for it). Every value here
+ * must be a real enum member or the insert is rejected outright.
+ */
+const CATEGORY_SECTIONS: { label: string; categories: string[] }[] = [
+  {
+    label: 'Materials & Printing',
+    categories: [
+      'Raw Materials', 'Ink',
+      'SAV 3ft', 'SAV 4ft', 'SAV 5ft', 'SAV 7ft',
+      'Flex 3ft', 'Flex 4ft', 'Flex 5ft', 'Flex 6ft', 'Flex 7ft', 'Flex 8ft', 'Flex 10ft',
+    ],
+  },
+  { label: 'Power & Transport', categories: ['Transport', 'Utilities'] },
+  { label: 'Maintenance', categories: ['Maintenance', 'Equipment'] },
+  { label: 'Office Supplies', categories: ['Office Supplies', 'Marketing'] },
+  { label: 'Salaries', categories: ['Salaries'] },
+  { label: 'Miscellaneous', categories: ['Miscellaneous'] },
 ];
+
+const DEFAULT_CATEGORY = CATEGORY_SECTIONS[0].categories[0];
 
 type SortKey = 'date' | 'amount' | 'category' | 'description';
 type SortDir = 'asc' | 'desc';
@@ -58,7 +64,7 @@ export default function ExpensesScreen() {
 
   // Form state
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [category, setCategory] = useState(DEFAULT_CATEGORY);
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -123,19 +129,16 @@ export default function ExpensesScreen() {
 
     setSubmitting(true);
     try {
-      const date = new Date();
-      const monthBucket = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-
-      await dbService.pushRecord(`expenses/${monthBucket}`, {
+      await createExpense({
         amount: numAmount,
         category,
         description: description.trim(),
-        // uid is required by the security rules for staff-created expenses
-        // (rules check newData.child('uid') === auth.uid); also drives the
-        // staff "own expenses only" filter below.
-        uid: user?.uid ?? '',
-        loggedBy: user?.displayName || user?.email || 'Unknown',
-        createdAt: date.toISOString(),
+        // logged_by (uid) is required by RLS for staff-created expenses
+        // (the insert policy checks logged_by = auth.uid()); also drives the
+        // staff "own expenses only" filter below. loggedBy.name is a
+        // snapshot written once at insert time — see the migration that
+        // added expenses.logged_by_name for why it isn't a live join.
+        loggedBy: { uid: user?.uid ?? '', name: actor.name },
       });
 
       logActivity({
@@ -147,7 +150,7 @@ export default function ExpensesScreen() {
 
       setAmount('');
       setDescription('');
-      setCategory(CATEGORIES[0]);
+      setCategory(DEFAULT_CATEGORY);
       setMode('list');
     } catch (error) {
       console.error('Error logging expense:', error);
@@ -194,16 +197,26 @@ export default function ExpensesScreen() {
 
             <View style={styles.formGroup}>
               <ThemedText themeColor="onSurfaceVariant" style={styles.label}>Category</ThemedText>
-              <View style={styles.categoryChips}>
-                {CATEGORIES.map((cat) => (
-                  <Button
-                    key={cat}
-                    mode={category === cat ? 'contained' : 'outlined'}
-                    onPress={() => setCategory(cat)}
-                    style={styles.chip}
-                  >
-                    {cat}
-                  </Button>
+              <View style={{ gap: Spacing.three }}>
+                {CATEGORY_SECTIONS.map((section) => (
+                  <View key={section.label}>
+                    <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.sectionLabel}>
+                      {section.label}
+                    </ThemedText>
+                    <View style={styles.categoryChips}>
+                      {section.categories.map((cat) => (
+                        <Button
+                          key={cat}
+                          compact
+                          mode={category === cat ? 'contained' : 'outlined'}
+                          onPress={() => setCategory(cat)}
+                          style={styles.chip}
+                        >
+                          {cat}
+                        </Button>
+                      ))}
+                    </View>
+                  </View>
                 ))}
               </View>
             </View>
@@ -348,6 +361,7 @@ const styles = StyleSheet.create({
   card: { borderRadius: 16, padding: Spacing.four, marginHorizontal: Spacing.four },
   formGroup: { marginBottom: Spacing.four },
   label: { fontSize: 13, fontWeight: '600', marginBottom: Spacing.two, textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionLabel: { fontSize: 12, fontWeight: '600', marginBottom: Spacing.one },
   categoryChips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   chip: { borderRadius: Spacing.two },
   summary: {

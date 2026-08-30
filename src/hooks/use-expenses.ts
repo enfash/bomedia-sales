@@ -1,45 +1,32 @@
-import { dbService } from '@/services/db';
+import { fetchExpensesForMonth, type ExpenseRecord } from '@/services/expense-repository';
 import { useCallback, useEffect, useState } from 'react';
 
-export interface ExpenseRecord {
-  id: string;
-  amount: number;
-  category: string;
-  description: string;
-  loggedBy: string;
-  uid?: string;
-  createdAt: string;
-  dbPath?: string;
-}
+export type { ExpenseRecord };
 
+/**
+ * One month's expenses. Fetched once per `selectedMonth` — not realtime
+ * (out of scope for this port; see supabase/README.md). `refresh` re-runs
+ * the fetch for real now, typically wired to pull-to-refresh.
+ */
 export function useExpenses(selectedMonth: string) {
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshNonce, setRefreshNonce] = useState(0);
+
+  const load = useCallback(async () => {
+    try {
+      const records = await fetchExpensesForMonth(selectedMonth);
+      setExpenses(records);
+    } catch (err) {
+      console.warn('useExpenses: fetch failed:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedMonth]);
 
   useEffect(() => {
-    const unsubscribe = dbService.subscribe(`expenses/${selectedMonth}`, (data: any) => {
-      // Loading is set to false in the callback below
-      if (data) {
-        const recordsArray = Object.keys(data).map(key => ({
-          ...data[key],
-          id: key,
-          dbPath: `expenses/${selectedMonth}/${key}`
-        }));
-        
-        // Sort descending by date
-        recordsArray.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setExpenses(recordsArray);
-      } else {
-        setExpenses([]);
-      }
-      setLoading(false);
-    });
+    setLoading(true);
+    void load();
+  }, [load]);
 
-    return () => unsubscribe();
-  }, [selectedMonth, refreshNonce]);
-
-  const refresh = useCallback(() => setRefreshNonce((n) => n + 1), []);
-
-  return { expenses, loading, refresh };
+  return { expenses, loading, refresh: load };
 }

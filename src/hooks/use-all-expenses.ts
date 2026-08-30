@@ -1,37 +1,32 @@
-import { dbService } from '@/services/db';
+import { fetchAllExpenses, type ExpenseRecord } from '@/services/expense-repository';
 import { useEffect, useState } from 'react';
-import type { ExpenseRecord } from './use-expenses';
 
 /**
- * Subscribes to the entire `expenses` tree (all month buckets) and returns a
- * flat list of expense records. Where {@link useExpenses} scopes to a single
- * month for the Expenses screen, this feeds the analytics selectors that need
- * spend across many months (e.g. expenses vs revenue).
+ * Every expense, all months — feeds analytics selectors that need spend
+ * across time (e.g. expenses vs revenue). Where {@link useExpenses} scopes
+ * to a single month for the Expenses screen, this doesn't scope at all.
+ *
+ * Fetched once on mount, not realtime (out of scope for this port).
  */
 export function useAllExpenses() {
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = dbService.subscribe('expenses', (data: any) => {
-      if (data && typeof data === 'object') {
-        const flat: ExpenseRecord[] = [];
-        Object.keys(data).forEach((month) => {
-          const bucket = data[month];
-          if (bucket && typeof bucket === 'object') {
-            Object.keys(bucket).forEach((key) => {
-              flat.push({ ...bucket[key], id: key, dbPath: `expenses/${month}/${key}` });
-            });
-          }
-        });
-        setExpenses(flat);
-      } else {
-        setExpenses([]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const records = await fetchAllExpenses();
+        if (!cancelled) setExpenses(records);
+      } catch (err) {
+        console.warn('useAllExpenses: fetch failed:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return { expenses, loading };
