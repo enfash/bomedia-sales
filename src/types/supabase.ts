@@ -546,6 +546,7 @@ export type Database = {
           logged_by_name: string
           notes: string | null
           receipt_number: string
+          superseded_by_sale_id: string | null
           void_reason: string | null
           voided_at: string | null
           voided_by: string | null
@@ -562,6 +563,7 @@ export type Database = {
           logged_by_name: string
           notes?: string | null
           receipt_number: string
+          superseded_by_sale_id?: string | null
           void_reason?: string | null
           voided_at?: string | null
           voided_by?: string | null
@@ -578,6 +580,7 @@ export type Database = {
           logged_by_name?: string
           notes?: string | null
           receipt_number?: string
+          superseded_by_sale_id?: string | null
           void_reason?: string | null
           voided_at?: string | null
           voided_by?: string | null
@@ -596,6 +599,20 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_superseded_by_sale_id_fkey"
+            columns: ["superseded_by_sale_id"]
+            isOneToOne: false
+            referencedRelation: "sale_totals"
+            referencedColumns: ["sale_id"]
+          },
+          {
+            foreignKeyName: "sales_superseded_by_sale_id_fkey"
+            columns: ["superseded_by_sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
             referencedColumns: ["id"]
           },
         ]
@@ -726,6 +743,7 @@ export type Database = {
           logged_by_name: string
           notes: string | null
           receipt_number: string
+          superseded_by_sale_id: string | null
           void_reason: string | null
           voided_at: string | null
           voided_by: string | null

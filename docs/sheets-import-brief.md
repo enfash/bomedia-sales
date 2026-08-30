@@ -1,12 +1,64 @@
 # Sheets → Postgres import brief
 
-The Google Sheets → Postgres historical import blocks cutover — see
-`supabase/README.md` → "Cutover plan (draft — not started)" for why it has
-to run and be verified *before* the Expo release ships, not after.
+**Decided: the middle path, not a full historical import, blocks cutover.**
+Firebase dev data is fully discardable (confirmed) and Sheets/Next.js is the
+only real system of record, but importing full line-item history before
+cutover was rejected as the wrong trade — see `supabase/README.md` →
+"Cutover plan" for the comparison (what breaks per-screen without an import,
+what gets harder importing against a live database, and why the middle path
+wins). What actually precedes cutover now is much smaller: `clients` (via
+the frequency-vote dedup, unchanged from the full-import plan) plus one
+permanent **opening-balance sale per client**, carrying whatever they owed
+at the freeze moment — not their itemized history. The full line-item
+backfill is deferred, not blocking, and doesn't need to happen under time
+pressure.
 
-This document is the open questions and known facts for that import,
-written down so the next session starts from these instead of re-deriving
-them. **Questions and facts only — the import itself is not designed here.**
+**Decided: overpaid clients are clamped to zero, not modeled as credit.**
+If a client's computed balance at freeze is negative, no opening-balance
+sale is created for them — they come out of the computation as a separate
+list (client, credit amount) for manual settlement. No credit mechanism
+gets invented in the schema for what's expected to be a handful of rows.
+
+**Decided: imported rows attribute to a dedicated account, not a real
+person's.** `sales.logged_by`/`payment_batches.collected_by` need a real
+`auth.users` row regardless of what wrote the row — using the owner's own
+account would make "who created this" unable to distinguish an import from
+a human entry, permanently, in a financial record. Seeded into
+`allowed_users` as admin (local dev; needs the same insert against any
+hosted project before that import runs there too):
+
+```sql
+insert into allowed_users (email, role) values ('data-import@bomedia-sales.internal', 'admin');
+```
+
+`.internal` because this address must never be signed into — it isn't
+meant to resolve or receive mail, only to exist as an allowlist/`auth.users`
+row. **Not yet provisioned as a real `auth.users` row** — `allowed_users`
+alone doesn't create one (that only happens via GoTrue's own signup flow or
+the Admin API); this needs `supabase auth admin create-user` (or the
+hosted-project equivalent) run once, immediately before the import actually
+uses this account, not before.
+
+**Already migrated, ahead of need:** `sales.superseded_by_sale_id` and the
+`client_debt` amendment that excludes a superseded sale from both its billed
+and paid sums (`20260830180000_sales_superseded_by.sql`) — what lets the
+opening-balance sale stay permanent, never voided or rewritten, once the
+full backfill eventually attaches real historical sales to the same client.
+Live-verified: marking a sale superseded removes exactly its own billed and
+paid amounts from `client_debt`, nothing else; a self-referencing
+`superseded_by_sale_id` is rejected by its own CHECK constraint.
+
+**Still open, and stated explicitly as the owner's to answer, not
+assumed:** how long the Sheets freeze can last, before this gets designed
+further — question 1 below, now scoped to the smaller opening-balance
+computation rather than full reconstruction, which should make it easier to
+answer, not harder.
+
+This document is the open questions and known facts for whatever gets
+designed next — the opening-balance import now, the full backfill later —
+written down so a session picking this up starts from these instead of
+re-deriving them. **Questions and facts only — neither import is designed
+here.**
 
 ## Three questions to answer before designing the import
 

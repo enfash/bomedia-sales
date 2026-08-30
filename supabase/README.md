@@ -380,6 +380,19 @@ Reads and writes move together in one release, not incrementally — see the
 "hold everything until cutover" decision above. This is the plan for that
 release. It is a plan, not code; nothing here has been built.
 
+**Decided since this was first drafted: the import that precedes cutover is
+the middle path, not a full historical import.** Wherever "the Sheets
+import" appears below, it now means: `clients` (frequency-vote dedup,
+unchanged) plus one permanent opening-balance sale per client carrying
+their balance at freeze — not full line-item history. The freeze/verify
+structure and the "no dual-read" reasoning below still hold, just over a
+smaller computation. Full details, including why, in
+[`docs/sheets-import-brief.md`](../docs/sheets-import-brief.md) — start
+there. The full line-item backfill is deferred and no longer blocks
+cutover; `sales.superseded_by_sale_id` (migrated already) is what lets it
+attach real historical sales to a client without double-counting against
+that client's opening-balance sale, whenever it eventually runs.
+
 ### Three systems, not two
 
 The earlier draft of this plan assumed Firebase held a small amount of real
