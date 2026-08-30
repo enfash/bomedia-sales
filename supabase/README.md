@@ -374,6 +374,88 @@ have, and the existence-check/journal/replay chain is backend-agnostic by
 construction (`reconcile()`/`replayMissing()` take an injected check/send,
 neither cares which backend answers).
 
+## Hosted project setup
+
+Everything built and tested this whole session has been against
+`127.0.0.1:54321` — `npx supabase start`'s local instance. Nothing has ever
+run against a real, hosted Supabase project. This is what that takes.
+
+1. **Account-level — only the project owner can do this.** Create a
+   Supabase organization/project at supabase.com (region, DB password).
+   Note the project ref it gives you.
+2. `supabase login` (authenticates the CLI), then from this repo:
+   `supabase link --project-ref <ref>`.
+3. `supabase db push` — replays every migration in this repo, in order,
+   against the hosted project. This is the actual first deployment of the
+   schema: enums, tables, RLS, triggers, views, the allowlist (including
+   the `elijahfasugba@gmail.com` admin seed baked into
+   `20260829150000_allowed_users.sql`), `create_sale`/`record_payment`,
+   `sales.superseded_by_sale_id` — all of it, in the same order it applied
+   locally.
+4. **Google OAuth, hosted-specific.** Register the hosted callback URL —
+   `https://<ref>.supabase.co/auth/v1/callback` — in Google Cloud Console.
+   This is a different URL from local dev's (see "Google sign-in redirect
+   URLs" above). Decide whether to reuse the same OAuth client or create a
+   dedicated one for production; either way, the redirect URI has to be
+   added before Google sign-in will work against this project at all.
+5. **Auth settings, via the Dashboard — `supabase/config.toml` only
+   governs local dev, it is not pushed to a hosted project.** Mirror
+   `[auth]`'s settings by hand under Authentication → Providers / Settings:
+   the redirect URLs (Authentication → URL Configuration), `jwt_expiry`
+   (3600s, matching local), and — separately, deliberately called out below
+   because getting this one backwards silently locks everyone out —
+   **"Allow new users to sign up" must be ON.**
+
+   **This is not the same lever as `allowed_users`, and turning it off does
+   not harden anything — it disables sign-in for everyone, including the
+   owner.** The mechanism, traced precisely, not asserted:
+
+   A Google sign-in hits GoTrue's `/callback` endpoint first — an
+   application server, not Postgres. GoTrue exchanges the code with Google,
+   gets the verified email, and checks whether an identity for it already
+   exists. For a first-time sign-in, GoTrue is about to create a new
+   `auth.users` row — and **before it does, GoTrue's own application code
+   checks this toggle.** If signups are disabled, GoTrue returns
+   `signup_disabled` to the client right there, in its own Go code, **and
+   never emits the `INSERT INTO auth.users` at all.**
+
+   `reject_unlisted_signup` (`20260829150000_allowed_users.sql`) — the
+   trigger that actually enforces the allowlist — is a Postgres
+   `BEFORE INSERT` trigger. A trigger can only fire on an `INSERT`
+   statement that reaches Postgres. With signups disabled, step above never
+   sends one, so there is no insert for the trigger to intercept — it does
+   not run, for anyone, allowlisted or not. This is not the trigger losing
+   a race to the toggle; the toggle is enforced one layer up, before the
+   database is consulted at all. `allowed_users` membership is irrelevant
+   to a request that already failed before it got there.
+
+   **This was observed live, not inferred:** with this setting off locally,
+   the owner's own first sign-in — an allowlisted email, via Google — came
+   back `signup_disabled` from Google's own callback, not from Postgres.
+   Direct evidence the rejection happens before the trigger, not instead of
+   letting it succeed.
+
+   The allowlist trigger is the real enforcement. This toggle has to stay
+   on for the trigger to ever get a chance to run at all.
+6. `supabase functions deploy mint-firebase-token --project-ref <ref>`,
+   then `supabase secrets set --project-ref <ref>
+   FIREBASE_SERVICE_ACCOUNT_JSON=...` — the Firebase Auth bridge needs
+   both on the hosted project, same as local (see "Firebase Auth bridge"
+   above).
+7. Seed the data-import account into the hosted `allowed_users` — not part
+   of any migration, has to be a separate insert per environment (see
+   `docs/sheets-import-brief.md`):
+   ```sql
+   insert into allowed_users (email, role) values ('data-import@bomedia-sales.internal', 'admin');
+   ```
+8. Point the app at the hosted project: swap `EXPO_PUBLIC_SUPABASE_URL`/
+   `EXPO_PUBLIC_SUPABASE_ANON_KEY` in `.env.local` from the local values to
+   the hosted ones — `.env.example` is already the template for this swap.
+9. Run the real-device verification this repo already has a culture of
+   (`docs/GATE_CHECKLIST.md`'s standard — real transactions, not static
+   checks) against the hosted project specifically, not just local, before
+   trusting it with anything real.
+
 ## Cutover plan (draft — not started)
 
 Reads and writes move together in one release, not incrementally — see the
@@ -492,18 +574,51 @@ Two orders are possible. Only one is safe:
    (pick a low-traffic moment).
 4. Run the delta import to catch anything written since step 1.
 5. Verify the delta.
-6. Ship the release: swap every read call site (`useRecords` or its
-   equivalent, board/index/analytics screens) from `sales-repository.ts` to
-   `sales-repository-pg.ts`; swap `createBatch`/standalone
+6. **Ship the release.** This is a build step, not a swap — slice 4/5 proved
+   the pattern (one read, one write, replay-safe), not parity. Diffing every
+   export of `sales-repository.ts`/`payment-repository.ts` (Firebase)
+   against their `-pg` counterparts, nine functions their real callers
+   depend on do not exist yet:
+
+   | Missing | Caller | Shape |
+   |---|---|---|
+   | List-fetch replacing `subscribeToBatches` | `records.tsx`/`.web.tsx`, `board.tsx`, `use-records.ts` | Realtime is out of scope (standing decision) — one-shot fetch, pull-to-refresh/refetch-on-focus, same pattern as activity/expenses. |
+   | `fetchBatchesByReceiptIds` | `invoice.tsx` | Multi-receipt invoice read. |
+   | `updateProductionStage` | `board.tsx` (drag-drop) | Thin single-row update — the job-status transition trigger already permits it. |
+   | `updateBatchDetails` | `invoice.tsx` (notes/due-date) | Thin single-row update. |
+   | `voidBatch` | `transaction/[id].tsx` | Thin update — `sales_void_returns_stock` trigger already handles the inventory side. |
+   | `markBatchesPaid` | bulk mark-paid (confirm still wired to a screen) | **Not thin. Build a dedicated bulk RPC, one transaction across every selected sale — decided, not deferred.** Firebase's version is one atomic multi-path update; looping client-side calls to `record_payment` gives up that atomicity, and a partial result (some sales marked paid, some not, no record of which one failed or why) is exactly the failure class this whole port exists to prevent — same reasoning as bundling `create_sale`'s opening payment rather than splitting it into two calls. Not designed here (still "don't start"), but its atomicity requirement is settled: whole-batch success or whole-batch rollback, no partial-success-with-reporting. |
+   | One-shot replacing `subscribeToPaymentsForDay` | `cash.tsx` | Same realtime-to-one-shot conversion. |
+   | One-shot replacing `subscribeToPaymentsInRange` | `ledger-integrity-banner.tsx` | Same. |
+   | `recalculateTotalPaid` | — | Likely **obsolete, not missing** — `sale_totals`/`client_debt` compute this live from SQL. Confirm before porting it, don't port it by default. |
+
+   Also in this step: **client resolution**, decided as resolve-at-submit
+   (not search-as-you-type) — the dedup pressure search-as-you-type would
+   add is weaker now that `clients` gets seeded from the Sheets frequency
+   vote before cutover (see `docs/sheets-import-brief.md`), so the
+   near-duplicates that matter already exist by the time anyone types a
+   name at the counter. Revisit only if staff start creating variants in
+   practice. Look up by `clients.name_key`'s own normalization (not
+   `client-identity.ts`'s `normalizeClientName` — a different, incompatible
+   scheme), `insert ... on conflict (name_key) do nothing`, re-select on
+   conflict, same landed-vs-replay shape as `create_sale`/`record_payment`.
+
+   Also: `quote-repository.ts` imports `createBatch`/`generateReceiptId`
+   from the Firebase `sales-repository.ts` for its quote→sale conversion.
+   Quotes themselves stay on Firebase permanently (standing decision), but
+   converting a quote into a real sale should create that sale wherever
+   sales now live — this needs repointing to `createSale` too, even though
+   nothing else about quotes changes.
+
+   Once the above exist: swap every read call site from `sales-repository.ts`
+   to `sales-repository-pg.ts`; swap `createBatch`/standalone
    `recordPayment`/`reversePayment` call sites to the `-pg` equivalents;
    collapse `OutboxOp` to the Postgres-only variants (drop `'update'`/`'set'`,
    drop `IncrementMarker`/`encodeIncrement`, per the comment already left in
    `outbox.ts` marking this as temporary); wire the existence-check
    dispatcher in `reconcile-pending.ts` to `checkExistsOnServerPg`; update
    any `.dbPath`-keyed call site to use `.id` (flagged since slice 4's
-   `normalizeSale`). Quotes are untouched — `quote-repository.ts` stays on
-   Firebase, out of scope for this or any slice, per the earlier decision to
-   drop that slice entirely.
+   `normalizeSale`).
 7. **Verify the Firebase Auth bridge is GONE, as a checklist item, not an
    assumption.** Once every RTDB-dependent write/read above is off Firebase,
    the bridge has nothing left to bridge. Confirm all of: `mint-firebase-token`

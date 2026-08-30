@@ -1,17 +1,43 @@
 # Sheets → Postgres import brief
 
-**Decided: the middle path, not a full historical import, blocks cutover.**
-Firebase dev data is fully discardable (confirmed) and Sheets/Next.js is the
-only real system of record, but importing full line-item history before
-cutover was rejected as the wrong trade — see `supabase/README.md` →
-"Cutover plan" for the comparison (what breaks per-screen without an import,
-what gets harder importing against a live database, and why the middle path
-wins). What actually precedes cutover now is much smaller: `clients` (via
-the frequency-vote dedup, unchanged from the full-import plan) plus one
-permanent **opening-balance sale per client**, carrying whatever they owed
-at the freeze moment — not their itemized history. The full line-item
-backfill is deferred, not blocking, and doesn't need to happen under time
-pressure.
+**Decided: opening balances are entered manually, not scripted.** No import
+job runs before cutover at all. The owner reads each client's outstanding
+balance off the Sheet and enters it by hand — through whatever the app or
+Supabase Studio offers for creating a sale, once the cutover slice exists.
+This replaces the "middle-path import" plan below with something smaller;
+the reasoning that led here (why *some* pre-cutover balance step is needed
+at all, and why full line-item history isn't) still holds — see
+`supabase/README.md` → "Cutover plan" for that comparison — only the
+mechanism changed, from a script to manual entry.
+
+Two things carry over unchanged from the scripted version of this plan:
+
+1. **Client dedup still runs first, and it's still a real (small) import,
+   not manual.** Seed `clients` from the Sheets data using the
+   frequency-vote spelling — *before* cutover, before anyone types a name
+   at the counter. `clients.name_key` is unique and first-insert-wins is
+   permanent (see `20260829120200_tables.sql`'s own comment on that column)
+   — whichever spelling exists first is what every later sale matches
+   against, forever. This is the one piece of "the import" that still has
+   to be a deliberate, ordered step, not something manual entry can
+   substitute for.
+2. **Opening-balance sales still use `sales.superseded_by_sale_id`'s
+   design** (migrated in `20260830180000_sales_superseded_by.sql`) — a
+   manually-entered opening-balance sale is exactly as permanent as a
+   scripted one would have been, and the deferred full line-item backfill
+   still needs the same "attach real history without double-counting"
+   mechanism whenever it eventually runs. Manual entry doesn't change what
+   gets built into a sale, only who/what creates the row.
+
+**Decided: verification is one number, not a query suite.** After balances
+are entered, compare the app's total outstanding (sum of `client_debt` across
+all clients) against the Sheet's own total outstanding. One comparison, not
+the four-query suite question 2 below originally called for — that fuller
+suite (total billed, total collected, per-client balance, batch-allocation
+sums) still matters for the *deferred full backfill*, which is scripted and
+needs that level of proof; manual entry of a single number per client
+doesn't have the same failure surface a script does, so it doesn't need the
+same verification weight.
 
 **Decided: overpaid clients are clamped to zero, not modeled as credit.**
 If a client's computed balance at freeze is negative, no opening-balance
@@ -48,41 +74,52 @@ Live-verified: marking a sale superseded removes exactly its own billed and
 paid amounts from `client_debt`, nothing else; a self-referencing
 `superseded_by_sale_id` is rejected by its own CHECK constraint.
 
-**Still open, and stated explicitly as the owner's to answer, not
-assumed:** how long the Sheets freeze can last, before this gets designed
-further — question 1 below, now scoped to the smaller opening-balance
-computation rather than full reconstruction, which should make it easier to
-answer, not harder.
+**Resolved by going manual, not answered directly:** the original freeze-
+duration question ("how long can Sheets writes be paused for a batch job")
+mostly stops applying — there's no batch job with a runtime to bound.
+Manual entry still needs a moment where each client's balance is read as
+"true as of now," and there's still a gap between that moment and the
+cutover slice actually going live during which a new Sheets/Next.js sale
+could change that client's real balance before Postgres has it — but that's
+a much smaller, more forgiving timing question than the original one, and
+still the owner's to answer operationally (re-check a balance that moved,
+or accept the small drift and true it up at the one-number verification
+step) rather than something to design around in code.
 
-This document is the open questions and known facts for whatever gets
-designed next — the opening-balance import now, the full backfill later —
+This document is the open facts and remaining decisions for what's left —
+client dedup, and whatever the deferred full backfill eventually needs —
 written down so a session picking this up starts from these instead of
-re-deriving them. **Questions and facts only — neither import is designed
-here.**
+re-deriving them. **Facts and open items only — neither the dedup step nor
+the eventual full backfill is designed here.**
 
-## Three questions to answer before designing the import
+## What's left to decide
 
-1. **How long can the Sheets freeze last?** Between freezing writes and the
-   Expo release going live, the business cannot record a sale. A couple of
-   hours means a single import on a Sunday. Longer means a delta pass at
-   cutover instead. This decides the import's shape.
+1. **Client dedup — needs an owner, a run, and a check, even though it's
+   small.** Who runs the frequency-vote pass (a one-off script reading
+   Sheets, writing `clients`), and when relative to the cutover slice
+   landing — it has to be before anyone can create a live sale through the
+   app, since the very first counter-typed name after cutover starts
+   claiming spellings otherwise. Not designed here; flagged so it isn't
+   forgotten now that it's the only real "import" left.
 
-2. **What does "verified" mean, as concrete SQL?** Not "rows loaded."
-   Define the queries that must match across both systems before cutover:
-   - total billed, all time
-   - total collected, all time
-   - outstanding balance per client
-   - every payment batch's allocations summing to its `BATCH TOTAL`
+2. **The one-number verification, made concrete.** "App's total outstanding
+   vs. the Sheet's total outstanding" needs an actual query on the Postgres
+   side once `client_debt` has real rows in it — `select sum(balance) from
+   client_debt` is the shape, but confirm it against the real view once
+   opening balances exist, not assumed now.
 
-   Write these as actual queries against the Postgres schema, plus the
-   equivalent Sheets aggregation to diff against.
-
-3. **What happens to rows that will not import cleanly?** Options: clean in
-   Sheets first, transform during import, or land in a quarantine table for
-   manual review. Silently dropping them makes the verification totals
-   wrong.
+3. **What happens to a client on the Sheet with no clean name to dedupe**
+   (a "Test" client, a malformed row) **when it's time to enter their
+   balance.** Smaller version of the old question 3 — still worth a decided
+   answer (skip, clean by hand first, flag for review) before manual entry
+   starts, so it isn't decided ad hoc per row.
 
 ## Known source-data facts (from the live Sheets system)
+
+Kept for whoever runs client dedup and, later, the deferred full backfill —
+most of these (dimensions, `TRANSACTION ID`, batch reconstruction) only
+matter to that later, still-scripted backfill now that opening balances are
+manual. The client-identity bullet matters now.
 
 - Roughly 4,500 sales rows and 900 payment rows, growing ~100 sales/week.
 - Sales tab has 27 columns. Dimensions live in an 8-slot layout
