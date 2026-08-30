@@ -10,6 +10,21 @@
  */
 process.env.TZ = 'Africa/Lagos';
 
+/**
+ * `@/lib/auth.native.ts` throws at module-load time if these are unset — a
+ * real guard for the app, but it also means any test that transitively
+ * imports it (via services/db.ts, outbox-send.ts, and everything built on
+ * those) fails at import, not at an assertion, in an environment with no
+ * `.env.local` — which is exactly what a fresh CI checkout is. Nothing under
+ * test talks to a real Supabase project regardless (every test that reaches
+ * this far mocks `@/lib/auth` or `@/services/db` — see create-batch.test.ts
+ * and friends), so a placeholder that merely satisfies the "are these set"
+ * check is enough. `||=` so a real exported value (local dev after
+ * `supabase start`) still wins.
+ */
+process.env.EXPO_PUBLIC_SUPABASE_URL ||= 'http://127.0.0.1:54321';
+process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||= 'test-placeholder-anon-key';
+
 // Jest REPLACES preset keys rather than merging them. Declaring
 // `moduleNameMapper` below without this would drop the preset's own mappings —
 // notably `^react-native($|/.*)`, without which react-native resolves to source
