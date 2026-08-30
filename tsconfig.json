@@ -23,5 +23,12 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
+  ],
+  // Deno Edge Functions — a separate runtime with its own globals (Deno.*)
+  // and npm:/jsr: specifiers this project's Node/RN tsconfig can't resolve.
+  // Typechecked separately, by Deno itself (`supabase functions serve` and
+  // the hosted deploy both do this on their own).
+  "exclude": [
+    "supabase/functions/**"
   ]
 }

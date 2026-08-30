@@ -160,6 +160,16 @@ shortens this — only a shorter `jwt_expiry` project-wide narrows the window
 for everyone, at the cost of more frequent refreshes for every active
 session.
 
+**One more step while the Firebase RTDB bridge exists (see "Firebase Auth
+bridge" below): also delete `users/{their-supabase-uid}` from the Firebase
+Realtime Database, by hand, via the Firebase console or REST.** The steps
+above fully revoke Supabase/Postgres access, but `mint-firebase-token`
+mirrors a role into that RTDB node on sign-in, and nothing here deletes it
+on revocation — see the bridge function's own comment for exactly why. Until
+that node is gone, a Firebase Auth session they already hold keeps
+satisfying RTDB's `role` check on every write, even after steps 1–3 above.
+This step goes away entirely once the db.ts cutover retires RTDB.
+
 ## Closed signup — enforced by a trigger, NOT the dashboard toggle
 
 `[auth] enable_signup` — both in `supabase/config.toml` and, on the
@@ -179,6 +189,82 @@ trigger on `auth.users`, which fires after GoTrue's own gate has already let
 the attempt through — see the comment on it for why it has to be `BEFORE`
 specifically (that's what guarantees no orphaned `profiles` row for a
 rejected email).
+
+## Firebase Auth bridge — a live regression, fixed, temporary
+
+**What broke.** After the auth port, nothing signs into Firebase Auth
+anymore — the app signs into Supabase Auth only. But `sales`, `quotes`,
+`payments` and `waste_log` still live on Firebase RTDB, and
+`database.rules.json`'s rules for all of them gate on `auth != null` plus a
+`root.child('users').child(auth.uid).child('role')` lookup, where `auth`
+means a *Firebase* Auth session specifically. With no Firebase Auth session
+ever established, every write to any of those paths — recording a sale,
+taking a payment, voiding, touching a quote — failed `PERMISSION_DENIED`.
+This was a real gap in the auth port that surfaced live, not a design
+choice: reported in "What Firebase Auth provided that Supabase Auth does
+not" below, that section only covered client-side conveniences and missed
+that RTDB's own rules needed a Firebase session too.
+
+**The fix.** `supabase/functions/mint-firebase-token` — an Edge Function
+that, given a valid Supabase session, verifies it, looks up the caller's
+role from `profiles`, mirrors that role into RTDB's `users/{uid}` node via
+the Firebase Admin SDK (bypassing RTDB rules — the one privileged step),
+and mints a Firebase custom token for that same uid. `src/lib/firebase-bridge.ts`
+calls it from `auth-context.tsx` whenever a Supabase session appears or
+refreshes, then signs into Firebase Auth with the result — invisibly, no
+second consent screen, no second sign-in the user sees. Because the custom
+token's uid is set equal to the Supabase uid, `auth.uid` in RTDB rules now
+matches `actor.uid` everywhere the app already writes it (e.g.
+`sales/.../loggedByUid`), which a naive "just sign into Firebase again"
+fix would not have — Firebase's own uid for the same Google account is a
+different string. See the function's own comment for the full design and
+the revocation caveat (also written into "Offboarding" above).
+
+**Required manual step — nothing above works until this exists.** The
+function needs the target Firebase project's service-account credentials,
+as the `FIREBASE_SERVICE_ACCOUNT_JSON` secret. Generate this once yourself
+— Firebase Console → Project Settings → Service Accounts → Generate new
+private key — then set it directly as a secret, so the key itself never
+passes through a chat or a shell that isn't yours:
+
+```bash
+# Local dev — supabase/functions/.env (gitignored, same pattern as
+# supabase/.env for the Google OAuth credentials):
+echo "FIREBASE_SERVICE_ACCOUNT_JSON='$(cat path/to/serviceAccountKey.json)'" \
+  >> supabase/functions/.env
+
+# Hosted:
+supabase secrets set --project-ref <ref> \
+  FIREBASE_SERVICE_ACCOUNT_JSON="$(cat path/to/serviceAccountKey.json)"
+```
+
+Restart (`npx supabase stop && npx supabase start`) after adding the local
+`.env` file — same reason as the Google OAuth credentials: not picked up by
+a running instance.
+
+**This is temporary, on purpose.** It exists only because RTDB writes are
+still live. Retire the Edge Function, `src/lib/firebase-bridge.ts`, the
+`auth-context.tsx` calls into it, and RTDB's auth-gated rules together, at
+the db.ts cutover (see "Cutover plan" below) — none of this has anything to
+add once every write that needs it has moved to Postgres/RLS.
+
+**Second-order bug the bridge itself exposed: live RTDB listeners lost the
+race and never recovered.** `bridgeFirebaseAuth()` is fire-and-forget by
+design — it must not block sign-in. But a component that calls `onValue`
+unconditionally on mount (`settings-context.tsx` did; `dbService.subscribe`/
+`subscribeQuery`/`subscribeToKeyRange` all did the same thing internally)
+can attach its listener before the bridge finishes, get denied once, and —
+this is the non-obvious part — **stay denied for the rest of the session**.
+The RTDB JS SDK cancels a listener on `PERMISSION_DENIED`; it does not
+retry it when auth changes later. Fixed by `whenFirebaseAuthed()` in
+`src/lib/firebase.ts`: every RTDB subscription in `dbService`, and
+`settings-context.tsx`'s own, now waits for a live Firebase Auth session
+via `onAuthStateChanged` before attaching, and re-attaches if that session
+drops and comes back (`.info/connected`, which needs no auth, is
+deliberately NOT wrapped in this). One-shot reads/writes (`getRecord`,
+`setRecord`, `createBatch`, …) never had this problem — a call that loses
+the race just fails once and succeeds on the next attempt, same as before
+the bridge existed.
 
 ## Known follow-ups — db.ts port
 
@@ -441,7 +527,12 @@ different answers:
 ## What Firebase Auth provided that Supabase Auth does not
 
 Ported for parity with the Firebase version this replaces, or worth knowing
-about if something feels missing:
+about if something feels missing. **This list was wrong by omission when
+first written** — it covered client-side conveniences only, and missed that
+Firebase RTDB's own security rules require a live Firebase Auth session,
+independent of anything Supabase-side. That gap broke every RTDB write live
+before it was caught; see "Firebase Auth bridge" above for what it was and
+the fix.
 
 - **A synchronous "who's signed in right now" accessor.** Firebase's
   `auth.currentUser` is available synchronously, reflecting the SDK's cached

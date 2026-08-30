@@ -1,4 +1,5 @@
 import { applyPersistence, signInWithGoogle as platformSignInWithGoogle, supabase } from '@/lib/auth';
+import { bridgeFirebaseAuth, unbridgeFirebaseAuth } from '@/lib/firebase-bridge';
 import {
   clearSessionKeys,
   getKeepSignedIn,
@@ -147,10 +148,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         setUser(appUser);
         setInitializing(false);
+        // Fire-and-forget: RTDB writes are still on Firebase, and its rules
+        // need a Firebase Auth session that nothing else establishes anymore
+        // — see @/lib/firebase-bridge. Never awaited here; it must not slow
+        // down sign-in, and a failure surfaces later as its own error.
+        if (appUser) void bridgeFirebaseAuth();
+        else void unbridgeFirebaseAuth();
         return;
       }
       // Runtime changes after startup (sign in / sign out / token refresh).
       setUser(appUser);
+      if (appUser) void bridgeFirebaseAuth();
+      else void unbridgeFirebaseAuth();
     });
 
     return () => subscription.subscription.unsubscribe();

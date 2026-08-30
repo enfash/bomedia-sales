@@ -1,21 +1,20 @@
-import { DATABASE_URL, app, db } from '@/lib/firebase';
+import { DATABASE_URL, auth, db, whenFirebaseAuthed } from '@/lib/firebase';
 import { checkExistsOnServer } from '@/services/existence-check';
 import { endAt, get, increment, onValue, orderByChild, orderByKey, push, query, ref, remove, set, startAt, update } from 'firebase/database';
-import { getAuth } from 'firebase/auth';
 
 /**
  * `@/lib/auth` now holds the Supabase Auth client (see the auth-context
  * port), not Firebase's — this file is unaffected by that on purpose, since
  * nothing else here changed: RTDB access still runs under Firebase's own
- * rules, unrelated to who is signed into Supabase. Getting the Auth instance
- * straight from `app` keeps that dependency explicit and self-contained
- * rather than reaching back into a module that no longer means this.
+ * rules, unrelated to who is signed into Supabase.
  *
- * In practice `auth.currentUser` is now always null — nothing signs into
- * Firebase Auth anymore, so `existsOnServer` below always falls back to an
- * unauthenticated request until the RTDB layer itself is ported to Supabase.
+ * `auth.currentUser` IS populated again as of the mint-firebase-token bridge
+ * (see auth-context.tsx and supabase/functions/mint-firebase-token) — a
+ * Firebase Auth session gets silently established alongside the Supabase
+ * one specifically so RTDB rules keep resolving. Without that bridge this
+ * would always be null and `existsOnServer` below would always run
+ * unauthenticated.
  */
-const auth = getAuth(app);
 
 /**
  * Firebase Realtime Database Service Wrapper
@@ -131,8 +130,13 @@ export const dbService = {
     endKey: string,
     callback: (data: T | null) => void,
   ) {
-    const q = query(ref(db, path), orderByKey(), startAt(startKey), endAt(endKey));
-    return onValue(q, (snapshot) => callback(snapshot.exists() ? (snapshot.val() as T) : null));
+    // Waits for the mint-firebase-token bridge, not just fires and hopes —
+    // see whenFirebaseAuthed's comment for why attaching before that
+    // resolves means a permanently cancelled listener, not a retried one.
+    return whenFirebaseAuthed(() => {
+      const q = query(ref(db, path), orderByKey(), startAt(startKey), endAt(endKey));
+      return onValue(q, (snapshot) => callback(snapshot.exists() ? (snapshot.val() as T) : null));
+    });
   },
 
   /**
@@ -175,10 +179,15 @@ export const dbService = {
     return onValue(ref(db, '.info/connected'), (snapshot) => callback(snapshot.val() === true));
   },
 
+  // Same reasoning as subscribeToKeyRange above — wait for the
+  // mint-firebase-token bridge, or a listener attached during the startup
+  // race is cancelled by PERMISSION_DENIED and never retried.
   subscribe<T>(path: string, callback: (data: T | null) => void) {
-    const dbRef = ref(db, path);
-    return onValue(dbRef, (snapshot) => {
-      callback(snapshot.exists() ? snapshot.val() as T : null);
+    return whenFirebaseAuthed(() => {
+      const dbRef = ref(db, path);
+      return onValue(dbRef, (snapshot) => {
+        callback(snapshot.exists() ? snapshot.val() as T : null);
+      });
     });
   },
 
@@ -187,9 +196,11 @@ export const dbService = {
    * @returns Unsubscribe function
    */
   subscribeQuery<T>(path: string, orderChild: string, callback: (data: T | null) => void) {
-    const q = query(ref(db, path), orderByChild(orderChild));
-    return onValue(q, (snapshot) => {
-      callback(snapshot.exists() ? snapshot.val() as T : null);
+    return whenFirebaseAuthed(() => {
+      const q = query(ref(db, path), orderByChild(orderChild));
+      return onValue(q, (snapshot) => {
+        callback(snapshot.exists() ? snapshot.val() as T : null);
+      });
     });
   }
 };

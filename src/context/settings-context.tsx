@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { db } from '@/lib/firebase';
+import { db, whenFirebaseAuthed } from '@/lib/firebase';
 import { ref, onValue, set, get } from 'firebase/database';
 
 export interface MaterialItem {
@@ -133,42 +133,52 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const settingsRef = ref(db, 'settings');
-    
-    // Listen for real-time updates from Firebase
-    const unsubscribe = onValue(settingsRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const nestedData = snapshot.val();
-        const flatData = flattenSettings(nestedData);
-        
-        // Backward compatibility migration for materials
-        if (flatData.materials && flatData.materials.length > 0 && typeof flatData.materials[0] === 'string') {
-          flatData.materials = flatData.materials.map((m: any, i: number) => ({
-            id: `migrated-m-${i}-${Date.now()}`,
-            name: m as string,
-            price: 0
-          }));
-        }
 
-        // Backward compatibility migration for printers
-        if (flatData.printers && flatData.printers.length > 0 && typeof flatData.printers[0] === 'string') {
-          flatData.printers = flatData.printers.map((p: any, i: number) => ({
-            id: `migrated-p-${i}-${Date.now()}`,
-            name: p as string
-          }));
-        }
+    // Waits for the mint-firebase-token bridge (see @/lib/firebase's
+    // whenFirebaseAuthed) rather than attaching immediately on mount — RTDB
+    // rules require a Firebase Auth session, and a listener attached before
+    // that bridge finishes is cancelled by PERMISSION_DENIED permanently,
+    // not retried, which is what silenced this screen's data before.
+    const unsubscribe = whenFirebaseAuthed(() =>
+      onValue(
+        settingsRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const nestedData = snapshot.val();
+            const flatData = flattenSettings(nestedData);
 
-        setSettings(flatData);
-      } else {
-        // First run or empty database, initialize with defaults
-        const nestedDefaults = nestSettings(DEFAULT_SETTINGS);
-        set(settingsRef, nestedDefaults).catch(console.error);
-        setSettings(DEFAULT_SETTINGS);
-      }
-      setIsLoading(false);
-    }, (error) => {
-      console.error('Failed to load settings from Firebase:', error);
-      setIsLoading(false);
-    });
+            // Backward compatibility migration for materials
+            if (flatData.materials && flatData.materials.length > 0 && typeof flatData.materials[0] === 'string') {
+              flatData.materials = flatData.materials.map((m: any, i: number) => ({
+                id: `migrated-m-${i}-${Date.now()}`,
+                name: m as string,
+                price: 0
+              }));
+            }
+
+            // Backward compatibility migration for printers
+            if (flatData.printers && flatData.printers.length > 0 && typeof flatData.printers[0] === 'string') {
+              flatData.printers = flatData.printers.map((p: any, i: number) => ({
+                id: `migrated-p-${i}-${Date.now()}`,
+                name: p as string
+              }));
+            }
+
+            setSettings(flatData);
+          } else {
+            // First run or empty database, initialize with defaults
+            const nestedDefaults = nestSettings(DEFAULT_SETTINGS);
+            set(settingsRef, nestedDefaults).catch(console.error);
+            setSettings(DEFAULT_SETTINGS);
+          }
+          setIsLoading(false);
+        },
+        (error) => {
+          console.error('Failed to load settings from Firebase:', error);
+          setIsLoading(false);
+        },
+      ),
+    );
 
     return () => unsubscribe();
   }, []);
