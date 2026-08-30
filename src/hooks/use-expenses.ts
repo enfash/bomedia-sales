@@ -24,8 +24,14 @@ export function useExpenses(selectedMonth: string) {
   }, [selectedMonth]);
 
   useEffect(() => {
-    setLoading(true);
-    void load();
+    let cancelled = false;
+    (async () => {
+      if (!cancelled) setLoading(true);
+      await load();
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [load]);
 
   return { expenses, loading, refresh: load };

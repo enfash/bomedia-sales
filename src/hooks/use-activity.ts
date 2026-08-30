@@ -88,12 +88,18 @@ export function useActivity() {
   // always empty and settled, matching what the realtime subscription used
   // to do for them (a no-op, since RLS gave them nothing to read).
   useEffect(() => {
-    if (!isAdmin) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    void load();
+    let cancelled = false;
+    (async () => {
+      if (!isAdmin) {
+        if (!cancelled) setLoading(false);
+        return;
+      }
+      if (!cancelled) setLoading(true);
+      await load();
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [isAdmin, load]);
 
   const entries = isAdmin ? rawEntries : [];
