@@ -1,5 +1,4 @@
-import { applyPersistence, auth } from '@/lib/auth';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { applyPersistence, signInWithGoogle as platformSignInWithGoogle, supabase } from '@/lib/auth';
 import {
   clearSessionKeys,
   getKeepSignedIn,
@@ -9,13 +8,8 @@ import {
   setLastActiveAt,
 } from '@/lib/session';
 import { actorFrom, type ActivityActor } from '@/services/activity';
-import { dbService } from '@/services/db';
-import {
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  type User,
-} from 'firebase/auth';
+import type { Session } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 
@@ -25,15 +19,40 @@ import { AppState, Platform } from 'react-native';
  */
 const ROLE_CACHE_PREFIX = 'bomedia:role:';
 
-/** App role. New users self-register as `staff`; the owner promotes to `admin`. */
+/** App role. Set by the owner via allowed_users before a person ever signs in — see supabase/README.md. */
 export type Role = 'admin' | 'staff';
 
+/**
+ * Minimal, auth-provider-agnostic user shape — deliberately field-for-field
+ * identical to the Firebase `User` this replaces (`uid`, `email`,
+ * `displayName`), so nothing outside this file and lib/auth.ts had to change:
+ * actorFrom (services/activity.ts) and the few other direct `.uid` readers
+ * (pending-writes-context.tsx, use-activity.ts) all still typecheck against
+ * this unchanged.
+ */
+export interface AppUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+}
+
+function toAppUser(session: Session | null): AppUser | null {
+  if (!session?.user) return null;
+  const meta = session.user.user_metadata as Record<string, unknown> | undefined;
+  const displayName = (meta?.full_name ?? meta?.name ?? null) as string | null;
+  return {
+    uid: session.user.id,
+    email: session.user.email ?? null,
+    displayName,
+  };
+}
+
 interface AuthContextValue {
-  /** The signed-in Firebase user, or null when signed out. */
-  user: User | null;
+  /** The signed-in user, or null when signed out. */
+  user: AppUser | null;
   /** The user's role, or null while it loads / when signed out. */
   role: Role | null;
-  /** `users/{uid}.name` — the source of truth for how this person is named. */
+  /** `profiles.name` — the source of truth for how this person is named. */
   profileName: string | null;
   /**
    * Who to attribute work to. Built once here so no caller can assemble a
@@ -48,27 +67,33 @@ interface AuthContextValue {
   /** True when the last sign-out was an automatic 48h-idle expiry (calm notice). */
   sessionExpired: boolean;
   clearSessionExpired: () => void;
-  signIn: (email: string, password: string, keepSignedIn: boolean) => Promise<void>;
+  signInWithGoogle: (keepSignedIn: boolean) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 /**
- * Owns Firebase Auth + session lifetime for the whole app.
+ * Owns Supabase Auth + session lifetime for the whole app.
  *
  * Session model:
  * - "Keep me signed in" (default): stays signed in across restarts, but is
  *   auto-signed-out after 48h of inactivity. `lastActiveAt` is persisted to
  *   AsyncStorage and checked on launch and on resume, so the timeout survives a
  *   full app close.
- * - Session-only: on web, Firebase `browserSessionPersistence` clears on browser
- *   close. On native, we sign out when the app goes to the **background**, so a
- *   closed app is already signed out and reopening lands on sign-in (no flash of
- *   authed content).
+ * - Session-only: on web, `sessionOnly` storage (see lib/auth.ts) clears on
+ *   browser close. On native, we sign out when the app goes to the
+ *   **background**, so a closed app is already signed out and reopening
+ *   lands on sign-in (no flash of authed content).
+ *
+ * Sign-up is closed — accounts exist only via `allowed_users`, seeded by the
+ * owner (see supabase/README.md). There is no self-registration path here,
+ * unlike the Firebase version this replaces: a user's `profiles` row and
+ * role are created by a database trigger the moment `allowed_users` accepts
+ * their first sign-in, not by this client.
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [role, setRole] = useState<Role | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
@@ -76,13 +101,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Ensures the launch-time session check runs only for the first auth result.
   const startupHandled = useRef(false);
+  // Supabase's own "is anyone signed in" accessor (getSession()) is async;
+  // the AppState handler below needs a synchronous answer, so the latest
+  // session is mirrored here as onAuthStateChange delivers it — this is what
+  // `auth.currentUser` gave the Firebase version for free.
+  const sessionRef = useRef<Session | null>(null);
 
   // Sign out + clear persisted session state. `expired` drives the calm notice.
   const endSession = async (expired: boolean) => {
     setUser(null); // clear immediately so no authed frame renders before signOut resolves
     if (expired) setSessionExpired(true);
     try {
-      await firebaseSignOut(auth);
+      await supabase.auth.signOut();
     } catch {
       // ignore — user is already treated as signed out locally
     }
@@ -91,10 +121,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Subscribe to auth state; run the launch session check behind `initializing`.
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      sessionRef.current = session;
+      const appUser = toAppUser(session);
+
       if (!startupHandled.current) {
         startupHandled.current = true;
-        if (u) {
+        if (appUser) {
           const keep = await getKeepSignedIn();
           if (keep) {
             // 48h idle expiry.
@@ -112,25 +145,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return;
           }
         }
-        setUser(u);
+        setUser(appUser);
         setInitializing(false);
         return;
       }
-      // Runtime changes after startup (sign in / sign out).
-      setUser(u);
+      // Runtime changes after startup (sign in / sign out / token refresh).
+      setUser(appUser);
     });
 
-    return unsubscribe;
+    return () => subscription.subscription.unsubscribe();
   }, []);
 
-  // Load the user's role AND their profile name. On first login, self-register
-  // as `staff` (the owner promotes to `admin` in the Firebase console).
-  // Fail-safe: any error → staff.
+  // Load the user's role AND their profile name from `profiles`. Both are
+  // set once, server-side, by the handle_new_user trigger reading
+  // allowed_users at signup — there is no client-side self-registration to
+  // fall back to (see supabase/migrations). Fail-safe: any error → staff.
   //
-  // The name comes out of this same read, deliberately — it is used to attribute
-  // sales, payments and every activity entry, so a second fetch would mean a
-  // window where the app knows who you are but signs your work as your email
-  // address.
+  // The name comes out of this same read, deliberately — it is used to
+  // attribute sales, payments and every activity entry, so a second fetch
+  // would mean a window where the app knows who you are but signs your work
+  // as your email address.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -145,10 +179,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Fast path, in ONE direction only.
       //
-      // The role is re-read from the database on every launch, so for a second
-      // or two after sign-in nobody's role is known and every admin-gated screen
-      // sits in `pending` — which is why a staff member opening /cash watched a
-      // Daily Cash skeleton for seconds before being redirected.
+      // The role is re-read from the database on every launch, so for a
+      // second or two after sign-in nobody's role is known and every
+      // admin-gated screen sits in `pending` — which is why a staff member
+      // opening /cash watched a Daily Cash skeleton for seconds before being
+      // redirected.
       //
       // A remembered 'staff' is applied immediately; a remembered 'admin' is
       // NOT. Restoring 'staff' can only ever restrict, so a stale cache costs
@@ -163,27 +198,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const existing = await dbService.getRecord<{ role?: string; name?: string }>(`users/${uid}`);
+        const { data, error } = await supabase.from('profiles').select('role, name').eq('id', uid).single();
         if (cancelled) return;
-        if (existing?.role) {
-          const resolved: Role = existing.role === 'admin' ? 'admin' : 'staff';
-          setProfileName(existing.name?.trim() || null);
-          setRole(resolved);
-          void AsyncStorage.setItem(`${ROLE_CACHE_PREFIX}${uid}`, resolved).catch(() => {});
+        if (error || !data) {
+          // The handle_new_user trigger creates this row synchronously as
+          // part of the same signup that created the auth.users row, so it
+          // should always exist by the time a session does. If it somehow
+          // doesn't, fail safe.
+          setRole('staff');
           return;
         }
-        const name = user.displayName ?? '';
-        await dbService.setRecord(`users/${uid}`, {
-          role: 'staff',
-          email: user.email ?? '',
-          name,
-          createdAt: new Date().toISOString(),
-        });
-        if (!cancelled) {
-          setProfileName(name.trim() || null);
-          setRole('staff');
-          void AsyncStorage.setItem(`${ROLE_CACHE_PREFIX}${uid}`, 'staff').catch(() => {});
-        }
+        const resolved: Role = data.role === 'admin' ? 'admin' : 'staff';
+        setProfileName(data.name?.trim() || null);
+        setRole(resolved);
+        void AsyncStorage.setItem(`${ROLE_CACHE_PREFIX}${uid}`, resolved).catch(() => {});
       } catch {
         if (!cancelled) setRole('staff');
       }
@@ -196,7 +224,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // React to foreground/background transitions for the idle timer + session-only.
   useEffect(() => {
     const sub = AppState.addEventListener('change', async (next) => {
-      if (!auth.currentUser) return;
+      if (!sessionRef.current) return;
 
       if (next === 'active') {
         const keep = await getKeepSignedIn();
@@ -229,15 +257,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       initializing,
       sessionExpired,
       clearSessionExpired: () => setSessionExpired(false),
-      signIn: async (email, password, keepSignedIn) => {
+      signInWithGoogle: async (keepSignedIn) => {
         await applyPersistence(keepSignedIn);
-        await signInWithEmailAndPassword(auth, email, password);
+        // Persisted BEFORE the platform call: web's version of this redirects
+        // the whole page to Google and back, which throws away every
+        // in-memory value (including what applyPersistence just set) before
+        // this app runs again — see lib/auth.ts for how the reloaded page
+        // re-derives its storage choice from this same persisted value.
         await setKeepSignedIn(keepSignedIn);
         await setLastActiveAt(Date.now());
         setSessionExpired(false);
+        await platformSignInWithGoogle();
       },
       signOut: async () => {
-        await firebaseSignOut(auth);
+        await supabase.auth.signOut();
         await clearSessionKeys();
       },
     }),

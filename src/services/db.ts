@@ -1,7 +1,21 @@
-import { auth } from '@/lib/auth';
-import { DATABASE_URL, db } from '@/lib/firebase';
+import { DATABASE_URL, app, db } from '@/lib/firebase';
 import { checkExistsOnServer } from '@/services/existence-check';
 import { endAt, get, increment, onValue, orderByChild, orderByKey, push, query, ref, remove, set, startAt, update } from 'firebase/database';
+import { getAuth } from 'firebase/auth';
+
+/**
+ * `@/lib/auth` now holds the Supabase Auth client (see the auth-context
+ * port), not Firebase's — this file is unaffected by that on purpose, since
+ * nothing else here changed: RTDB access still runs under Firebase's own
+ * rules, unrelated to who is signed into Supabase. Getting the Auth instance
+ * straight from `app` keeps that dependency explicit and self-contained
+ * rather than reaching back into a module that no longer means this.
+ *
+ * In practice `auth.currentUser` is now always null — nothing signs into
+ * Firebase Auth anymore, so `existsOnServer` below always falls back to an
+ * unauthenticated request until the RTDB layer itself is ported to Supabase.
+ */
+const auth = getAuth(app);
 
 /**
  * Firebase Realtime Database Service Wrapper

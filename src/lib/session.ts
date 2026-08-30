@@ -5,7 +5,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  * "keep me signed in" choice and the idle timer survive a full app close — the
  * timeout can't live only in memory or it wouldn't apply after a cold launch.
  */
-const KEEP_KEY = 'bomedia:auth:keepSignedIn';
+// Exported so src/lib/auth.ts (web) can seed its storage choice by reading
+// this same key straight off window.localStorage — see the note there on why
+// that has to happen synchronously, before this module's own async getter
+// could return.
+export const KEEP_KEY = 'bomedia:auth:keepSignedIn';
 const LAST_ACTIVE_KEY = 'bomedia:auth:lastActiveAt';
 
 /** Auto sign-out after this much inactivity (keep-me-signed-in sessions). */

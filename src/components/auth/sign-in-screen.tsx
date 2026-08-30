@@ -1,32 +1,26 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { PrimaryButton } from '@/components/ui/primary-button';
-import { ThemedTextInput } from '@/components/ui/themed-text-input';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useTheme } from '@/hooks/use-theme';
 import { withAlpha } from '@/utils/color';
-import { FirebaseError } from 'firebase/app';
+import { AuthError } from '@supabase/supabase-js';
 import { useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { Checkbox, Surface, TextInput } from 'react-native-paper';
+import { Checkbox, Surface } from 'react-native-paper';
 
-/** Turn a Firebase auth error into a calm, human message (never leak codes). */
+/** Turn a Supabase auth error into a calm, human message (never leak codes). */
 function messageForError(e: unknown): string {
-  if (e instanceof FirebaseError) {
+  if (e instanceof AuthError) {
     switch (e.code) {
-      case 'auth/invalid-email':
-        return 'That email address looks invalid.';
-      case 'auth/user-disabled':
-        return 'This account has been disabled.';
-      case 'auth/user-not-found':
-      case 'auth/wrong-password':
-      case 'auth/invalid-credential':
-        return 'Incorrect email or password.';
-      case 'auth/too-many-requests':
+      case 'provider_disabled':
+        return 'Google sign-in is not enabled for this project yet.';
+      case 'signup_disabled':
+      case 'email_provider_disabled':
+        return 'Sign-ups are closed. Ask an admin to add your email before trying again.';
+      case 'over_request_rate_limit':
         return 'Too many attempts. Please try again in a moment.';
-      case 'auth/network-request-failed':
-        return 'Network error. Check your connection and try again.';
       default:
         return 'Could not sign in. Please try again.';
     }
@@ -35,39 +29,37 @@ function messageForError(e: unknown): string {
 }
 
 /**
- * Email/password sign-in. Rendered by the root gate when no user is present, so
- * the rest of the app never mounts until authentication succeeds. Uses the
- * existing brand components (PrimaryButton, ThemedTextInput) and MD3 theme.
+ * Google sign-in. Rendered by the root gate when no user is present, so the
+ * rest of the app never mounts until authentication succeeds.
+ *
+ * There is no self-registration: signInWithGoogle only ever succeeds for an
+ * email an admin has already added to `allowed_users` — see
+ * supabase/README.md. A rejected email surfaces here as the same calm
+ * "could not sign in" message as any other failure, deliberately: the
+ * sign-in screen doesn't tell an unrecognised visitor whether the problem
+ * was their email, their password (there isn't one), or something else.
  */
 export function SignInScreen() {
   const theme = useTheme();
-  const { signIn, sessionExpired, clearSessionExpired } = useAuth();
+  const { signInWithGoogle, sessionExpired, clearSessionExpired } = useAuth();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const clearNotices = () => {
-    if (error) setError(null);
-    if (sessionExpired) clearSessionExpired();
-  };
-
-  const onSubmit = async () => {
+  const onSignIn = async () => {
     if (submitting) return;
-    if (!email.trim() || !password) {
-      setError('Enter your email and password to continue.');
-      return;
-    }
     setSubmitting(true);
     setError(null);
+    if (sessionExpired) clearSessionExpired();
     try {
-      await signIn(email.trim(), password, keepSignedIn);
-      // Success: onAuthStateChanged flips the gate and unmounts this screen.
+      await signInWithGoogle(keepSignedIn);
+      // Web: the page navigates away to Google and back; nothing further to
+      // do here. Native: success flips onAuthStateChanged, which flips the
+      // root gate and unmounts this screen.
     } catch (e) {
       setError(messageForError(e));
+    } finally {
       setSubmitting(false);
     }
   };
@@ -100,40 +92,6 @@ export function SignInScreen() {
               ) : null}
 
               <View style={styles.form}>
-                <ThemedTextInput
-                  label="Email"
-                  value={email}
-                  onChangeText={(t) => { setEmail(t); clearNotices(); }}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoComplete="email"
-                  keyboardType="email-address"
-                  textContentType="emailAddress"
-                  returnKeyType="next"
-                  editable={!submitting}
-                />
-
-                <ThemedTextInput
-                  label="Password"
-                  value={password}
-                  onChangeText={(t) => { setPassword(t); clearNotices(); }}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  autoComplete="password"
-                  textContentType="password"
-                  returnKeyType="done"
-                  editable={!submitting}
-                  onSubmitEditing={onSubmit}
-                  right={
-                    <TextInput.Icon
-                      icon={showPassword ? 'eye-off' : 'eye'}
-                      onPress={() => setShowPassword((s) => !s)}
-                      forceTextInputFocus={false}
-                      accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-                    />
-                  }
-                />
-
                 {/* Keep-me-signed-in: checkbox + label toggle independently so a
                     tap on either fires exactly once; label stays on one line. */}
                 <View style={styles.keepRow}>
@@ -153,12 +111,13 @@ export function SignInScreen() {
                 ) : null}
 
                 <PrimaryButton
-                  onPress={onSubmit}
+                  onPress={onSignIn}
                   loading={submitting}
                   disabled={submitting}
+                  icon="google"
                   style={styles.submit}
                 >
-                  Sign in
+                  Continue with Google
                 </PrimaryButton>
               </View>
             </Surface>

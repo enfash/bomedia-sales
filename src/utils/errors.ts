@@ -13,12 +13,21 @@ export interface OperatorMessage {
   body: string;
 }
 
-/** Firebase error codes arrive as `PERMISSION_DENIED` or `permission-denied`. */
+/**
+ * Firebase error codes arrive as `PERMISSION_DENIED` or `permission-denied`
+ * with nothing useful in `.message`. Postgres/PostgREST errors are the
+ * opposite: `.code` is always present but it's a bare SQLSTATE ("42501" for
+ * an RLS rejection), and the human-readable part — "row-level security
+ * policy" — is only in `.message`. Searching both concatenated, rather than
+ * falling back to message only when code is empty, is what makes one set of
+ * checks below work against either shape.
+ */
 function codeOf(error: unknown): string {
-  const raw =
-    (typeof error === 'object' && error && 'code' in error ? String((error as any).code) : '') ||
-    (error instanceof Error ? error.message : String(error ?? ''));
-  return raw.toLowerCase();
+  if (typeof error !== 'object' || !error) return String(error ?? '').toLowerCase();
+  const code = 'code' in error ? String((error as any).code ?? '') : '';
+  const message =
+    'message' in error ? String((error as any).message ?? '') : error instanceof Error ? error.message : '';
+  return `${code} ${message}`.toLowerCase();
 }
 
 export function describeWriteError(error: unknown, what: string): OperatorMessage {
@@ -26,7 +35,14 @@ export function describeWriteError(error: unknown, what: string): OperatorMessag
 
   // Live since the rules were enforced on 2026-08-03: before that this path
   // could not happen, because the database accepted anything from anyone.
-  if (code.includes('permission_denied') || code.includes('permission-denied')) {
+  // 42501 is Postgres's SQLSTATE for an RLS/privilege rejection — the
+  // Postgres-backed equivalent of Firebase's PERMISSION_DENIED.
+  if (
+    code.includes('permission_denied') ||
+    code.includes('permission-denied') ||
+    code.includes('42501') ||
+    code.includes('row-level security')
+  ) {
     return {
       title: `Not allowed to ${what}`,
       body: 'Your account does not have permission for this. Ask the owner to check your role, then try again.',
