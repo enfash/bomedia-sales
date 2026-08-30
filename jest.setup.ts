@@ -48,3 +48,16 @@ if (januaryOffset !== -60 || julyOffset !== -60) {
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
+
+/**
+ * expo-crypto has no native module under Jest either, but unlike AsyncStorage
+ * it doesn't throw on import — `Crypto.randomUUID()` just silently returns
+ * `undefined`. `sales-repository-pg.ts`/`payment-repository-pg.ts` use it to
+ * generate the client-side keys (`receipt_number`'s companion opening-payment
+ * id, `payment_batch_id`) that the pending journal records BEFORE a write is
+ * issued — a test that exercises either without mocking this would journal
+ * `undefined` as a money-write key with no failure pointing at why.
+ */
+jest.mock('expo-crypto', () => ({
+  randomUUID: () => require('node:crypto').randomUUID(),
+}));

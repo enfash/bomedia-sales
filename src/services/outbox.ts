@@ -37,6 +37,10 @@ export const AUTO_REPLAY_MAX_AGE_MS = 12 * 60 * 60 * 1000; // 12 hours
  * real sentinel is rebuilt at write time. The same encoded object is what gets
  * persisted AND what the original write uses, so a replay cannot drift from the
  * write it repeats.
+ *
+ * STILL LIVE. `payment-repository.ts`'s standalone recordPayment/reversePayment
+ * (payments against an already-existing sale) still write Firebase — see the
+ * note on OutboxOp below for why removing this isn't safe yet.
  */
 export interface IncrementMarker {
   __increment: number;
@@ -46,10 +50,71 @@ export function encodeIncrement(delta: number): IncrementMarker {
   return { __increment: delta };
 }
 
-/** The write itself, in a form that survives storage. */
+/**
+ * The write itself, in a form that survives storage.
+ *
+ * TEMPORARY UNION, not the clean break originally planned for this slice.
+ * The RTDB-shaped variants ('update'/'set') are what `sales-repository.ts`
+ * and `payment-repository.ts` still construct — both are staying on
+ * Firebase for now, deliberately: `record_payment`'s `p_sale_id` is a real
+ * foreign key into Postgres `sales`, and no existing sale has a Postgres row
+ * yet (reads haven't cut over either). Wiring standalone payment recording
+ * to Postgres now would fail every payment against every sale that exists
+ * today. The Postgres-shaped variants ('create_sale'/'record_payment') are
+ * what the new, not-yet-wired `sales-repository-pg.ts` /
+ * `payment-repository-pg.ts` construct — tested directly, not through any
+ * screen. Collapse this back to just the new variants once the cutover
+ * moves every caller across at once (see supabase/README.md → "Cutover
+ * plan").
+ */
 export type OutboxOp =
   | { kind: 'update'; updates: Record<string, unknown> }
-  | { kind: 'set'; path: string; value: unknown };
+  | { kind: 'set'; path: string; value: unknown }
+  | { kind: 'create_sale'; payload: CreateSalePayload }
+  | { kind: 'record_payment'; payload: RecordPaymentPayload };
+
+export interface CreateSaleLine {
+  material_type: string;
+  width_ft: number;
+  height_ft: number;
+  job_unit: 'in' | 'ft';
+  quantity: number;
+  unit_price: number;
+  total: number;
+  eyelets?: boolean;
+  lamination?: boolean;
+  turnaround_time?: string;
+  job_name?: string;
+}
+
+export interface CreateSaleAdjustment {
+  kind: 'mov' | 'delivery' | 'legacy';
+  label: string;
+  amount: number;
+}
+
+export interface CreateSalePayload {
+  receipt_number: string;
+  client_id: string;
+  lines: CreateSaleLine[];
+  adjustments?: CreateSaleAdjustment[];
+  notes?: string;
+  due_date?: string;
+  opening_payment?: {
+    payment_batch_id: string;
+    amount: number;
+    method: 'Transfer' | 'POS' | 'Cash';
+  };
+}
+
+export interface RecordPaymentPayload {
+  payment_batch_id: string;
+  sale_id: string;
+  amount: number;
+  method: 'Transfer' | 'POS' | 'Cash';
+  reversal_of?: string;
+  reversal_reason?: string;
+}
 
 export type ReplayOutcome = 'sent' | 'skipped-unverified' | 'skipped-landed' | 'skipped-too-old' | 'no-payload' | 'failed';
 
