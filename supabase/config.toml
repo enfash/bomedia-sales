@@ -234,8 +234,14 @@ web3 = 30
 # secret = ""
 
 [auth.email]
-# Unused — this app signs in with Google only, no email/password form exists.
-# Off for the same reason as [auth] enable_signup above.
+# The app DOES have an email/password form now (and magic links, also
+# gated by this section) — but self-registration through it is still
+# closed, same as it always was. This governs the SIGNUP endpoint
+# specifically; it has no bearing on signing IN with a password, or on
+# `supabase.auth.admin.createUser()` provisioning an account server-side —
+# see supabase/README.md → "Adding a user". Off for the same reason as
+# [auth] enable_signup above: accounts exist only via `allowed_users`,
+# never a public form.
 enable_signup = false
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
@@ -356,8 +362,12 @@ email_optional = false
 # from a Google Cloud OAuth client (Web application type); see
 # supabase/README.md → "Google sign-in redirect URLs" for the exact URIs that
 # client and the Supabase dashboard both need registered before this works.
+# Google OAuth was this app's only sign-in method, then removed entirely —
+# email/password and magic links replaced it (see supabase/README.md →
+# "Sign-in methods"). Left disabled, not deleted, in case Google ever comes
+# back as an option rather than the only one.
 [auth.external.google]
-enabled = true
+enabled = false
 client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
 secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
 redirect_uri = ""

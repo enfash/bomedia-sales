@@ -2,15 +2,7 @@ import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import * as AuthSession from 'expo-auth-session';
-import * as QueryParams from 'expo-auth-session/build/QueryParams';
-import * as WebBrowser from 'expo-web-browser';
 import type { Database } from '@/types/supabase';
-
-// Dismisses the in-app browser sheet once the OS hands control back to the
-// app via the deep-link redirect. Required once at module scope per
-// Supabase's documented Expo pattern — without it, Android can leave the
-// auth browser sheet stuck open after a successful sign-in.
-WebBrowser.maybeCompleteAuthSession();
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -36,9 +28,10 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
     storage: AsyncStorage,
     persistSession: true,
     autoRefreshToken: true,
-    // The OAuth result arrives via WebBrowser.openAuthSessionAsync's return
-    // value in signInWithGoogle below, not by the app itself loading a URL —
-    // there's no browser-location for the client to inspect.
+    // The magic-link result arrives via a deep link the OS hands to this
+    // app directly (see @/context/auth-context.tsx's Linking listener),
+    // not by this client inspecting a browser location — there is no
+    // browser-location here to detect a session in.
     detectSessionInUrl: false,
     flowType: 'pkce',
   },
@@ -55,36 +48,38 @@ export async function applyPersistence(_keepSignedIn: boolean): Promise<void> {
   // intentionally empty — see AuthProvider for native session-only behaviour
 }
 
+/** Password sign-in. No redirect, no deep link — the session is established directly. */
+export async function signInWithPassword(email: string, password: string): Promise<void> {
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+}
+
 /**
- * Opens Google's consent screen in the OS browser (Google blocks OAuth
- * inside an embedded WebView) and captures the app's own deep-link redirect
- * back — Supabase's documented Expo pattern:
- * https://supabase.com/docs/guides/auth/native-mobile-deep-linking
+ * Sends a magic-link email. The user leaves this app entirely (opens their
+ * email client) — completion happens later, out of band, when they tap the
+ * link and the OS hands `bomediasales://auth-callback?code=...` back to
+ * this app. See `auth-context.tsx`'s `Linking` listener for that half; this
+ * function's job ends once the email is sent.
+ *
+ * `AuthSession.makeRedirectUri` is called HERE, inside the function, not at
+ * module scope — it resolves the current native scheme context (Expo Go /
+ * dev build / standalone), which isn't available at plain module-import
+ * time (breaks under Jest, which has no such context). Same reason the old
+ * Google OAuth flow computed its redirect URI inside `signInWithGoogle`
+ * rather than as a top-level constant.
+ *
+ * `shouldCreateUser` left at its default (`true`) — see the web version's
+ * comment for why: blocking it would also block a first-time sign-in for
+ * someone genuinely on `allowed_users`, not just uninvited emails.
  *
  * Requires a development build; Expo Go cannot reliably intercept a custom
- * URL scheme redirect. See README.md → "Google sign-in redirect URLs".
+ * URL scheme redirect (same requirement Google OAuth had here).
  */
-export async function signInWithGoogle(): Promise<void> {
+export async function signInWithMagicLink(email: string): Promise<void> {
   const redirectTo = AuthSession.makeRedirectUri({ scheme: 'bomediasales', path: 'auth-callback' });
-
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo, skipBrowserRedirect: true },
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: redirectTo },
   });
   if (error) throw error;
-  if (!data.url) throw new Error('Supabase did not return a Google sign-in URL.');
-
-  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-  if (result.type !== 'success') {
-    // User backed out of the browser sheet (back button / swipe-dismiss) —
-    // not an error, just no session; the sign-in screen stays put.
-    return;
-  }
-
-  const { params, errorCode } = QueryParams.getQueryParams(result.url);
-  if (errorCode) throw new Error(errorCode);
-  if (!params.code) throw new Error('Google sign-in did not return an authorization code.');
-
-  const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(params.code);
-  if (exchangeError) throw exchangeError;
 }

@@ -1,9 +1,11 @@
 # Supabase — auth & local development
 
-This app signs in with **Google only**, via Supabase Auth. Sign-up is
-**closed**: there is no self-registration screen anywhere in the app.
-Accounts are provisioned by the owner, one email at a time, before that
-person ever opens the app — see "Adding a user" below.
+This app signs in with **email/password or a magic link**, via Supabase
+Auth — Google OAuth was the original sign-in method, removed entirely (see
+"Sign-in methods" below for why and what changed). Sign-up is **closed**:
+there is no self-registration screen anywhere in the app. Accounts are
+provisioned by the owner, one email at a time, before that person ever
+opens the app — see "Adding a user" below.
 
 ## Local development
 
@@ -22,67 +24,68 @@ client bundle, and RLS is what actually protects data, not the key's
 secrecy. `.env.example` at the repo root has the same two variable names
 with empty values as a template for the hosted project's keys.
 
-For local Google sign-in to actually work (not just typecheck), `supabase
-start` also needs your Google OAuth client's id/secret, in **`supabase/.env`**
-(gitignored — this is a different file from the repo-root `.env.local`
-above):
-
-```
-SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID=<from Google Cloud Console>
-SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET=<from Google Cloud Console>
-```
-
-Without it, `[auth.external.google]` in `config.toml` still says
-`enabled = true`, but GoTrue silently reports the provider as disabled
-(`curl http://127.0.0.1:54321/auth/v1/settings` shows `"google": false`) —
-`supabase start`/`db reset` don't fail or warn about it either. Restart
-(`npx supabase stop && npx supabase start`) after adding the file; it isn't
-picked up by a running instance.
-
 Every migration runs on `npx supabase db reset`, including
 `20260829150000_allowed_users.sql`, which seeds `elijahfasugba@gmail.com` as
 `admin` — otherwise closing signup would lock out the very first sign-in. To
 seed a different owner (a fork, a different environment), edit that one
 `insert` statement before the first `db reset` against it.
 
-## Google sign-in redirect URLs
+## Sign-in methods
 
-Two different places need a redirect URI registered, for two different
-reasons — missing either one fails sign-in with an opaque error on Google's
-consent screen or Supabase's callback, not in this app's own code.
+**Google OAuth was removed entirely** — no third sign-in option kept
+alongside the two below, no fallback, no Google Cloud Console dependency
+anywhere in this app anymore. `src/lib/auth.ts`/`auth.native.ts` no longer
+import `expo-web-browser` (the in-app browser session OAuth needed to open
+Google's consent screen and capture its redirect); `expo-auth-session` is
+still a dependency, now only for `makeRedirectUri`'s magic-link URI. Why:
+Google Console setup (a registered OAuth client, a redirect URI, a
+production-vs-test-client distinction) was friction with no benefit for a
+handful of staff who already have an email — see the two methods below,
+neither of which needs any of that.
 
-**1. Google Cloud Console** (the OAuth client itself) needs Supabase's own
-callback under *APIs & Services → Credentials → \<OAuth client, "Web
-application" type\> → Authorized redirect URIs*:
+**Email/password.** `supabase.auth.signInWithPassword({email, password})`
+— no redirect, no deep link, the session is established as part of the
+call returning. Provisioning someone a password is a real manual step (see
+"Adding a user" below) — there is no password-reset-by-email flow wired up
+here, so a forgotten password currently means re-provisioning, not
+recovering.
 
-```
-https://<project-ref>.supabase.co/auth/v1/callback
-```
+**Magic link.** `supabase.auth.signInWithOtp({email})` sends an email; the
+person clicks it and is signed in without ever typing a password. Simpler
+to provision (no password to generate or distribute — see "Adding a user"),
+but depends on email actually arriving. **Free-tier / no-custom-SMTP
+caveat**: Supabase's built-in email sending is rate-limited (a handful of
+emails per hour) and explicitly meant for testing, not production volume —
+fine for a small shop's occasional sign-ins, but if two people request
+magic links back to back, whoever's second is stuck until the limit resets.
+Configure custom SMTP (Dashboard → Authentication → Emails) before relying
+on this for real operations.
 
-For local development against `supabase start`, Google's console won't
-accept a `127.0.0.1` URI directly for this — test against a linked hosted
-project, or use `http://localhost:54321/auth/v1/callback` if your Google
-Cloud OAuth client is configured to allow localhost (test/dev clients
-usually are; production ones usually aren't).
+Completion works differently by platform, both already wired:
+- **Web**: `detectSessionInUrl: true` (already the client's config) picks
+  up the magic-link result automatically when the browser reloads at the
+  redirect URL — no callback route needed, same mechanism Google OAuth
+  used to rely on here.
+- **Native**: there is no in-app browser session to capture a result from
+  (the person leaves the app entirely, opens their email client) — the
+  link deep-links `bomediasales://auth-callback?code=...` back into the
+  app directly. `src/context/auth-context.tsx` listens for this via
+  `expo-linking` (`Linking.getInitialURL()` for a cold start,
+  `Linking.addEventListener('url', …)` for the app already running) and
+  calls `exchangeCodeForSession` itself — deliberately NOT a routed Expo
+  Router screen: `AuthGate` (`src/app/_layout.tsx`) shows the sign-in
+  screen for *any* route while `user` is null, which is always true when a
+  magic-link callback arrives, so a routed `/auth-callback` screen would
+  never actually mount. **Testing on a physical device or simulator
+  requires a development build** (`expo run:ios` / `expo run:android` or
+  an EAS dev build) — Expo Go cannot reliably intercept a custom URL
+  scheme redirect, so the deep link will appear to hang or silently fail
+  there. Same requirement Google OAuth had.
 
-**2. Supabase dashboard** (or `[auth]` in `supabase/config.toml` for local)
-needs this app's own redirect targets, under *Authentication → URL
-Configuration → Redirect URLs* — an allow-list Supabase checks the
-`redirectTo` argument against before honoring it:
-
-```
-bomediasales://auth-callback                 # native (src/lib/auth.native.ts)
-http://localhost:8081                        # web, local dev (expo start --web's default port — check
-                                               # your terminal/browser if Metro picked a different one)
-<your deployed web origin, once there is one>
-```
-
-The native URI comes from `AuthSession.makeRedirectUri({ scheme:
-'bomediasales', path: 'auth-callback' })` — `bomediasales` is `expo.scheme`
-in `app.json`. **Testing Google sign-in on a physical device or simulator
-requires a development build** (`expo run:ios` / `expo run:android` or an
-EAS dev build) — Expo Go cannot reliably intercept a custom URL scheme
-redirect, so sign-in will appear to hang or silently fail there.
+`[auth]` in `supabase/config.toml` (or the hosted Dashboard's Authentication
+→ URL Configuration → Redirect URLs) still needs `bomediasales://auth-callback`
+registered — that part of the old Google setup carries over unchanged, it
+was never Google-specific, just this app's own redirect target.
 
 ## Adding a user
 
@@ -102,6 +105,32 @@ bypasses RLS (e.g. the `postgres` role, or the dashboard's own connection) —
 an already-signed-in admin session works too, but the very first admin has
 to be seeded by migration, not by a query, since nobody can be an admin
 session yet.
+
+**That's the whole job for magic-link sign-in** — the allowlist row alone.
+The person requests a magic link with that email whenever they first try to
+sign in, and `reject_unlisted_signup` is what actually decides whether that
+succeeds — same protection Google OAuth's first sign-in had.
+
+**Password sign-in needs one more step**, since there's no password to
+generate on its own: create the `auth.users` row yourself, with a password,
+via the Admin API — never from client code, this needs the service role
+key:
+
+```bash
+curl -X POST '<SUPABASE_URL>/auth/v1/admin/users' \
+  -H "apikey: <service_role_key>" -H "Authorization: Bearer <service_role_key>" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"someone@example.com","password":"<a real password>","email_confirm":true,"user_metadata":{"full_name":"Their Name"}}'
+```
+
+`email_confirm: true` skips the confirmation-email step (this app has no
+use for it — the owner is provisioning a known person, not verifying an
+unknown signup). `user_metadata.full_name` is what `handle_new_user`
+sources their `profiles.name` from — without it, their name falls back to
+their email address until they (or an admin) update it (see
+`20260829150000_allowed_users.sql`'s `handle_new_user`). Get the resulting
+password to that person through whatever channel you'd trust with a
+password generally — there's no invite-email flow wired up here.
 
 Removing access is the whole job now, not just the future-signups half of
 it — see "Offboarding" below.
@@ -215,8 +244,10 @@ that RTDB's own rules needed a Firebase session too.
 **The fix.** `supabase/functions/mint-firebase-token` — an Edge Function
 that, given a valid Supabase session, verifies it, looks up the caller's
 role from `profiles`, mirrors that role into RTDB's `users/{uid}` node via
-the Firebase Admin SDK (bypassing RTDB rules — the one privileged step),
-and mints a Firebase custom token for that same uid. `src/lib/firebase-bridge.ts`
+a plain authenticated REST call using the service account's own access
+token (bypassing RTDB rules — the one privileged step; see the third-order
+bug below for why this isn't the Admin SDK's `.set()`), and mints a
+Firebase custom token for that same uid. `src/lib/firebase-bridge.ts`
 calls it from `auth-context.tsx` whenever a Supabase session appears or
 refreshes, then signs into Firebase Auth with the result — invisibly, no
 second consent screen, no second sign-in the user sees. Because the custom
@@ -272,6 +303,27 @@ deliberately NOT wrapped in this). One-shot reads/writes (`getRecord`,
 `setRecord`, `createBatch`, …) never had this problem — a call that loses
 the race just fails once and succeeds on the next attempt, same as before
 the bridge existed.
+
+**Third-order bug, found once the secret was actually set: `firebase-admin/database`'s
+`.set()` hangs indefinitely in this runtime.** With `FIREBASE_SERVICE_ACCOUNT_JSON`
+correctly configured, the function still never returned — no error, no
+timeout, just an open connection until the client gave up. Isolated by
+racing the call against a bounded timeout inside the function itself:
+`getAuth(app).createCustomToken()` (same Admin SDK, same request, same
+credential) returned in 4ms; `getDatabase(app).ref(...).set(...)` never
+settled inside an 8s window. A plain outbound `fetch()` to the same
+database's own REST endpoint, from the same runtime, answered in under a
+second — ruling out the credential, the network, and the destination.
+The `firebase-admin/database` submodule apparently depends on a connection
+mechanism Supabase Edge Functions' Deno sandbox doesn't support. Fixed by
+not using it: `writeRtdbRole()` in `mint-firebase-token/index.ts` mints a
+Google OAuth2 access token directly from the service-account credential
+(`credential.getAccessToken()` — local, no RTDB SDK involved) and does the
+write as a plain authenticated `PUT` against RTDB's REST API instead — same
+privilege, different transport. `firebase-admin/database` is no longer
+imported by this function at all. If anything else in this codebase ever
+needs `firebase-admin/database`'s live/streaming features (not just a
+one-shot write), expect the same hang and use the same REST workaround.
 
 ## Known follow-ups — db.ts port
 
@@ -392,19 +444,22 @@ run against a real, hosted Supabase project. This is what that takes.
    `20260829150000_allowed_users.sql`), `create_sale`/`record_payment`,
    `sales.superseded_by_sale_id` — all of it, in the same order it applied
    locally.
-4. **Google OAuth, hosted-specific.** Register the hosted callback URL —
-   `https://<ref>.supabase.co/auth/v1/callback` — in Google Cloud Console.
-   This is a different URL from local dev's (see "Google sign-in redirect
-   URLs" above). Decide whether to reuse the same OAuth client or create a
-   dedicated one for production; either way, the redirect URI has to be
-   added before Google sign-in will work against this project at all.
+4. **Redirect URL, hosted-specific.** Register
+   `bomediasales://auth-callback` under Authentication → URL Configuration
+   → Redirect URLs on the hosted project's Dashboard — `supabase/config.toml`'s
+   `[auth]` block only governs local dev, it is not pushed. Without this,
+   magic links sent from the hosted project won't complete (see "Sign-in
+   methods" above). No OAuth client, no Google Cloud Console — that
+   dependency is gone entirely now that Google sign-in has been removed.
+   If real magic-link volume is expected, also configure custom SMTP
+   (Authentication → Emails) — the built-in sender is rate-limited and
+   meant for testing only (see "Sign-in methods").
 5. **Auth settings, via the Dashboard — `supabase/config.toml` only
    governs local dev, it is not pushed to a hosted project.** Mirror
    `[auth]`'s settings by hand under Authentication → Providers / Settings:
-   the redirect URLs (Authentication → URL Configuration), `jwt_expiry`
-   (3600s, matching local), and — separately, deliberately called out below
-   because getting this one backwards silently locks everyone out —
-   **"Allow new users to sign up" must be ON.**
+   `jwt_expiry` (3600s, matching local), and — separately, deliberately
+   called out below because getting this one backwards silently locks
+   everyone out — **"Allow new users to sign up" must be ON.**
 
    **This is not the same lever as `allowed_users`, and turning it off does
    not harden anything — it disables sign-in for everyone, including the

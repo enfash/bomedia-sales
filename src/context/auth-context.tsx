@@ -1,4 +1,9 @@
-import { applyPersistence, signInWithGoogle as platformSignInWithGoogle, supabase } from '@/lib/auth';
+import {
+  applyPersistence,
+  signInWithMagicLink as platformSignInWithMagicLink,
+  signInWithPassword as platformSignInWithPassword,
+  supabase,
+} from '@/lib/auth';
 import { bridgeFirebaseAuth, unbridgeFirebaseAuth } from '@/lib/firebase-bridge';
 import {
   clearSessionKeys,
@@ -10,7 +15,9 @@ import {
 } from '@/lib/session';
 import { actorFrom, type ActivityActor } from '@/services/activity';
 import type { Session } from '@supabase/supabase-js';
+import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Linking from 'expo-linking';
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 
@@ -68,7 +75,9 @@ interface AuthContextValue {
   /** True when the last sign-out was an automatic 48h-idle expiry (calm notice). */
   sessionExpired: boolean;
   clearSessionExpired: () => void;
-  signInWithGoogle: (keepSignedIn: boolean) => Promise<void>;
+  signInWithPassword: (email: string, password: string, keepSignedIn: boolean) => Promise<void>;
+  /** Sends the email; completion happens later, out of band — see the module comment. */
+  signInWithMagicLink: (email: string, keepSignedIn: boolean) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -163,6 +172,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => subscription.subscription.unsubscribe();
+  }, []);
+
+  // Native only: complete a magic-link sign-in. `signInWithMagicLink`
+  // (@/lib/auth.native.ts) only sends the email — the user leaves the app
+  // entirely, and completion happens later, out of band, when they tap the
+  // link and the OS hands `bomediasales://auth-callback?code=...` back to
+  // this app as a deep link. `detectSessionInUrl: false` there means the
+  // Supabase client won't pick this up on its own the way the web client
+  // does; this listener is what does, for both cases a deep link can
+  // arrive: the app already running (`Linking.addEventListener`) and the
+  // app cold-started BY the link (`Linking.getInitialURL()`).
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+
+    const handleUrl = async (url: string) => {
+      const { path, queryParams } = Linking.parse(url);
+      if (path !== 'auth-callback') return; // some other deep link — not ours
+
+      const { params, errorCode } = QueryParams.getQueryParams(url);
+      if (errorCode) {
+        console.warn('auth-context: magic-link callback returned an error:', errorCode);
+        return;
+      }
+      const code = params.code ?? (queryParams?.code as string | undefined);
+      if (!code) return;
+
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) console.warn('auth-context: exchangeCodeForSession failed:', error);
+      // Success needs no further action here — onAuthStateChange (above)
+      // fires from this same call and carries the new session forward.
+    };
+
+    Linking.getInitialURL().then((url) => {
+      if (url) void handleUrl(url);
+    });
+    const sub = Linking.addEventListener('url', ({ url }) => void handleUrl(url));
+    return () => sub.remove();
   }, []);
 
   // Load the user's role AND their profile name from `profiles`. Both are
@@ -266,17 +312,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       initializing,
       sessionExpired,
       clearSessionExpired: () => setSessionExpired(false),
-      signInWithGoogle: async (keepSignedIn) => {
+      signInWithPassword: async (email, password, keepSignedIn) => {
         await applyPersistence(keepSignedIn);
-        // Persisted BEFORE the platform call: web's version of this redirects
-        // the whole page to Google and back, which throws away every
-        // in-memory value (including what applyPersistence just set) before
-        // this app runs again — see lib/auth.ts for how the reloaded page
-        // re-derives its storage choice from this same persisted value.
         await setKeepSignedIn(keepSignedIn);
         await setLastActiveAt(Date.now());
         setSessionExpired(false);
-        await platformSignInWithGoogle();
+        await platformSignInWithPassword(email, password);
+      },
+      signInWithMagicLink: async (email, keepSignedIn) => {
+        await applyPersistence(keepSignedIn);
+        // Persisted BEFORE the platform call: web's version of this reloads
+        // the page when the user comes back from their email client, which
+        // throws away every in-memory value (including what applyPersistence
+        // just set) before this app runs again — see lib/auth.ts for how the
+        // reloaded page re-derives its storage choice from this same
+        // persisted value.
+        await setKeepSignedIn(keepSignedIn);
+        await setLastActiveAt(Date.now());
+        setSessionExpired(false);
+        await platformSignInWithMagicLink(email);
       },
       signOut: async () => {
         await supabase.auth.signOut();

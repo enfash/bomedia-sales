@@ -1,5 +1,6 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { ThemedTextInput } from '@/components/ui/themed-text-input';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
@@ -14,11 +15,12 @@ import { Checkbox, Surface } from 'react-native-paper';
 function messageForError(e: unknown): string {
   if (e instanceof AuthError) {
     switch (e.code) {
-      case 'provider_disabled':
-        return 'Google sign-in is not enabled for this project yet.';
+      case 'invalid_credentials':
+        return 'Incorrect email or password.';
       case 'signup_disabled':
       case 'email_provider_disabled':
         return 'Sign-ups are closed. Ask an admin to add your email before trying again.';
+      case 'over_email_send_rate_limit':
       case 'over_request_rate_limit':
         return 'Too many attempts. Please try again in a moment.';
       default:
@@ -28,35 +30,66 @@ function messageForError(e: unknown): string {
   return 'Could not sign in. Please try again.';
 }
 
+type Mode = 'password' | 'magic-link';
+
 /**
- * Google sign-in. Rendered by the root gate when no user is present, so the
- * rest of the app never mounts until authentication succeeds.
+ * Sign-in — email/password, or a magic link sent to that email. Rendered by
+ * the root gate when no user is present, so the rest of the app never
+ * mounts until authentication succeeds.
  *
- * There is no self-registration: signInWithGoogle only ever succeeds for an
- * email an admin has already added to `allowed_users` — see
+ * There is no self-registration: neither method ever succeeds for an email
+ * an admin has not already added to `allowed_users` — see
  * supabase/README.md. A rejected email surfaces here as the same calm
  * "could not sign in" message as any other failure, deliberately: the
  * sign-in screen doesn't tell an unrecognised visitor whether the problem
- * was their email, their password (there isn't one), or something else.
+ * was their email, their password, or something else.
+ *
+ * Magic-link completion happens elsewhere — see @/context/auth-context.tsx's
+ * `Linking` listener (native) / `detectSessionInUrl` (web). This screen's
+ * job for that path ends once the email is sent.
  */
 export function SignInScreen() {
   const theme = useTheme();
-  const { signInWithGoogle, sessionExpired, clearSessionExpired } = useAuth();
+  const { signInWithPassword, signInWithMagicLink, sessionExpired, clearSessionExpired } = useAuth();
 
+  const [mode, setMode] = useState<Mode>('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
 
-  const onSignIn = async () => {
+  const switchMode = (next: Mode) => {
+    setMode(next);
+    setError(null);
+    setMagicLinkSent(false);
+  };
+
+  const onSubmit = async () => {
     if (submitting) return;
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setError('Enter your email.');
+      return;
+    }
+    if (mode === 'password' && !password) {
+      setError('Enter your password.');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     if (sessionExpired) clearSessionExpired();
     try {
-      await signInWithGoogle(keepSignedIn);
-      // Web: the page navigates away to Google and back; nothing further to
-      // do here. Native: success flips onAuthStateChanged, which flips the
-      // root gate and unmounts this screen.
+      if (mode === 'password') {
+        await signInWithPassword(trimmedEmail, password, keepSignedIn);
+        // Success flips onAuthStateChanged, which flips the root gate and
+        // unmounts this screen — nothing further to do here.
+      } else {
+        await signInWithMagicLink(trimmedEmail, keepSignedIn);
+        setMagicLinkSent(true);
+      }
     } catch (e) {
       setError(messageForError(e));
     } finally {
@@ -91,35 +124,79 @@ export function SignInScreen() {
                 </View>
               ) : null}
 
-              <View style={styles.form}>
-                {/* Keep-me-signed-in: checkbox + label toggle independently so a
-                    tap on either fires exactly once; label stays on one line. */}
-                <View style={styles.keepRow}>
-                  <Checkbox
-                    status={keepSignedIn ? 'checked' : 'unchecked'}
-                    color={theme.primary}
-                    onPress={() => setKeepSignedIn((v) => !v)}
-                    disabled={submitting}
-                  />
-                  <Pressable onPress={() => setKeepSignedIn((v) => !v)} hitSlop={6}>
-                    <ThemedText type="small" numberOfLines={1}>Keep me signed in</ThemedText>
+              {magicLinkSent ? (
+                <View style={styles.form}>
+                  <View style={[styles.notice, { backgroundColor: withAlpha(theme.primary, 0.08) }]}>
+                    <ThemedText type="small">
+                      Check your email — we sent a sign-in link to {email.trim()}.
+                    </ThemedText>
+                  </View>
+                  <Pressable onPress={() => switchMode('magic-link')} hitSlop={6}>
+                    <ThemedText type="small" style={{ color: theme.primary }}>
+                      Didn&apos;t get it? Send again
+                    </ThemedText>
                   </Pressable>
                 </View>
+              ) : (
+                <View style={styles.form}>
+                  <ThemedTextInput
+                    placeholder="Email"
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    keyboardType="email-address"
+                    returnKeyType={mode === 'password' ? 'next' : 'done'}
+                    onSubmitEditing={mode === 'magic-link' ? onSubmit : undefined}
+                    editable={!submitting}
+                  />
 
-                {error ? (
-                  <ThemedText type="small" style={{ color: theme.error }}>{error}</ThemedText>
-                ) : null}
+                  {mode === 'password' ? (
+                    <ThemedTextInput
+                      placeholder="Password"
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry
+                      autoComplete="password"
+                      returnKeyType="done"
+                      onSubmitEditing={onSubmit}
+                      editable={!submitting}
+                    />
+                  ) : null}
 
-                <PrimaryButton
-                  onPress={onSignIn}
-                  loading={submitting}
-                  disabled={submitting}
-                  icon="google"
-                  style={styles.submit}
-                >
-                  Continue with Google
-                </PrimaryButton>
-              </View>
+                  {/* Keep-me-signed-in: checkbox + label toggle independently so a
+                      tap on either fires exactly once; label stays on one line. */}
+                  <View style={styles.keepRow}>
+                    <Checkbox
+                      status={keepSignedIn ? 'checked' : 'unchecked'}
+                      color={theme.primary}
+                      onPress={() => setKeepSignedIn((v) => !v)}
+                      disabled={submitting}
+                    />
+                    <Pressable onPress={() => setKeepSignedIn((v) => !v)} hitSlop={6}>
+                      <ThemedText type="small" numberOfLines={1}>Keep me signed in</ThemedText>
+                    </Pressable>
+                  </View>
+
+                  {error ? (
+                    <ThemedText type="small" style={{ color: theme.error }}>{error}</ThemedText>
+                  ) : null}
+
+                  <PrimaryButton onPress={onSubmit} loading={submitting} disabled={submitting} style={styles.submit}>
+                    {mode === 'password' ? 'Sign in' : 'Send magic link'}
+                  </PrimaryButton>
+
+                  <Pressable
+                    onPress={() => switchMode(mode === 'password' ? 'magic-link' : 'password')}
+                    hitSlop={6}
+                    disabled={submitting}
+                  >
+                    <ThemedText type="small" style={{ color: theme.primary, textAlign: 'center' }}>
+                      {mode === 'password' ? 'Sign in with a magic link instead' : 'Sign in with a password instead'}
+                    </ThemedText>
+                  </Pressable>
+                </View>
+              )}
             </Surface>
 
             <ThemedText type="small" themeColor="onSurfaceVariant" style={styles.footer}>
