@@ -3,7 +3,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { attachPayments, type BatchWithPayments } from '@/services/payment-reconciliation';
-import { subscribeToPaymentsInRange } from '@/services/payment-repository';
+import { fetchPaymentsInRange, toPaymentEntry } from '@/services/payment-repository-pg';
 import { formatCurrency } from '@/utils/currency';
 import { localDayKey } from '@/utils/date';
 import { STATUS_META } from '@/utils/payment-status';
@@ -90,10 +90,17 @@ export function useLedgerIntegrity({
 
   useEffect(() => {
     if (!isAdmin) return;
-    return subscribeToPaymentsInRange(startKey, endKey, (received) => {
-      setPayments(received);
-      setReceivedFor(`${startKey}..${endKey}`);
-    });
+    let cancelled = false;
+    fetchPaymentsInRange(startKey, endKey)
+      .then((rows) => {
+        if (cancelled) return;
+        setPayments(rows.map(toPaymentEntry));
+        setReceivedFor(`${startKey}..${endKey}`);
+      })
+      .catch((err) => console.warn('fetchPaymentsInRange failed:', err));
+    return () => {
+      cancelled = true;
+    };
   }, [isAdmin, startKey, endKey]);
 
   const paymentsReceived = receivedFor === `${startKey}..${endKey}`;

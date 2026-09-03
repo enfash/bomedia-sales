@@ -18,7 +18,7 @@ import { supabase } from '@/lib/auth';
 import { generateReceiptId } from '@/services/sales-repository';
 import { pgPath } from '@/services/existence-check-pg';
 import { sendOp } from '@/services/outbox-send';
-import { journalled, type JournalEntry } from '@/services/pending-journal';
+import { journalled, register, clear, type JournalEntry } from '@/services/pending-journal';
 import type { CreateSaleAdjustment, CreateSaleLine, CreateSalePayload, OutboxOp } from '@/services/outbox';
 import type { PaymentActor } from '@/services/payment-repository';
 import { computePaymentStatus, STATUS_META } from '@/utils/payment-status';
@@ -181,19 +181,213 @@ export async function fetchSaleById(id: string): Promise<SalesBatch | null> {
   return normalizeSale(sale as unknown as SaleRow, totals ?? undefined);
 }
 
+/**
+ * Every sale, one shot — replaces `subscribeToBatches`. Realtime is out of
+ * scope for this port (standing decision); callers refresh the same way
+ * activity/expenses now do (pull-to-refresh, refetch-on-focus), not a
+ * live listener. Same default as Firebase's version: excludes voided sales
+ * unless asked for them; "today only" and other display filters are a
+ * `useRecords`-level concern, not this repository's — same chokepoint
+ * reasoning the Firebase version documented.
+ */
+export async function fetchAllSales(
+  includeVoided = false,
+  defaultTermsDays = DEFAULT_TERMS_DAYS,
+): Promise<SalesBatch[]> {
+  let query = supabase.from('sales').select(SALE_SELECT);
+  if (!includeVoided) query = query.eq('is_voided', false);
+  const { data: sales, error: salesError } = await query;
+  if (salesError) throw salesError;
+
+  const rows = (sales ?? []) as unknown as SaleRow[];
+  if (rows.length === 0) return [];
+
+  const { data: totals, error: totalsError } = await supabase
+    .from('sale_totals')
+    .select('sale_id, total_amount, total_paid')
+    .in(
+      'sale_id',
+      rows.map((r) => r.id),
+    );
+  if (totalsError) throw totalsError;
+
+  const totalsById = new Map((totals ?? []).map((t) => [t.sale_id, t]));
+  return rows.map((row) => normalizeSale(row, totalsById.get(row.id), defaultTermsDays));
+}
+
+/**
+ * Specific sales by receipt number — used by the invoice screen, which
+ * bypasses `fetchAllSales`/`useRecords` entirely (same reasoning as the
+ * Firebase version: a filter every other consumer gets automatically and
+ * this one gets by remembering is the bug this exists to prevent, so it
+ * takes `includeVoided` explicitly rather than defaulting like the rest —
+ * a voided sale still needs to produce an invoice, stamped VOIDED).
+ *
+ * Firebase's version matched by `.id`, which for a Firebase-stored batch
+ * WAS the receipt id. In Postgres, `id` is the internal uuid and
+ * `receipt_number` is the separate human-readable field — this filters on
+ * `receipt_number`, not `id`.
+ */
+export async function fetchBatchesByReceiptIds(
+  receiptIds: string[],
+  includeVoided = false,
+): Promise<SalesBatch[]> {
+  if (receiptIds.length === 0) return [];
+
+  let query = supabase.from('sales').select(SALE_SELECT).in('receipt_number', receiptIds);
+  if (!includeVoided) query = query.eq('is_voided', false);
+  const { data: sales, error: salesError } = await query;
+  if (salesError) throw salesError;
+
+  const rows = (sales ?? []) as unknown as SaleRow[];
+  if (rows.length === 0) return [];
+
+  const { data: totals, error: totalsError } = await supabase
+    .from('sale_totals')
+    .select('sale_id, total_amount, total_paid')
+    .in(
+      'sale_id',
+      rows.map((r) => r.id),
+    );
+  if (totalsError) throw totalsError;
+
+  const totalsById = new Map((totals ?? []).map((t) => [t.sale_id, t]));
+  return rows.map((row) => normalizeSale(row, totalsById.get(row.id)));
+}
+
+/**
+ * Move a job to a different production stage on the board. Thin — RLS
+ * already permits staff to change `job_status` specifically
+ * (`sales_staff_update_guard`, `20260829120300_functions_triggers.sql`),
+ * and the transition trigger already blocks leaving 'Delivered'.
+ */
+export async function updateProductionStage(saleId: string, stage: ProductionStage): Promise<void> {
+  const { error } = await supabase.from('sales').update({ job_status: stage }).eq('id', saleId);
+  if (error) throw error;
+}
+
+/**
+ * Editable batch details (notes / due date), across one or more sales.
+ * Thin — `sales_staff_update_guard` already restricts these columns to
+ * admin, so this doesn't re-implement that check client-side.
+ */
+export async function updateBatchDetails(
+  saleIds: string[],
+  patch: { notes?: string; dueDate?: string },
+): Promise<void> {
+  const update: { notes?: string; due_date?: string } = {};
+  if (patch.notes !== undefined) update.notes = patch.notes;
+  if (patch.dueDate !== undefined) update.due_date = patch.dueDate;
+  if (Object.keys(update).length === 0) return;
+
+  const { error } = await supabase.from('sales').update(update).in('id', saleIds);
+  if (error) throw error;
+}
+
+/**
+ * Void a sale. There is no delete — same reasoning as the Firebase version
+ * (a financial record must never be erased, and `sales_void_returns_stock`
+ * needs a real row to reverse inventory against). Admin-only is enforced
+ * server-side (`sales_staff_update_guard`); this doesn't re-check it.
+ */
+export async function voidBatch(saleId: string, reason: string, actor: PaymentActor): Promise<void> {
+  const trimmed = reason.trim();
+  if (!trimmed) throw new Error('A reason is required to void a sale.');
+
+  const { error } = await supabase
+    .from('sales')
+    .update({
+      is_voided: true,
+      voided_at: new Date().toISOString(),
+      voided_by: actor.uid,
+      voided_by_name: actor.name,
+      void_reason: trimmed,
+    })
+    .eq('id', saleId);
+  if (error) throw error;
+}
+
+export interface MarkBatchesPaidResult {
+  saleId: string;
+  settled: boolean;
+  amountPaid: number;
+}
+
+/**
+ * Mark one or more sales fully paid — by RECORDING a payment for each
+ * one's outstanding balance, atomically across the whole set (the
+ * `mark_batches_paid` RPC, `20260903100000_mark_batches_paid.sql`).
+ * Deliberately NOT a client-side loop over `record_payment`: that would
+ * give up the atomicity Firebase's version had (one atomic multi-path
+ * update) — a partial result, some sales marked paid and some not with no
+ * record of which failed, is the exact failure class this whole port
+ * exists to prevent. See that migration's own comment.
+ *
+ * One client-generated `payment_batch_id` per sale, same replay-safety
+ * shape as every other write here — a retry of this whole call is
+ * idempotent per sale as long as it's the same sale ids in the same call.
+ */
+export async function markBatchesPaid(
+  saleIds: string[],
+  method: 'Transfer' | 'POS' | 'Cash',
+  actor: PaymentActor,
+): Promise<MarkBatchesPaidResult[]> {
+  if (saleIds.length === 0) return [];
+
+  const paymentBatchIds = saleIds.map(() => Crypto.randomUUID());
+  const now = new Date();
+  // One journal entry per sale, registered before the call — same
+  // before-not-after ordering as every other money write here. The
+  // outstanding amount per sale isn't known client-side (the RPC computes it
+  // from sale_totals), so this journals `amount: 0` rather than adding a
+  // pre-read query just to populate it — still strictly better than no
+  // recovery trail at all, which is what this replaces.
+  const entries: JournalEntry[] = saleIds.map((saleId, i) => ({
+    key: paymentBatchIds[i]!,
+    path: pgPath('payment_batches', paymentBatchIds[i]!),
+    kind: 'payment',
+    amount: 0,
+    method,
+    byUid: actor.uid,
+    byName: actor.name,
+    at: now.toISOString(),
+    atMs: now.getTime(),
+  }));
+
+  for (const entry of entries) await register(entry);
+  try {
+    const { data, error } = await supabase.rpc('mark_batches_paid', {
+      p_sale_ids: saleIds,
+      p_payment_batch_ids: paymentBatchIds,
+      p_method: method,
+    });
+    if (error) throw error;
+
+    return (data ?? []).map((row: any) => ({
+      saleId: row.sale_id,
+      settled: row.settled,
+      amountPaid: roundNaira(row.amount_paid),
+    }));
+  } finally {
+    // mark_batches_paid runs as one transaction — either every sale in the
+    // call landed or none did, so there's no partial-success case where some
+    // entries should be cleared and others kept. On rejection this matches
+    // journalled()'s own reasoning: the server answered and refused, so the
+    // write definitively did not land, and the caller surfaces the error.
+    for (const entry of entries) await clear(entry.key);
+  }
+}
+
 /* ------------------------------------------------------------------ *
  * Writes — tested directly against the RPC, NOT wired to any screen.
  * See payment-repository-pg.ts for the twin of this pattern.
  *
- * KNOWN GAP, same shape as the one already flagged for standalone
- * recordPayment: `create_sale`'s `p_client_id` is a real foreign key into
- * `clients`. `NewSaleInput` below takes `clientId` as a plain required
- * field rather than resolving it from a name/contact the way the Firebase
- * `createBatch` does (`clientName`/`contact` free text, no FK) — because
- * that resolution (find-or-create against `clients`) does not exist yet.
- * Nothing in this file papers over that; a caller with only a client's name
- * cannot call `createSale` until something builds it. Flagged here rather
- * than assumed, same as the payment gap.
+ * Client resolution (the gap once flagged here) is built —
+ * `client-repository-pg.ts`'s `resolveClientId`. `createSale` below still
+ * takes `clientId` as a plain required field rather than resolving it
+ * itself: resolution is a separate, distinct step (and a separate RLS/
+ * dedup concern) a caller runs first, same as generating a receipt number
+ * is a separate step from the RPC call that uses it.
  * ------------------------------------------------------------------ */
 
 export interface NewSaleLineInput {
@@ -332,9 +526,17 @@ export interface CreateSaleResult {
   openingPaymentBatchId?: string;
 }
 
-/** Create a sale (optionally with a bundled opening payment) in Postgres. */
-export async function createSale(input: NewSaleInput): Promise<CreateSaleResult> {
-  const receiptNumber = generateReceiptId();
+/**
+ * Create a sale (optionally with a bundled opening payment) in Postgres.
+ *
+ * `receiptNumber` can be pre-generated by the caller and passed in — needed
+ * by any screen that has to show the receipt number in an unconfirmed-write
+ * warning ("write this on paper") BEFORE this promise settles, since a
+ * timed-out/disconnected write may still land later with no further signal.
+ * Generating it here by default keeps every other caller (e.g. quote
+ * conversion) unchanged.
+ */
+export async function createSale(input: NewSaleInput, receiptNumber = generateReceiptId()): Promise<CreateSaleResult> {
   const openingPaymentBatchId =
     input.openingPayment && input.openingPayment.amount > 0 ? Crypto.randomUUID() : undefined;
 

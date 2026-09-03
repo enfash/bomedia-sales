@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -187,7 +192,7 @@ export type Database = {
           id: string
           item_name: string
           low_stock_threshold_ft: number
-          material_type: Database["public"]["Enums"]["material_type"]
+          material_type: string
           price_per_sqft: number
           raw_length_ft: number
           remaining_length_ft: number
@@ -205,7 +210,7 @@ export type Database = {
           id?: string
           item_name: string
           low_stock_threshold_ft?: number
-          material_type: Database["public"]["Enums"]["material_type"]
+          material_type: string
           price_per_sqft: number
           raw_length_ft: number
           remaining_length_ft: number
@@ -223,7 +228,7 @@ export type Database = {
           id?: string
           item_name?: string
           low_stock_threshold_ft?: number
-          material_type?: Database["public"]["Enums"]["material_type"]
+          material_type?: string
           price_per_sqft?: number
           raw_length_ft?: number
           remaining_length_ft?: number
@@ -353,7 +358,7 @@ export type Database = {
         Row: {
           height_ft: number
           id: string
-          material_type: Database["public"]["Enums"]["material_type"]
+          material_type: string
           quantity: number
           quote_id: string
           sqft: number | null
@@ -363,7 +368,7 @@ export type Database = {
         Insert: {
           height_ft: number
           id?: string
-          material_type: Database["public"]["Enums"]["material_type"]
+          material_type: string
           quantity?: number
           quote_id: string
           sqft?: number | null
@@ -373,7 +378,7 @@ export type Database = {
         Update: {
           height_ft?: number
           id?: string
-          material_type?: Database["public"]["Enums"]["material_type"]
+          material_type?: string
           quantity?: number
           quote_id?: string
           sqft?: number | null
@@ -476,7 +481,7 @@ export type Database = {
           job_name: string | null
           job_unit: string
           lamination: boolean
-          material_type: Database["public"]["Enums"]["material_type"]
+          material_type: string
           quantity: number
           sale_id: string
           sqft: number | null
@@ -492,7 +497,7 @@ export type Database = {
           job_name?: string | null
           job_unit?: string
           lamination?: boolean
-          material_type: Database["public"]["Enums"]["material_type"]
+          material_type: string
           quantity?: number
           sale_id: string
           sqft?: number | null
@@ -508,7 +513,7 @@ export type Database = {
           job_name?: string | null
           job_unit?: string
           lamination?: boolean
-          material_type?: Database["public"]["Enums"]["material_type"]
+          material_type?: string
           quantity?: number
           sale_id?: string
           sqft?: number | null
@@ -666,7 +671,7 @@ export type Database = {
       }
       materials_valuation: {
         Row: {
-          material_type: Database["public"]["Enums"]["material_type"] | null
+          material_type: string | null
           realised_expected_revenue: number | null
           remaining_asset_value: number | null
           remaining_expected_revenue: number | null
@@ -688,7 +693,7 @@ export type Database = {
       }
       unconsumed_sale_lines: {
         Row: {
-          material_type: Database["public"]["Enums"]["material_type"] | null
+          material_type: string | null
           quantity: number | null
           sale_created_at: string | null
           sale_id: string | null
@@ -765,33 +770,74 @@ export type Database = {
         Returns: undefined
       }
       is_admin: { Args: never; Returns: boolean }
-      record_payment: {
+      mark_batches_paid: {
         Args: {
-          p_amount: number
           p_method: Database["public"]["Enums"]["payment_method"]
-          p_payment_batch_id: string
-          p_reversal_of?: string
-          p_reversal_reason?: string
-          p_sale_id: string
+          p_payment_batch_ids: string[]
+          p_sale_ids: string[]
         }
         Returns: {
-          collected_by: string
-          collected_by_name: string
-          id: string
-          method: Database["public"]["Enums"]["payment_method"]
-          notes: string | null
-          received_at: string
-          reversal_of: string | null
-          reversal_reason: string | null
-          total_amount: number
-        }
-        SetofOptions: {
-          from: "*"
-          to: "payment_batches"
-          isOneToOne: true
-          isSetofReturn: false
-        }
+          amount_paid: number
+          sale_id: string
+          settled: boolean
+        }[]
       }
+      record_payment:
+        | {
+            Args: {
+              p_amount: number
+              p_method: Database["public"]["Enums"]["payment_method"]
+              p_payment_batch_id: string
+              p_reversal_of?: string
+              p_reversal_reason?: string
+              p_sale_id: string
+            }
+            Returns: {
+              collected_by: string
+              collected_by_name: string
+              id: string
+              method: Database["public"]["Enums"]["payment_method"]
+              notes: string | null
+              received_at: string
+              reversal_of: string | null
+              reversal_reason: string | null
+              total_amount: number
+            }
+            SetofOptions: {
+              from: "*"
+              to: "payment_batches"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_amount: number
+              p_method: Database["public"]["Enums"]["payment_method"]
+              p_notes?: string
+              p_payment_batch_id: string
+              p_reversal_of?: string
+              p_reversal_reason?: string
+              p_sale_id: string
+            }
+            Returns: {
+              collected_by: string
+              collected_by_name: string
+              id: string
+              method: Database["public"]["Enums"]["payment_method"]
+              notes: string | null
+              received_at: string
+              reversal_of: string | null
+              reversal_reason: string | null
+              total_amount: number
+            }
+            SetofOptions: {
+              from: "*"
+              to: "payment_batches"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       reverse_sale_line_consumption: {
         Args: { p_sale_line_id: string }
         Returns: undefined
@@ -831,12 +877,6 @@ export type Database = {
         | "Office Supplies"
         | "Miscellaneous"
       job_status: "Queued" | "Printing" | "Finishing" | "Ready" | "Delivered"
-      material_type:
-        | "Flex"
-        | "SAV"
-        | "Window Graphics"
-        | "Solite"
-        | "Clear Stickers"
       payment_method: "Transfer" | "POS" | "Cash"
       roll_status: "Active" | "Low Stock" | "Out of Stock"
       user_role: "admin" | "staff"
@@ -864,12 +904,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -893,11 +933,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -918,11 +958,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -943,11 +983,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -960,11 +1000,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1013,13 +1053,6 @@ export const Constants = {
         "Miscellaneous",
       ],
       job_status: ["Queued", "Printing", "Finishing", "Ready", "Delivered"],
-      material_type: [
-        "Flex",
-        "SAV",
-        "Window Graphics",
-        "Solite",
-        "Clear Stickers",
-      ],
       payment_method: ["Transfer", "POS", "Cash"],
       roll_status: ["Active", "Low Stock", "Out of Stock"],
       user_role: ["admin", "staff"],
@@ -1036,4 +1069,3 @@ export const Constants = {
     },
   },
 } as const
-

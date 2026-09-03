@@ -18,7 +18,7 @@ import { MaxContentWidth } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useSettings } from '@/context/settings-context';
 import { logActivity } from '@/services/activity';
-import { fetchBatchesByReceiptIds, updateBatchDetails } from '@/services/sales-repository';
+import { fetchBatchesByReceiptIds, updateBatchDetails } from '@/services/sales-repository-pg';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate, isOverdue } from '@/utils/date';
 import { computePaymentStatus, STATUS_META } from '@/utils/payment-status';
@@ -99,7 +99,7 @@ export default function InvoiceScreen() {
 
         setIsVoided(batches.some((b) => b.isVoided));
         setRecords(items);
-        setBatchPaths(batches.map((b) => b.dbPath));
+        setBatchPaths(batches.map((b) => b.id));
         setTotals({
           subtotal: batches.reduce((s, b) => s + (b.subtotal || 0), 0),
           adjustments: mergeAdjustments(batches),
@@ -166,10 +166,7 @@ export default function InvoiceScreen() {
   const handleSaveDetails = async () => {
     setIsSavingDetails(true);
     try {
-      await updateBatchDetails(
-        batchPaths.map((dbPath) => ({ dbPath })),
-        { notes, dueDate },
-      );
+      await updateBatchDetails(batchPaths, { notes, dueDate });
       logActivity({
         type: 'sale_edited',
         actor: actor,

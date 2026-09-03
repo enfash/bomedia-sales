@@ -20,17 +20,19 @@ import React from 'react';
 import { Text } from 'react-native';
 
 const SALE = 'sales/2026/08/01/INV-A';
-let mockDeliver: ((p: PaymentEntry[]) => void) | null = null;
+let mockResolve: ((p: PaymentEntry[]) => void) | null = null;
 
 jest.mock('@/context/auth-context', () => ({ useAuth: () => ({ isAdmin: true }) }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
-jest.mock('@/services/payment-repository', () => ({
-  subscribeToPaymentsInRange: (_s: string, _e: string, cb: (p: any[]) => void) => {
-    mockDeliver = cb;
-    return () => {
-      mockDeliver = null;
-    };
-  },
+jest.mock('@/services/payment-repository-pg', () => ({
+  fetchPaymentsInRange: (_s: string, _e: string) =>
+    new Promise((resolve) => {
+      mockResolve = resolve;
+    }),
+  // The test builds PaymentEntry-shaped objects directly (see `entry()`
+  // below) rather than raw PaymentAllocationRow rows, so the adapter is a
+  // no-op here.
+  toPaymentEntry: (row: any) => row,
 }));
 
 const theme = { outlineVariant: '#ccc', onSurfaceVariant: '#666' };
@@ -75,7 +77,7 @@ function Harness({ batches, batchesReceived }: { batches: SalesBatch[]; batchesR
 }
 
 beforeEach(() => {
-  mockDeliver = null;
+  mockResolve = null;
 });
 
 describe('deriveIntegrityStatus', () => {
@@ -117,7 +119,7 @@ describe('LedgerIntegrityBanner rendering', () => {
 
   it('renders the clean line once both arrive and the data agrees', async () => {
     await render(<Harness batches={[paidSale()]} batchesReceived />);
-    await act(async () => mockDeliver?.([entry(4_000)]));
+    await act(async () => mockResolve?.([entry(4_000)]));
     expect(screen.getByTestId('status').props.children).toBe('clean');
     expect(screen.getByText(/No discrepancies in the last 90 days/i)).toBeTruthy();
     // The scope caveat must survive — silence about the window is the failure.
@@ -126,13 +128,13 @@ describe('LedgerIntegrityBanner rendering', () => {
 
   it('an empty ledger with no sales is a CLEAN verdict, not unknown', async () => {
     await render(<Harness batches={[]} batchesReceived />);
-    await act(async () => mockDeliver?.([]));
+    await act(async () => mockResolve?.([]));
     expect(screen.getByTestId('status').props.children).toBe('clean');
   });
 
   it('renders the top banner when there is a real gap', async () => {
     await render(<Harness batches={[paidSale()]} batchesReceived />);
-    await act(async () => mockDeliver?.([entry(1_000)])); // ledger says 1,000; sale claims 4,000
+    await act(async () => mockResolve?.([entry(1_000)])); // ledger says 1,000; sale claims 4,000
     expect(screen.getByTestId('status').props.children).toBe('discrepancy');
     expect(screen.getByText(/match its payments/i)).toBeTruthy();
     expect(screen.getByText(/₦3,000/)).toBeTruthy();
@@ -141,7 +143,7 @@ describe('LedgerIntegrityBanner rendering', () => {
 
   it('never shows both surfaces at once', async () => {
     await render(<Harness batches={[paidSale()]} batchesReceived />);
-    await act(async () => mockDeliver?.([entry(4_000)]));
+    await act(async () => mockResolve?.([entry(4_000)]));
     expect(screen.queryByText(/largest gap/i)).toBeNull();
     expect(screen.getByText(/No discrepancies/i)).toBeTruthy();
   });

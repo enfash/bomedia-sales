@@ -19,7 +19,7 @@ import { Spacing } from '@/constants/theme';
 import { useAdminGate } from '@/hooks/use-admin-gate';
 import { useTheme } from '@/hooks/use-theme';
 import { summariseDay, todayKey } from '@/services/payment-reconciliation';
-import { subscribeToPaymentsForDay } from '@/services/payment-repository';
+import { fetchPaymentsForDay, toPaymentEntry } from '@/services/payment-repository-pg';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate, localDayKey } from '@/utils/date';
 import { STATUS_META } from '@/utils/payment-status';
@@ -65,7 +65,15 @@ export default function CashReconciliationScreen() {
   // wrong on its own terms, whatever the rules happen to allow this week.
   useEffect(() => {
     if (gate !== 'allowed') return;
-    return subscribeToPaymentsForDay(dayKey, setPayments);
+    let cancelled = false;
+    fetchPaymentsForDay(dayKey)
+      .then((rows) => {
+        if (!cancelled) setPayments(rows.map(toPaymentEntry));
+      })
+      .catch((err) => console.warn('fetchPaymentsForDay failed:', err));
+    return () => {
+      cancelled = true;
+    };
   }, [dayKey, gate]);
 
   const day = useMemo(() => summariseDay(dayKey, payments), [dayKey, payments]);

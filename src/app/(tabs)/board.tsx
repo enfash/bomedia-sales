@@ -8,7 +8,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { describeWriteError } from '@/utils/errors';
 import { useAuth } from '@/context/auth-context';
 import { logActivity } from '@/services/activity';
-import { updateProductionStage } from '@/services/sales-repository';
+import { updateProductionStage } from '@/services/sales-repository-pg';
 import { formatCurrency } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
 import { STATUS_META } from '@/utils/payment-status';
@@ -66,7 +66,7 @@ export default function BoardScreen() {
     // mistake it prevents. It is not journalled either — a lost stage move is
     // re-doable, and putting it through the outbox would put every write in the
     // app behind machinery built for payments.
-    updateProductionStage(job, next)
+    updateProductionStage(job.id, next)
       .then(() => {
         logActivity({
           type: 'production_moved',
@@ -74,10 +74,16 @@ export default function BoardScreen() {
           message: `${actor.name} moved ${job.clientName || 'a job'} to ${next}`,
           meta: { batchId: job.id, stage: next },
         });
+        // Reads are one-shot now (not realtime) — the column list needs an
+        // explicit refetch to actually show the card in its new column;
+        // only the detail panel's optimistic patch above updates on its own.
+        refresh();
       })
       .catch((error) => {
-        // The board re-renders from the subscription, so a refused move snaps
-        // back on its own. Say so rather than leaving it unexplained.
+        // No more live subscription to snap the optimistic patch back on its
+        // own — revert it explicitly so the detail panel doesn't keep
+        // showing a stage the server refused.
+        setActiveJob(job);
         const message = describeWriteError(error, 'move this job');
         Alert.alert(message.title, message.body);
       });

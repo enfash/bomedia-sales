@@ -18,7 +18,9 @@ import { sendOp } from '@/services/outbox-send';
 import { journalled, type JournalEntry } from '@/services/pending-journal';
 import { pgPath } from '@/services/existence-check-pg';
 import { roundNaira } from '@/utils/money';
+import { localDayKey } from '@/utils/date';
 import type { PaymentActor } from '@/services/payment-repository';
+import type { PaymentEntry } from '@/components/records/types';
 
 export type { PaymentActor };
 
@@ -33,6 +35,7 @@ export interface BuildRecordPaymentOpInput {
   method: RecordPaymentPayload['method'];
   reversalOf?: string;
   reversalReason?: string;
+  notes?: string;
 }
 
 /**
@@ -57,6 +60,7 @@ export function buildRecordPaymentOp(input: BuildRecordPaymentOpInput): OutboxOp
       method: input.method,
       reversal_of: input.reversalOf,
       reversal_reason: input.reversalReason?.trim(),
+      notes: input.notes?.trim() || undefined,
     },
   };
 }
@@ -105,6 +109,7 @@ export interface RecordPaymentInput {
   receiptNumber: string;
   amount: number;
   method: RecordPaymentPayload['method'];
+  notes?: string;
   actor: PaymentActor;
 }
 
@@ -126,6 +131,7 @@ export async function recordPayment(input: RecordPaymentInput): Promise<string> 
     saleId: input.saleId,
     amount: input.amount,
     method: input.method,
+    notes: input.notes,
   }) as Extract<OutboxOp, { kind: 'record_payment' }>;
 
   const entry = journalEntryForPayment(op, input.actor, input.receiptNumber);
@@ -171,6 +177,8 @@ export interface PaymentAllocationRow {
   id: string;
   paymentBatchId: string;
   saleId: string;
+  /** `sales.receipt_number` for the sale this allocation is against — what an operator recognises, unlike `saleId`. */
+  receiptId: string;
   amount: number;
   kind: string;
   method: RecordPaymentPayload['method'];
@@ -186,7 +194,7 @@ export async function fetchPaymentsForSale(saleId: string): Promise<PaymentAlloc
   const { data, error } = await supabase
     .from('payment_allocations')
     .select(
-      'id, payment_batch_id, sale_id, amount, kind, payment_batches(method, collected_by, collected_by_name, received_at, reversal_of, reversal_reason)',
+      'id, payment_batch_id, sale_id, amount, kind, sales(receipt_number), payment_batches(method, collected_by, collected_by_name, received_at, reversal_of, reversal_reason)',
     )
     .eq('sale_id', saleId)
     .order('created_at', { ascending: false });
@@ -197,6 +205,7 @@ export async function fetchPaymentsForSale(saleId: string): Promise<PaymentAlloc
     id: row.id,
     paymentBatchId: row.payment_batch_id,
     saleId: row.sale_id,
+    receiptId: row.sales?.receipt_number,
     amount: roundNaira(row.amount),
     kind: row.kind,
     method: row.payment_batches?.method,
@@ -206,4 +215,126 @@ export async function fetchPaymentsForSale(saleId: string): Promise<PaymentAlloc
     reversalOf: row.payment_batches?.reversal_of ?? null,
     reversalReason: row.payment_batches?.reversal_reason ?? null,
   }));
+}
+
+/**
+ * `[start, end)` for one local calendar day, expressed as `Date`s built via
+ * the local-time constructor — same assumption `localDayKey`/`parseDate`
+ * (`@/utils/date`) already make (this app runs in Africa/Lagos; the local
+ * `Date` constructor handles the UTC offset correctly as long as that's
+ * true of the device it runs on, without hardcoding the offset here).
+ */
+function localDayBounds(dayKey: string): { start: string; end: string } {
+  const [year, month, day] = dayKey.split('-').map(Number);
+  const start = new Date(year, month - 1, day, 0, 0, 0, 0);
+  const end = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+function flattenPaymentBatches(rows: any[]): PaymentAllocationRow[] {
+  const flat: PaymentAllocationRow[] = [];
+  for (const batch of rows) {
+    for (const alloc of batch.payment_allocations ?? []) {
+      flat.push({
+        id: alloc.id,
+        paymentBatchId: batch.id,
+        saleId: alloc.sale_id,
+        receiptId: alloc.sales?.receipt_number,
+        amount: roundNaira(alloc.amount),
+        kind: alloc.kind,
+        method: batch.method,
+        collectedBy: batch.collected_by,
+        collectedByName: batch.collected_by_name,
+        receivedAt: batch.received_at,
+        reversalOf: batch.reversal_of ?? null,
+        reversalReason: batch.reversal_reason ?? null,
+      });
+    }
+  }
+  return flat;
+}
+
+const PAYMENT_BATCH_WITH_ALLOCATIONS_SELECT =
+  'id, method, collected_by, collected_by_name, received_at, reversal_of, reversal_reason, payment_allocations(id, sale_id, amount, kind, sales(receipt_number))';
+
+/**
+ * One local calendar day's payments, newest first — replaces
+ * `subscribeToPaymentsForDay`. What the reconciliation view (`cash.tsx`)
+ * needs. Realtime is out of scope for this port; caller refreshes the same
+ * way activity/expenses now do.
+ *
+ * Queries `payment_batches`, not `payment_allocations` (unlike
+ * `fetchPaymentsForSale`) — `received_at` lives on the batch, and
+ * PostgREST can only filter the table a query is rooted at, not an
+ * embedded one.
+ */
+export async function fetchPaymentsForDay(dayKey: string): Promise<PaymentAllocationRow[]> {
+  const { start, end } = localDayBounds(dayKey);
+  const { data, error } = await supabase
+    .from('payment_batches')
+    .select(PAYMENT_BATCH_WITH_ALLOCATIONS_SELECT)
+    .gte('received_at', start)
+    .lt('received_at', end)
+    .order('received_at', { ascending: false });
+
+  if (error) throw error;
+  return flattenPaymentBatches(data ?? []);
+}
+
+/**
+ * Adapts a Postgres `PaymentAllocationRow` to the `PaymentEntry` shape the
+ * UI already knows (`payment-reconciliation.ts`, `PaymentHistory`, the cash
+ * reconciliation view). Shared by every screen that displays payment rows
+ * from this repository (`transaction/[id].tsx`, `cash.tsx`,
+ * `ledger-integrity-banner.tsx`) so the mapping can't drift between them.
+ *
+ * `batchPath` is set to `row.saleId` deliberately — `attachPayments`
+ * (`payment-reconciliation.ts`) joins a payment to its batch via
+ * `payment.batchPath === batch.dbPath`, and `sales-repository-pg.ts`'s
+ * `normalizeSale` shims `SalesBatch.dbPath` to `sale.id`. This has to keep
+ * matching that shim exactly for the join to keep working.
+ *
+ * `unreadablePayments` has no equivalent here: RLS on `payment_allocations`
+ * simply omits a row the caller can't read rather than returning a
+ * per-row denial the way ref-by-ref Firebase reads could report one — so
+ * there is nothing for a caller to count.
+ */
+export function toPaymentEntry(row: PaymentAllocationRow): PaymentEntry {
+  return {
+    id: row.id,
+    dbPath: pgPath('payment_batches', row.paymentBatchId),
+    dayKey: localDayKey(row.receivedAt),
+    amount: row.amount,
+    method: row.method,
+    at: row.receivedAt,
+    atMs: new Date(row.receivedAt).getTime(),
+    byUid: row.collectedBy,
+    byName: row.collectedByName,
+    receiptId: row.receiptId,
+    batchPath: row.saleId,
+    reversalOf: row.reversalOf ?? undefined,
+    reversalReason: row.reversalReason ?? undefined,
+    isReversal: Boolean(row.reversalOf),
+  };
+}
+
+/**
+ * A window of local calendar days, inclusive — replaces
+ * `subscribeToPaymentsInRange`. Scoping an integrity check necessarily
+ * weakens it (a discrepancy outside the window isn't seen — inherent to
+ * scoping, not a flaw in it, same note the Firebase version carried:
+ * anything built on this must SAY what period it covers).
+ */
+export async function fetchPaymentsInRange(startDayKey: string, endDayKey: string): Promise<PaymentAllocationRow[]> {
+  const { start } = localDayBounds(startDayKey);
+  const { end } = localDayBounds(endDayKey);
+  const { data, error } = await supabase
+    .from('payment_batches')
+    .select(PAYMENT_BATCH_WITH_ALLOCATIONS_SELECT)
+    .gte('received_at', start)
+    .lt('received_at', end)
+    .order('received_at', { ascending: false });
+
+  if (error) throw error;
+  return flattenPaymentBatches(data ?? []);
 }

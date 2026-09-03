@@ -16,6 +16,8 @@ interface RecordsHeaderProps {
   statusFilter: string;
   setStatusFilter: (s: string) => void;
   selectedBatches: string[];
+  /** Receipt numbers for the same selection, in the same order — what the `/invoice` route actually needs (sales.id is now an internal uuid, not the receipt id). */
+  selectedReceiptIds: string[];
   setSelectedBatches: (batches: string[]) => void;
   exportCSV: () => void;
   markSelectedAsPaid: () => void;
@@ -25,7 +27,7 @@ interface RecordsHeaderProps {
 }
 
 export function RecordsHeader({
-  searchQuery, setSearchQuery, statusFilter, setStatusFilter, selectedBatches, setSelectedBatches,
+  searchQuery, setSearchQuery, statusFilter, setStatusFilter, selectedBatches, selectedReceiptIds, setSelectedBatches,
   exportCSV, markSelectedAsPaid, dateFilter, setDateFilter, isMobile = false
 }: RecordsHeaderProps) {
   const router = useRouter();
@@ -86,7 +88,7 @@ export function RecordsHeader({
           <View style={{ flexDirection: 'row', gap: Spacing.two }}>
             <PrimaryButton 
               onPress={() => {
-                router.push({ pathname: '/invoice', params: { batchId: selectedBatches.join(',') } });
+                router.push({ pathname: '/invoice', params: { batchId: selectedReceiptIds.join(',') } });
                 setSelectedBatches([]);
               }} 
             >

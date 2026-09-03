@@ -40,4 +40,14 @@ describe('describeWriteError — PERMISSION_DENIED', () => {
     const message = describeWriteError({ code: '42501', message: 'row-level security policy violation' }, 'record this payment');
     expect(message.title).toBe('Not allowed to record this payment');
   });
+
+  it('still blames the account for a genuine Postgres 42501, even with no Firebase Auth session', () => {
+    // The Firebase bridge is unrelated to Supabase/Postgres auth — a real
+    // RLS denial must never be reworded as "connection didn't start" just
+    // because the (irrelevant) Firebase bridge session happens to be null.
+    setFirebaseUser(null);
+    const message = describeWriteError({ code: '42501', message: 'row-level security policy violation' }, 'void this sale');
+    expect(message.title).toBe('Not allowed to void this sale');
+    expect(message.body).toMatch(/permission|role/i);
+  });
 });

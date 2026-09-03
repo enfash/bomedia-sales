@@ -1,6 +1,8 @@
 import { PageContainer } from '@/components/ui/page-container';
 import { PrimaryButton } from '@/components/ui/primary-button';
-import { createBatch, generateReceiptId } from '@/services/sales-repository';
+import { createSale } from '@/services/sales-repository-pg';
+import { generateReceiptId } from '@/services/sales-repository';
+import { resolveClientId } from '@/services/client-repository-pg';
 import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -61,7 +63,7 @@ export default function NewSalesScreen() {
   });
 
   const submitBatch = async () => {
-    // Double-submit guard: createBatch generates a fresh receiptId on every
+    // Double-submit guard: createSale generates a fresh receiptId on every
     // call, so a second tap while the first is in flight writes a second real
     // sale under a different id. Nothing downstream can tell them apart.
     if (isSubmitting) return;
@@ -73,26 +75,52 @@ export default function NewSalesScreen() {
     }
 
     setIsSubmitting(true);
+
+    let clientId: string;
+    try {
+      clientId = await resolveClientId(clientData.clientName, clientData.contact);
+    } catch (err) {
+      setIsSubmitting(false);
+      const message = describeWriteError(err, 'resolve this client');
+      Alert.alert(message.title, message.body);
+      return;
+    }
+
+    // Generated up front, not read back from createSale's result — an
+    // unconfirmed write (timeout/disconnected) may still land later with no
+    // further signal, and the "write it on paper" alert below has to name
+    // the receipt regardless of whether the promise itself ever settles.
     const receiptId = generateReceiptId();
+    const advanceAmount = parseFloat(advancePayment) || 0;
 
     // Bounded, like every money write. Offline this never settles, and a second
     // tap creates a SECOND real sale under a different receipt id — nothing
     // downstream can tell them apart.
     const result = await confirmWindow.run(
-      createBatch({
+      createSale(
+        {
+          clientId,
+          clientName: clientData.clientName,
+          lines: batchItems.map((item) => ({
+            jobName: item.jobName,
+            material: item.material,
+            width: item.width,
+            height: item.height,
+            jobUnit: item.jobUnit,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            total: item.total,
+            eyelets: item.eyelets,
+            lamination: item.lamination,
+            turnaroundTime: item.turnaroundTime,
+          })),
+          adjustments,
+          ...(advanceAmount > 0 ? { openingPayment: { amount: advanceAmount, method: paymentMethod } } : {}),
+          // Attributes the advance to whoever is at the counter.
+          actor,
+        },
         receiptId,
-        clientName: clientData.clientName,
-        contact: clientData.contact,
-        subtotal: batchSubtotal,
-        adjustments,
-        totalAmount: finalBatchTotal,
-        deliveryCost: parseFloat(deliveryCost) || 0,
-        totalPaid: parseFloat(advancePayment) || 0,
-        paymentMethod,
-        items: batchItems,
-        // Attributes the advance to whoever is at the counter.
-        actor,
-      }),
+      ),
     );
     setIsSubmitting(false);
 

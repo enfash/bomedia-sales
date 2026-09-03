@@ -21,7 +21,9 @@ import type {
 } from '@/components/records/types';
 import { dbService } from '@/services/db';
 import { roundNaira } from '@/utils/money';
-import { createBatch, generateReceiptId } from '@/services/sales-repository';
+import { generateReceiptId } from '@/services/sales-repository';
+import { createSale } from '@/services/sales-repository-pg';
+import { resolveClientId } from '@/services/client-repository-pg';
 import type { PaymentActor } from '@/services/payment-repository';
 
 const QUOTES_ROOT = 'quotes';
@@ -220,54 +222,48 @@ export class MissingQuoteInfoError extends Error {
 
 /**
  * Migrate a quote into the sales ledger. Requires a client name — otherwise
- * throws {@link MissingQuoteInfoError} so the UI can prompt for it. Returns the
- * new sale's dbPath.
+ * throws {@link MissingQuoteInfoError} so the UI can prompt for it.
+ *
+ * Quotes stay on Firebase permanently (standing decision — see
+ * supabase/README.md's Cutover plan), but the sale a conversion produces
+ * lands wherever sales now live, same as every other sale.
  */
 export async function convertQuoteToSale(
   quote: QuoteRecord,
   actor: PaymentActor,
-): Promise<string> {
+): Promise<void> {
   const missing: string[] = [];
   if (!quote.clientName?.trim()) missing.push('client name');
   if (quote.records.length === 0) missing.push('at least one item');
   if (missing.length > 0) throw new MissingQuoteInfoError(missing);
 
-  const items: StoredItem[] = quote.records.map((r) => ({
-    jobName: r.jobName,
-    material: r.material,
-    width: r.width,
-    height: r.height,
-    jobUnit: r.jobUnit,
-    quantity: r.quantity,
-    unitPrice: r.unitPrice,
-    total: r.total,
-    eyelets: r.eyelets,
-    lamination: r.lamination,
-    turnaroundTime: r.turnaroundTime,
-    type: r.type,
-  }));
+  const clientId = await resolveClientId(quote.clientName, quote.contact);
 
   // The sale carries the quote's OWN money fields across unchanged. Converting
   // must never re-price: the customer accepted this total, and recomputing it
   // against today's MOV could quietly hand them a different number.
-  const dbPath = await createBatch({
-    receiptId: generateReceiptId('INV'),
+  await createSale({
+    clientId,
     clientName: quote.clientName,
-    contact: quote.contact,
-    subtotal: quote.subtotal,
+    lines: quote.records.map((r) => ({
+      jobName: r.jobName,
+      material: r.material,
+      width: r.width,
+      height: r.height,
+      jobUnit: r.jobUnit,
+      quantity: r.quantity,
+      unitPrice: r.unitPrice,
+      total: r.total,
+      eyelets: r.eyelets,
+      lamination: r.lamination,
+      turnaroundTime: r.turnaroundTime,
+    })),
     adjustments: quote.adjustments,
-    totalAmount: quote.totalAmount,
-    deliveryCost: quote.deliveryCost ?? 0,
-    totalPaid: 0,
-    paymentMethod: 'Transfer',
-    items,
     notes: quote.notes,
-    // A converted quote starts unpaid, so no opening entry is written — but
-    // createBatch needs the actor in case that ever changes.
+    // A converted quote starts unpaid — no openingPayment.
     actor,
   });
 
   // Keep the quote for history, marked as converted.
   await dbService.updateRecord(quote.dbPath, { status: 'Converted' });
-  return dbPath;
 }

@@ -14,7 +14,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { describeWriteError } from '@/utils/errors';
 import { logActivity } from '@/services/activity';
 import type { PaymentMethod } from '@/components/records/types';
-import { markBatchesPaid } from '@/services/sales-repository';
+import { markBatchesPaid } from '@/services/sales-repository-pg';
 import { formatCurrency, formatCurrencyCompact } from '@/utils/currency';
 import { formatDate } from '@/utils/date';
 import { withAlpha } from '@/utils/color';
@@ -58,6 +58,7 @@ export default function RecordsWeb() {
     sortDirection,
     handleSort,
     sortedBatches,
+    refresh,
   } = useRecords(theme, { persistKey: 'bomedia:records-filters', staffTodayOnly: !isAdmin, includeVoided: true });
 
   const [selected, setSelected] = useState<string[]>([]);
@@ -123,21 +124,25 @@ export default function RecordsWeb() {
 
   const doMarkPaid = async (batches: SalesBatch[], method: PaymentMethod) => {
     try {
-      // markBatchesPaid returns only the batches it actually wrote for —
-      // anything already settled is skipped rather than given a zero entry.
-      const settled = await markBatchesPaid(batches, method, actor);
+      // markBatchesPaid returns one row per requested sale, settled or not —
+      // filter to what it actually wrote for, same as before.
+      const results = await markBatchesPaid(batches.map((b) => b.id), method, actor);
+      const settled = results.filter((r) => r.settled);
       if (settled.length === 0) {
         Alert.alert('Nothing to record', 'Those sales are already fully paid.');
         return;
       }
-      const paidTotal = settled.reduce((s, b) => s + (b.totalBalance || 0), 0);
+      const paidTotal = settled.reduce((s, r) => s + r.amountPaid, 0);
       logActivity({
         type: 'payment_recorded',
         actor: actor,
         message: `${actor.name} marked ${settled.length} sale${settled.length !== 1 ? 's' : ''} paid by ${method} (${formatCurrency(paidTotal)})`,
-        meta: { batchIds: settled.map((b) => b.id), amount: paidTotal },
+        meta: { batchIds: settled.map((r) => r.saleId), amount: paidTotal },
       });
       setSelected([]);
+      // One-shot reads now (not realtime) — the table won't reflect the new
+      // paid status on its own.
+      refresh();
     } catch (e: any) {
       const message = describeWriteError(e, 'mark these paid');
       Alert.alert(message.title, message.body);
@@ -354,7 +359,13 @@ export default function RecordsWeb() {
                 icon={{ ios: 'doc.text', android: 'description', web: 'description' }}
                 primary
                 onPress={() => {
-                  router.push({ pathname: '/invoice', params: { batchId: selected.join(',') } });
+                  // sales.id is the internal uuid now, not the receipt id —
+                  // fetchBatchesByReceiptIds filters on receipt_number, so
+                  // the route must carry receiptId, not id.
+                  const receiptIds = sortedBatches
+                    .filter((b) => selected.includes(b.id))
+                    .map((b) => b.receiptId ?? b.id);
+                  router.push({ pathname: '/invoice', params: { batchId: receiptIds.join(',') } });
                   setSelected([]);
                 }}
               />

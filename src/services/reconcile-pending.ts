@@ -1,7 +1,21 @@
 import { dbService } from '@/services/db';
+import { checkExistsOnServerPg } from '@/services/existence-check-pg';
 import { replayMissing, type ReplayResult } from '@/services/outbox';
 import { sendOp } from '@/services/outbox-send';
 import { clear, list, reconcile, type ReconcileResult } from '@/services/pending-journal';
+
+/**
+ * Dispatches by the journal entry's own path prefix — `pg:`-namespaced
+ * entries (from `createSale`/`recordPayment`/`markBatchesPaid`, see
+ * `pgPath()` in existence-check-pg.ts) go to the Postgres check; everything
+ * else is a Firebase RTDB path, checked the way it always was. Both share
+ * the same `(path) => Promise<boolean | null>` shape by construction, so
+ * this is the entire dispatcher.
+ */
+function checkExists(path: string): Promise<boolean | null> {
+  if (path.startsWith('pg:')) return checkExistsOnServerPg(path);
+  return dbService.existsOnServer(path);
+}
 
 export interface ReconcileAndReplayResult extends ReconcileResult {
   replayed: ReplayResult[];
@@ -19,7 +33,7 @@ export interface ReconcileAndReplayResult extends ReconcileResult {
  * `unverified` bucket: see the safety invariant in `outbox.ts`.
  */
 export async function reconcilePendingWrites(): Promise<ReconcileAndReplayResult> {
-  const result = await reconcile((path) => dbService.existsOnServer(path));
+  const result = await reconcile(checkExists);
 
   if (result.missing.length === 0) return { ...result, replayed: [] };
 

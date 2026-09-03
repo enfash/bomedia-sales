@@ -11,9 +11,9 @@ import { usePendingFor } from '@/context/pending-writes-context';
 import { UNCONFIRMED_MESSAGE, useConfirmWindow } from '@/hooks/use-confirm-window';
 import { describeWriteError } from '@/utils/errors';
 import { logActivity } from '@/services/activity';
-import { voidBatch } from '@/services/sales-repository';
+import { voidBatch } from '@/services/sales-repository-pg';
 import { VoidModal } from '@/components/records/void-modal';
-import { recordPayment, subscribeToPaymentsForSale } from '@/services/payment-repository';
+import { recordPayment, fetchPaymentsForSale, toPaymentEntry } from '@/services/payment-repository-pg';
 import { attachPayments, describeMismatch } from '@/services/payment-reconciliation';
 import { PaymentHistory } from '@/components/records/payment-history';
 import { WebDetailShell } from '@/components/web-detail-shell';
@@ -64,21 +64,30 @@ export default function TransactionDetails() {
   // exactly the ones the operator may need to enter again.
   const outstanding = usePendingFor(transaction?.receiptId ?? transaction?.id)?.state === 'pending';
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
-  // How many entries on this sale could not be read, from the subscription
-  // itself. The partial-view notice keys off this rather than off the role: it
-  // should say what actually happened, not what someone's permissions imply.
-  const [unreadablePayments, setUnreadablePayments] = useState(0);
+  // RLS on payment_allocations simply omits a row the caller can't read
+  // rather than reporting a per-row denial the way ref-by-ref Firebase reads
+  // could — there is no longer a signal to count here. Always 0; kept as a
+  // prop so PaymentHistory's contract is unchanged.
+  const unreadablePayments = 0;
+  // Bumped after a successful payment to trigger a refetch — there is no
+  // more live listener to pick up the new entry on its own.
+  const [paymentsRefetchNonce, setPaymentsRefetchNonce] = useState(0);
 
-  // Scoped to THIS sale via its paymentRefs index, rather than subscribing to
-  // the whole ledger and filtering. Staff still only receive their own entries
-  // — the rules enforce that at the uid level, not the UI.
+  // One-shot, not realtime (out of scope for this port; see
+  // supabase/README.md's Cutover plan) — re-fetched on mount and after
+  // every successful payment.
   useEffect(() => {
-    if (!transaction?.dbPath) return;
-    return subscribeToPaymentsForSale(transaction.dbPath, (next, meta) => {
-      setPayments(next);
-      setUnreadablePayments(meta.unreadable);
-    });
-  }, [transaction?.dbPath]);
+    if (!transaction?.id) return;
+    let cancelled = false;
+    fetchPaymentsForSale(transaction.id)
+      .then((rows) => {
+        if (!cancelled) setPayments(rows.map(toPaymentEntry));
+      })
+      .catch((err) => console.warn('fetchPaymentsForSale failed:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [transaction?.id, paymentsRefetchNonce]);
 
   const handleAddPayment = async () => {
     if (!transaction || !paymentAmount) return;
@@ -95,10 +104,11 @@ export default function TransactionDetails() {
     // operator taps again — which queues a SECOND ledger entry.
     const result = await confirm.run(
       recordPayment({
-        batch: transaction,
+        saleId: transaction.id,
+        receiptNumber: transaction.receiptId ?? transaction.id,
         amount,
         method: paymentMethod,
-        note: paymentNote,
+        notes: paymentNote,
         actor,
       }),
     );
@@ -121,6 +131,7 @@ export default function TransactionDetails() {
     setPaymentModalVisible(false);
     setPaymentAmount('');
     setPaymentNote('');
+    setPaymentsRefetchNonce((n) => n + 1);
 
     if (confirm.isUnconfirmed(result.outcome)) {
       // NOT "failed". The write is still queued and may land in a moment; the
@@ -137,7 +148,7 @@ export default function TransactionDetails() {
     if (!transaction || isVoiding) return;
     setIsVoiding(true);
     try {
-      await voidBatch(transaction, reason, actor);
+      await voidBatch(transaction.id, reason, actor);
       logActivity({
         type: 'sale_deleted',
         actor: actor,
@@ -350,7 +361,7 @@ ${itemsString}`;
 
       <TransactionActionBar
         totalBalance={transaction.totalBalance}
-        onPrintInvoice={() => router.push(`/invoice?batchId=${transaction.id}`)}
+        onPrintInvoice={() => router.push(`/invoice?batchId=${transaction.receiptId ?? transaction.id}`)}
         onShare={handleShare}
         onDelete={handleDelete}
         onRecordPayment={() => setPaymentModalVisible(true)}

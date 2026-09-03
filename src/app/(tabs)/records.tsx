@@ -6,7 +6,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { describeWriteError } from '@/utils/errors';
 import { logActivity } from '@/services/activity';
 import type { PaymentMethod, SalesBatch } from '@/components/records/types';
-import { markBatchesPaid } from '@/services/sales-repository';
+import { markBatchesPaid } from '@/services/sales-repository-pg';
 import { formatCurrency } from '@/utils/currency';
 import { useState } from 'react';
 import { Alert, Platform, RefreshControl, StyleSheet, View, useWindowDimensions } from 'react-native';
@@ -101,21 +101,25 @@ export default function RecordsScreen() {
 
   const doMarkPaid = async (batches: SalesBatch[], method: PaymentMethod) => {
     try {
-      // markBatchesPaid returns only the batches it actually wrote for —
-      // anything already settled is skipped rather than given a zero entry.
-      const settled = await markBatchesPaid(batches, method, actor);
+      // markBatchesPaid returns one row per requested sale, settled or not —
+      // filter to what it actually wrote for, same as before.
+      const results = await markBatchesPaid(batches.map((b) => b.id), method, actor);
+      const settled = results.filter((r) => r.settled);
       if (settled.length === 0) {
         Alert.alert('Nothing to record', 'Those sales are already fully paid.');
         return;
       }
-      const paidTotal = settled.reduce((s, b) => s + (b.totalBalance || 0), 0);
+      const paidTotal = settled.reduce((s, r) => s + r.amountPaid, 0);
       logActivity({
         type: 'payment_recorded',
         actor: actor,
         message: `${actor.name} marked ${settled.length} sale${settled.length !== 1 ? 's' : ''} paid by ${method} (${formatCurrency(paidTotal)})`,
-        meta: { batchIds: settled.map((b) => b.id), amount: paidTotal },
+        meta: { batchIds: settled.map((r) => r.saleId), amount: paidTotal },
       });
       setSelectedBatches([]);
+      // One-shot reads now (not realtime) — the list won't reflect the new
+      // paid status on its own.
+      refresh();
     } catch (e: any) {
       const message = describeWriteError(e, 'mark these paid');
       Alert.alert(message.title, message.body);
@@ -155,6 +159,7 @@ export default function RecordsScreen() {
         statusFilter={statusFilter}
         setStatusFilter={setStatusFilter}
         selectedBatches={selectedBatches}
+        selectedReceiptIds={sortedBatches.filter((b) => selectedBatches.includes(b.id)).map((b) => b.receiptId ?? b.id)}
         setSelectedBatches={setSelectedBatches}
         exportCSV={exportCSV}
         markSelectedAsPaid={markSelectedAsPaid}

@@ -1,6 +1,6 @@
 import { SalesBatch, SalesRecord } from '@/components/records/types';
 import { useSettings } from '@/context/settings-context';
-import { subscribeToBatches } from '@/services/sales-repository';
+import { fetchAllSales } from '@/services/sales-repository-pg';
 import { isToday } from '@/utils/date';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -69,9 +69,6 @@ export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
   const [searchQuery, setSearchQuery] = useState('');
   const [rawBatches, setRawBatches] = useState<SalesBatch[]>([]);
   const [loading, setLoading] = useState(true);
-  // Bumping this re-runs the subscription effect (pull-to-refresh re-pulls a
-  // fresh snapshot even though the underlying listener is already realtime).
-  const [refreshNonce, setRefreshNonce] = useState(0);
 
   // Filter & Sort State (status/date/sort auto-remembered when persistKey is set;
   // search stays transient so a stale query never hides records on return).
@@ -91,17 +88,35 @@ export function useRecords(_theme?: unknown, options: UseRecordsOptions = {}) {
     }
   }, [persistKey, statusFilter, dateFilter, sortColumn, sortDirection]);
 
-  // The single place Settings meets the repository. `normalizeBatch` stays a
-  // pure function of its arguments; the live terms value is injected here.
-  useEffect(() => {
-    const unsubscribe = subscribeToBatches((batches) => {
+  // The single place Settings meets the repository — one-shot fetch, not
+  // realtime (out of scope for this port; see supabase/README.md's Cutover
+  // plan). Callers with pull-to-refresh wired (records.tsx, board.tsx,
+  // clients.tsx, index.tsx) get a real re-fetch; others get a fresh snapshot
+  // on mount/dependency change only — same precedent already accepted for
+  // useExpenses/useAllExpenses on the already-migrated expenses domain.
+  const load = useCallback(async () => {
+    try {
+      const batches = await fetchAllSales(includeVoided, defaultTermsDays);
       setRawBatches(batches);
+    } catch (err) {
+      console.warn('useRecords: fetch failed:', err);
+    } finally {
       setLoading(false);
-    }, defaultTermsDays, includeVoided);
-    return () => unsubscribe();
-  }, [refreshNonce, defaultTermsDays, includeVoided]);
+    }
+  }, [defaultTermsDays, includeVoided]);
 
-  const refresh = useCallback(() => setRefreshNonce((n) => n + 1), []);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!cancelled) setLoading(true);
+      await load();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
+
+  const refresh = useCallback(() => load(), [load]);
 
   // Role scoping: staff only see today's batches on the Records screen.
   const scopedBatches = useMemo(

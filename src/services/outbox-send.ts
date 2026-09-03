@@ -63,6 +63,7 @@ export async function sendOp(op: OutboxOp): Promise<void> {
     p_method: op.payload.method,
     p_reversal_of: op.payload.reversal_of ?? undefined,
     p_reversal_reason: op.payload.reversal_reason ?? undefined,
+    p_notes: op.payload.notes ?? undefined,
   });
   if (error) throw error;
 }

@@ -32,6 +32,20 @@ function codeOf(error: unknown): string {
   return `${code} ${message}`.toLowerCase();
 }
 
+/**
+ * A SQLSTATE is always exactly 5 characters — Firebase's `PERMISSION_DENIED`/
+ * `permission-denied` never is. Used to gate the Firebase-bridge fallback
+ * below to errors that could actually have come from Firebase: a genuine
+ * Postgres 42501 must always read as "not allowed", regardless of whether
+ * the (unrelated) Firebase Auth bridge session happens to be live at that
+ * moment — the two are independent auth systems, and conflating them here
+ * would blame the wrong thing for a real RLS denial.
+ */
+function isPostgresCode(error: unknown): boolean {
+  if (typeof error !== 'object' || !error || !('code' in error)) return false;
+  return /^[0-9a-z]{5}$/i.test(String((error as any).code ?? ''));
+}
+
 export function describeWriteError(error: unknown, what: string): OperatorMessage {
   const code = codeOf(error);
 
@@ -53,7 +67,7 @@ export function describeWriteError(error: unknown, what: string): OperatorMessag
     // about the wrong thing. `firebaseAuth.currentUser` is the distinguishing
     // signal: null means no bridge session exists, so this can't be a real
     // role check at all — RTDB never got far enough to evaluate one.
-    if (!firebaseAuth.currentUser) {
+    if (!firebaseAuth.currentUser && !isPostgresCode(error)) {
       return {
         title: `Could not ${what}`,
         body: 'The connection needed to save this did not start correctly. Try again in a moment — if it keeps failing, tell the owner exactly what this said.',

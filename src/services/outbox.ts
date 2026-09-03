@@ -114,6 +114,7 @@ export interface RecordPaymentPayload {
   method: 'Transfer' | 'POS' | 'Cash';
   reversal_of?: string;
   reversal_reason?: string;
+  notes?: string;
 }
 
 export type ReplayOutcome = 'sent' | 'skipped-unverified' | 'skipped-landed' | 'skipped-too-old' | 'no-payload' | 'failed';
